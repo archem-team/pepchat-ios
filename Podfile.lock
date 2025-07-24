@@ -1,0 +1,22 @@
+PODS:
+  - Down (0.11.0)
+
+DEPENDENCIES:
+  - Down (from `https://github.com/iwasrobbed/Down.git`, tag `v0.11.0`)
+
+EXTERNAL SOURCES:
+  Down:
+    :git: https://github.com/iwasrobbed/Down.git
+    :tag: v0.11.0
+
+CHECKOUT OPTIONS:
+  Down:
+    :git: https://github.com/iwasrobbed/Down.git
+    :tag: v0.11.0
+
+SPEC CHECKSUMS:
+  Down: b6ba1bc985c9d2f4e15e3b293d2207766fa12612
+
+PODFILE CHECKSUM: 673aa47638b09cf82f78cb7a5501420bc0871110
+
+COCOAPODS: 1.16.2

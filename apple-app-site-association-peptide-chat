@@ -1,0 +1,47 @@
+{
+    "applinks": {
+        "details": [
+            {
+                "appIDs": ["T23HBWQ54Y.chat.revolt.app"],
+                "components": [
+                    {
+                        "/": "/",
+                        "comment": "home"
+                    },
+                    {
+                        "/": "/app",
+                        "comment": "app root"
+                    },
+                    {
+                        "/": "/login",
+                        "comment": "login page"
+                    },
+                    {
+                        "/": "/server/*",
+                        "comment": "servers"
+                    },
+                    {
+                        "/": "/server/*/*",
+                        "comment": "server channels"
+                    },
+                    {
+                        "/": "/channel/*",
+                        "comment": "channels"
+                    },
+                    {
+                        "/": "/channel/*/*",
+                        "comment": "channel messages"
+                    },
+                    {
+                        "/": "/invite/*",
+                        "comment": "invite"
+                    },
+                    {
+                        "/": "/friends/*",
+                        "comment": "friends"
+                    }
+                ]
+            }
+        ]
+    }
+}

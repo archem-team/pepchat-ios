@@ -1,0 +1,717 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "" : {
+
+    },
+    "-" : {
+
+    },
+    "(edited)" : {
+
+    },
+    "%lld of 100 members" : {
+
+    },
+    "About" : {
+
+    },
+    "Accept Invite" : {
+
+    },
+    "Add Bot" : {
+
+    },
+    "Allows others to invite the bot to their servers and groups" : {
+
+    },
+    "Appearance" : {
+
+    },
+    "Are you sure you want to delete your account?" : {
+
+    },
+    "Are you sure you want to disable your account?" : {
+
+    },
+    "Are you sure?" : {
+
+    },
+    "Authenticator App" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Authenticator App"
+          }
+        }
+      }
+    },
+    "Auto" : {
+
+    },
+    "Bans" : {
+
+    },
+    "BOT" : {
+
+    },
+    "Bots" : {
+
+    },
+    "Brought to you with ❤️ by the Revolt team." : {
+
+    },
+    "By creating a bot, you are agreeing to the [Acceptable Usage Policy](https://revolt.chat/aup)." : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Categories" : {
+
+    },
+    "Choose your preferred platform!" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose your preferred platform!"
+          }
+        }
+      }
+    },
+    "code" : {
+      "comment" : "TOTP code"
+    },
+    "Code time" : {
+      "comment" : "debug print, don't translate"
+    },
+    "Complete Registration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Complete Registration"
+          }
+        }
+      }
+    },
+    "Confirm" : {
+
+    },
+    "Confirm deleting your account" : {
+
+    },
+    "Confirm disabling your account" : {
+
+    },
+    "continue" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue"
+          }
+        }
+      }
+    },
+    "Copied!" : {
+
+    },
+    "Copy Invite Link" : {
+
+    },
+    "Copy to clipboard" : {
+
+    },
+    "Copy Token" : {
+
+    },
+    "Create" : {
+
+    },
+    "Create a bot" : {
+
+    },
+    "Create Bot" : {
+
+    },
+    "Customisation" : {
+
+    },
+    "Dark" : {
+
+    },
+    "Delete bot" : {
+
+    },
+    "Delete bot?" : {
+
+    },
+    "Delete server" : {
+
+    },
+    "Developer" : {
+
+    },
+    "Didn’t-receive-an-email" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Didn’t receive an email?"
+          }
+        }
+      }
+    },
+    "Discovery" : {
+
+    },
+    "Do it" : {
+
+    },
+    "Done" : {
+
+    },
+    "Emojis" : {
+
+    },
+    "Enter custom API url..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter custom API url..."
+          }
+        }
+      }
+    },
+    "Enter the code provided by your authenticator app" : {
+      "comment" : "Prompting the user for their OTP while setting up TOTP"
+    },
+    "Enter the verification code sent to your email" : {
+
+    },
+    "Enter TOTP code" : {
+      "comment" : "Authenticator prompt"
+    },
+    "Enter your email to receive a reset link." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your email to receive a reset link."
+          }
+        }
+      }
+    },
+    "Experiments" : {
+
+    },
+    "Failed to generate QR Code" : {
+
+    },
+    "Force remote notification upload" : {
+
+    },
+    "Forgot Password" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forgot your password?"
+          }
+        }
+      }
+    },
+    "Forgot Your Password?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forgot Your Password?"
+          }
+        }
+      }
+    },
+    "Give us some detail" : {
+
+    },
+    "Go back" : {
+
+    },
+    "great-to-see-you-again" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Great to see you again!"
+          }
+        }
+      }
+    },
+    "Group TODO" : {
+
+    },
+    "Hello, World!" : {
+
+    },
+    "Home" : {
+
+    },
+    "Interactions url" : {
+
+    },
+    "Invite code or link" : {
+
+    },
+    "Invites" : {
+
+    },
+    "It’s Quiet Here..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It’s Quiet Here..."
+          }
+        }
+      }
+    },
+    "It's time to choose a username." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It's time to choose a username."
+          }
+        }
+      }
+    },
+    "Join" : {
+
+    },
+    "join-endless" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Join endless chats and connections; PepChat is your place to vibe with friends!"
+          }
+        }
+      }
+    },
+    "KeyDirect Messages" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Direct Messages"
+          }
+        }
+      }
+    },
+    "Language" : {
+
+    },
+    "Light" : {
+
+    },
+    "Log In" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Log In"
+          }
+        }
+      }
+    },
+    "Looks a bit empty in here." : {
+
+    },
+    "make-it-official" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make it Official!"
+          }
+        }
+      }
+    },
+    "Manage Roles" : {
+
+    },
+    "Members" : {
+
+    },
+    "Messages" : {
+
+    },
+    "My Bots" : {
+
+    },
+    "Name Yourself!" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name Yourself!"
+          }
+        }
+      }
+    },
+    "New Conversation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Conversation"
+          }
+        }
+      }
+    },
+    "New Group" : {
+
+    },
+    "New Here? Let’s Get You Set Up!" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Here? Let’s Get You Set Up!"
+          }
+        }
+      }
+    },
+    "Next" : {
+
+    },
+    "Note: this field is reserved for the future." : {
+
+    },
+    "Notifications" : {
+
+    },
+    "One more thing" : {
+
+    },
+    "Open in authenticator app" : {
+      "comment" : "Open the user's authenticator app"
+    },
+    "Others can find, recognize, and mention you with this name; choose wisely!" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Others can find, recognize, and mention you with this name; choose wisely!"
+          }
+        }
+      }
+    },
+    "Overview" : {
+
+    },
+    "PepChat" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PepChat"
+          }
+        }
+      }
+    },
+    "Personal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personal"
+          }
+        }
+      }
+    },
+    "Pick a category" : {
+
+    },
+    "Please note that this does not get sent to this server's moderators" : {
+
+    },
+    "Processing..." : {
+
+    },
+    "Public Bot" : {
+
+    },
+    "Push Notifications" : {
+
+    },
+    "Receive Reset Link" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Receive Reset Link"
+          }
+        }
+      }
+    },
+    "Recovery Code" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recovery Code"
+          }
+        }
+      }
+    },
+    "register" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Register"
+          }
+        }
+      }
+    },
+    "Register" : {
+
+    },
+    "Report reason" : {
+
+    },
+    "resend-verification" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resend Verification"
+          }
+        }
+      }
+    },
+    "Reset token" : {
+
+    },
+    "Reset token?" : {
+
+    },
+    "Revolt" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revolt"
+          }
+        }
+      }
+    },
+    "Revolt iOS" : {
+
+    },
+    "Roles" : {
+
+    },
+    "Save" : {
+
+    },
+    "Saved Notes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved Notes"
+          }
+        }
+      }
+    },
+    "Search for friends" : {
+
+    },
+    "Select how you’d like to verify your account." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select how you’d like to verify your account."
+          }
+        }
+      }
+    },
+    "Settings" : {
+      "comment" : "Settings Tooltip"
+    },
+    "Something went wrong. Try again later?" : {
+
+    },
+    "Stop right there!" : {
+
+    },
+    "Submit" : {
+
+    },
+    "Tell us what's wrong with this message" : {
+
+    },
+    "Text Field" : {
+
+    },
+    "Theme" : {
+
+    },
+    "This area is guarded by trolls. Fetch them your TOTP code to continue." : {
+      "comment" : "subtitle prompt for password when modifying totp"
+    },
+    "This will prevent you from being able to sign in. You'll need to message support to get your account reactivated." : {
+
+    },
+    "Todo" : {
+
+    },
+    "TODO" : {
+
+    },
+    "unknown" : {
+
+    },
+    "User Management" : {
+
+    },
+    "Username" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Username"
+          }
+        }
+      }
+    },
+    "Verification Code" : {
+
+    },
+    "Verify time" : {
+      "comment" : "debug print, don't translate"
+    },
+    "Verify Your Identity" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verify Your Identity"
+          }
+        }
+      }
+    },
+    "verify-in-your-inbox" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verify in Your Inbox"
+          }
+        }
+      }
+    },
+    "verify-your-email" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verify Your Email"
+          }
+        }
+      }
+    },
+    "Wait a minute!" : {
+
+    },
+    "we-sent-a-verification-mail-to %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We sent a verification mail to %@."
+          }
+        }
+      }
+    },
+    "Webhook" : {
+
+    },
+    "Welcome to" : {
+
+    },
+    "Welcome to PepChat!" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Welcome to PepChat!"
+          }
+        }
+      }
+    },
+    "welcome-back" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Welcome back!"
+          }
+        }
+      }
+    },
+    "What's wrong..." : {
+
+    },
+    "You can change it anytime in User Settings. You’ll get a unique number tag, visible in Settings." : {
+
+    },
+    "You've got 2FA enabled to keep your account extra-safe." : {
+
+    },
+    "Your account will be disabled, and may be reactivated by opening a support request. After a week, it will be permanently deleted." : {
+
+    }
+  },
+  "version" : "1.0"
+}
