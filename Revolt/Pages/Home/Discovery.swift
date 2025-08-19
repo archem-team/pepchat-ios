@@ -196,9 +196,23 @@ fileprivate struct WebView: UIViewRepresentable {
 /// The toolbar includes a custom icon and title, and the background adapts to the app's theme.
 struct Discovery: View {
     @EnvironmentObject var viewState: ViewState  // Access to global app state.
+    
+    // Get the appropriate discovery URL based on the current base URL
+    private func getDiscoveryURL() -> URL {
+        let baseURL = viewState.baseURL ?? viewState.defaultBaseURL
+        
+        if baseURL.contains("peptide.chat") {
+            // For PepChat, use the embedded discovery page
+            return URL(string: "https://rvlt.gg/discover?embedded=true")!
+        } else {
+            // For other domains (like app.revolt.chat), show a different discovery or empty state
+            // You can customize this based on what should be shown for other instances
+            return URL(string: "https://revolt.chat/discover")!
+        }
+    }
 
     var body: some View {
-        WebView(url: URL(string: "https://rvlt.gg/discover?embedded=true")!)  // Loads the Discovery URL.
+        WebView(url: getDiscoveryURL())  // Loads the Discovery URL based on current domain.
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     // Displays a toolbar with an icon and the "Discovery" label.

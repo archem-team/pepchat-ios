@@ -148,9 +148,27 @@ struct ChannelOptionsSheet: View {
                         Task{
                             
                             if let lastId = viewState.channels[self.channel.id]?.last_message_id {
-                                let _ = await viewState.http.ackMessage(channel: self.channel.id, message: lastId)
+                                let result = await viewState.http.ackMessage(channel: self.channel.id, message: lastId)
                                 
-                                self.isPresented.toggle()
+                                // Update local unread state if successful
+                                if case .success = result {
+                                    await MainActor.run {
+                                        if var unread = viewState.unreads[self.channel.id] {
+                                            unread.last_id = lastId
+                                            unread.mentions?.removeAll() // Clear mentions when marking as read
+                                            viewState.unreads[self.channel.id] = unread
+                                        } else if let currentUserId = viewState.currentUser?.id {
+                                            // Create a new unread entry if one doesn't exist
+                                            let unreadId = Unread.Id(channel: self.channel.id, user: currentUserId)
+                                            viewState.unreads[self.channel.id] = Unread(id: unreadId, last_id: lastId)
+                                        }
+                                        
+                                        // Update app badge count after marking as read
+                                        viewState.updateAppBadgeCount()
+                                        
+                                        self.isPresented.toggle()
+                                    }
+                                }
                             }
                         }
                         
@@ -255,7 +273,25 @@ struct ChannelOptionsSheet: View {
                                 Task{
                                     
                                     if let lastId = viewState.channels[self.channel.id]?.last_message_id {
-                                        let _ = await viewState.http.ackMessage(channel: self.channel.id, message: lastId)
+                                        let result = await viewState.http.ackMessage(channel: self.channel.id, message: lastId)
+                                        
+                                        // Update local unread state if successful
+                                        if case .success = result {
+                                            await MainActor.run {
+                                                if var unread = viewState.unreads[self.channel.id] {
+                                                    unread.last_id = lastId
+                                                    unread.mentions?.removeAll() // Clear mentions when marking as read
+                                                    viewState.unreads[self.channel.id] = unread
+                                                } else if let currentUserId = viewState.currentUser?.id {
+                                                    // Create a new unread entry if one doesn't exist
+                                                    let unreadId = Unread.Id(channel: self.channel.id, user: currentUserId)
+                                                    viewState.unreads[self.channel.id] = Unread(id: unreadId, last_id: lastId)
+                                                }
+                                                
+                                                // Update app badge count after marking as read
+                                                viewState.updateAppBadgeCount()
+                                            }
+                                        }
                                     }
                                 }
                             } label: {

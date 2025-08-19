@@ -51,6 +51,9 @@
     "Auto" : {
 
     },
+    "Badge Debugging" : {
+
+    },
     "Bans" : {
 
     },
@@ -82,6 +85,9 @@
           }
         }
       }
+    },
+    "Cleanup Stale Unreads" : {
+
     },
     "code" : {
       "comment" : "TOTP code"
@@ -145,6 +151,9 @@
 
     },
     "Dark" : {
+
+    },
+    "Debug Badge Count" : {
 
     },
     "Delete bot" : {
@@ -217,6 +226,9 @@
 
     },
     "Failed to generate QR Code" : {
+
+    },
+    "Force Mark All Read" : {
 
     },
     "Force remote notification upload" : {
@@ -490,6 +502,9 @@
           }
         }
       }
+    },
+    "Refresh Badge Count" : {
+
     },
     "register" : {
       "extractionState" : "manual",

@@ -699,6 +699,12 @@ struct MainApp: View {
                     PeptideWarningTemplateView()
                 }
                 
+            case .developer_settings:
+                DeveloperSettings()
+                
+            case .about_settings:
+                About()
+                
             }
         }
         // Show user profile sheet

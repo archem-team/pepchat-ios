@@ -309,6 +309,7 @@
 		F54587972E15304600797AC1 /* OggDecoder in Frameworks */ = {isa = PBXBuildFile; productRef = F54587962E15304600797AC1 /* OggDecoder */; };
 		F57D4C062E27D737004B7EF6 /* ChannelLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F57D4C052E27D735004B7EF6 /* ChannelLoadingView.swift */; };
 		F57D4C0A2E2E49BB004B7EF6 /* EmojiParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = F57D4C092E2E49BA004B7EF6 /* EmojiParser.swift */; };
+		F5D0DE5D2E4CC222002D44E1 /* BadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5D0DE5C2E4CC221002D44E1 /* BadgeView.swift */; };
 		F5E857052E10EEFE00E8655F /* AudioPlayerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E857042E10EEFC00E8655F /* AudioPlayerManager.swift */; };
 		F5E857072E10EF0A00E8655F /* AudioPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E857062E10EF0900E8655F /* AudioPlayerView.swift */; };
 		F5E857092E10EF1C00E8655F /* AudioSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E857082E10EF1B00E8655F /* AudioSessionManager.swift */; };
@@ -655,6 +656,7 @@
 		F545878C2E1504BB00797AC1 /* AttachmentPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentPreviewView.swift; sourceTree = "<group>"; };
 		F57D4C052E27D735004B7EF6 /* ChannelLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelLoadingView.swift; sourceTree = "<group>"; };
 		F57D4C092E2E49BA004B7EF6 /* EmojiParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiParser.swift; sourceTree = "<group>"; };
+		F5D0DE5C2E4CC221002D44E1 /* BadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeView.swift; sourceTree = "<group>"; };
 		F5E857042E10EEFC00E8655F /* AudioPlayerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerManager.swift; sourceTree = "<group>"; };
 		F5E857062E10EF0900E8655F /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
 		F5E857082E10EF1B00E8655F /* AudioSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionManager.swift; sourceTree = "<group>"; };
@@ -966,6 +968,7 @@
 			isa = PBXGroup;
 			children = (
 				05EF87572D121D840036AF82 /* PeptideUserAvatar.swift */,
+				F5D0DE5C2E4CC221002D44E1 /* BadgeView.swift */,
 			);
 			path = User;
 			sourceTree = "<group>";
@@ -2035,6 +2038,7 @@
 				1777DD842ADC24CE003D6C72 /* ReversedSrollView.swift in Sources */,
 				055C33CB2CD2707E00A6DCAE /* PeptideLoading.swift in Sources */,
 				059381CC2D29328F00A49BD5 /* ServerCategoryView.swift in Sources */,
+				F5D0DE5D2E4CC222002D44E1 /* BadgeView.swift in Sources */,
 				BC03378F4B91AD5652EAD6E4 /* RoleColorPickerSheet.swift in Sources */,
 				7031993BD3D264C895FFB466 /* CreateServerRoleView.swift in Sources */,
 				285F7581BAD6234593D2394F /* RoleDeleteSheet.swift in Sources */,

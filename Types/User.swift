@@ -154,6 +154,11 @@ public struct User: Identifiable, Codable, Equatable, Hashable {
     public func getBadges() -> Badges? {
         return Badges.fromCode(code: badges)
     }
+    
+    /// Get all badges for this user from the bitfield
+    public func getAllBadges() -> [Badges] {
+        return Badges.allBadgesFromCode(code: badges)
+    }
 }
 
 /// A structure representing a user's profile, including content and background.

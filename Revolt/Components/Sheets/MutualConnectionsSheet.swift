@@ -36,7 +36,7 @@ struct MutualConnectionsSheet: View {
     
     var body: some View {
         VStack{
-            PeptideSheet(isPresented: $isPresented, horizontalPadding: .zero){
+            PeptideSheet(isPresented: $isPresented, horizontalPadding: .zero, maxHeight: 600){
                 
                 ZStack(alignment: .center) {
                     PeptideText(
@@ -68,161 +68,183 @@ struct MutualConnectionsSheet: View {
                 }
                 .padding(.bottom, .size24)
                 
-                if(selectedTab == .friends){
-                    
-                    let firstUserId = self.mutualFriends.first?.id
-                    let lastUserId = self.mutualFriends.last?.id
-                    
-                    ForEach(self.mutualFriends, id: \.self){ friend in
-                        
-                        let userId = friend.id
-                        
-                        HStack(spacing: .zero){
-                        
-                            Avatar(user: friend, withPresence: false)
-                                .padding(.trailing, .size12)
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVStack(spacing: 0) {
+                        if(selectedTab == .friends){
                             
-                            PeptideText(text: friend.username)
-                            
-                            Spacer(minLength: .zero)
-                            
-                        }
-                        .padding(.all, .size12)
-                        .background{
-                            
-                            UnevenRoundedRectangle(topLeadingRadius: userId == firstUserId ? .radiusMedium : .zero,
-                                                   bottomLeadingRadius: userId == lastUserId ? .radiusMedium : .zero,
-                                                   bottomTrailingRadius: userId == lastUserId ? .radiusMedium : .zero,
-                                                   topTrailingRadius: userId == firstUserId ? .radiusMedium : .zero)
-                            .fill(Color.bgGray11)
-                            
-                        }
-                        .padding(.horizontal, .size16)
-                        
-                        if userId != lastUserId {
-                            PeptideDivider(backgrounColor: .borderGray10)
-                                .padding(.leading, .size48)
-                                .background(Color.bgGray11)
-                                .padding(.horizontal, .size16)
-                            
-                        }
-                        
-                    }
-                    
-                }
-                else if(selectedTab == .groups){
-                    
-                    let firstItemId = self.mutualChannels.first?.id
-                    let lastItemId = self.mutualChannels.last?.id
-                    
-                    ForEach(self.mutualChannels, id: \.id){ item in
-                        
-                        let itemId = item.id
-                        
-                        HStack(spacing: .zero){
-                            
-                            
-                            if let icon = item.icon {
-                                LazyImage(source: .file(icon), height: 32, width: 32, clipTo: Circle()) .padding(.trailing, .size12)
+                            if mutualFriends.isEmpty {
+                                PeptideText(text: "No mutual friends found", 
+                                          font: .peptideBody4, 
+                                          textColor: .textGray07)
+                                    .padding(.all, .padding24)
                             } else {
-
-                                PeptideText(text: item.name.first?.description ?? "")
-                                    .frame(width: 32, height: 32, alignment: .center)
-                                    .background(.bgGray12, in: .circle)
-                                    .padding(.trailing, .size12)
-
+                                let firstUserId = self.mutualFriends.first?.id
+                                let lastUserId = self.mutualFriends.last?.id
+                            
+                            ForEach(self.mutualFriends, id: \.self){ friend in
+                                
+                                let userId = friend.id
+                                
+                                HStack(spacing: .zero){
+                                
+                                    Avatar(user: friend, withPresence: false)
+                                        .padding(.trailing, .size12)
+                                    
+                                    PeptideText(text: friend.username)
+                                    
+                                    Spacer(minLength: .zero)
+                                    
+                                }
+                                .padding(.all, .size12)
+                                .background{
+                                    
+                                    UnevenRoundedRectangle(topLeadingRadius: userId == firstUserId ? .radiusMedium : .zero,
+                                                           bottomLeadingRadius: userId == lastUserId ? .radiusMedium : .zero,
+                                                           bottomTrailingRadius: userId == lastUserId ? .radiusMedium : .zero,
+                                                           topTrailingRadius: userId == firstUserId ? .radiusMedium : .zero)
+                                    .fill(Color.bgGray11)
+                                    
+                                }
+                                .padding(.horizontal, .size16)
+                                
+                                if userId != lastUserId {
+                                    PeptideDivider(backgrounColor: .borderGray10)
+                                        .padding(.leading, .size48)
+                                        .background(Color.bgGray11)
+                                        .padding(.horizontal, .size16)
+                                    
+                                }
+                                
                             }
                             
-
-                            
-                            PeptideText(text: item.name)
-                            
-                            Spacer(minLength: .zero)
-                            
+                            }
                         }
-                        .padding(.all, .size12)
-                        .background{
+                        else if(selectedTab == .groups){
                             
-                            UnevenRoundedRectangle(topLeadingRadius: itemId == firstItemId ? .radiusMedium : .zero,
-                                                   bottomLeadingRadius: itemId == lastItemId ? .radiusMedium : .zero,
-                                                   bottomTrailingRadius: itemId == lastItemId ? .radiusMedium : .zero,
-                                                   topTrailingRadius: itemId == firstItemId ? .radiusMedium : .zero)
-                            .fill(Color.bgGray11)
-                            
-                        }
-                        .padding(.horizontal, .size16)
-                        
-                        if itemId != lastItemId {
-                            PeptideDivider(backgrounColor: .borderGray10)
-                                .padding(.leading, .size48)
-                                .background(Color.bgGray11)
-                                .padding(.horizontal, .size16)
-                            
-                        }
-                        
-                    }
-                    
-                }
-                else if(selectedTab == .servers){
-                    
-                    let firstItemId = self.mutualServers.first?.id
-                    let lastItemId = self.mutualServers.last?.id
-                    
-                    ForEach(self.mutualServers, id: \.id){ item in
-                        
-                        let itemId = item.id
-                        
-                        HStack(spacing: .zero){
-                            
-                            
-                            if let icon = item.icon {
-                                LazyImage(source: .file(icon), height: 32, width: 32, clipTo: Circle()) .padding(.trailing, .size12)
+                            if mutualChannels.isEmpty {
+                                PeptideText(text: "No mutual groups found", 
+                                          font: .peptideBody4, 
+                                          textColor: .textGray07)
+                                    .padding(.all, .padding24)
                             } else {
+                                let firstItemId = self.mutualChannels.first?.id
+                                let lastItemId = self.mutualChannels.last?.id
+                                
+                                ForEach(self.mutualChannels, id: \.id){ item in
+                                
+                                let itemId = item.id
+                                
+                                HStack(spacing: .zero){
+                                    
+                                    
+                                    if let icon = item.icon {
+                                        LazyImage(source: .file(icon), height: 32, width: 32, clipTo: Circle()) .padding(.trailing, .size12)
+                                    } else {
 
-                                PeptideText(text: item.name.first?.description ?? "")
-                                    .frame(width: 32, height: 32, alignment: .center)
-                                    .background(.bgGray12, in: .circle)
-                                    .padding(.trailing, .size12)
+                                        PeptideText(text: item.name.first?.description ?? "")
+                                            .frame(width: 32, height: 32, alignment: .center)
+                                            .background(.bgGray12, in: .circle)
+                                            .padding(.trailing, .size12)
 
+                                    }
+                                    
+
+                                    
+                                    PeptideText(text: item.name)
+                                    
+                                    Spacer(minLength: .zero)
+                                    
+                                }
+                                .padding(.all, .size12)
+                                .background{
+                                    
+                                    UnevenRoundedRectangle(topLeadingRadius: itemId == firstItemId ? .radiusMedium : .zero,
+                                                           bottomLeadingRadius: itemId == lastItemId ? .radiusMedium : .zero,
+                                                           bottomTrailingRadius: itemId == lastItemId ? .radiusMedium : .zero,
+                                                           topTrailingRadius: itemId == firstItemId ? .radiusMedium : .zero)
+                                    .fill(Color.bgGray11)
+                                    
+                                }
+                                .padding(.horizontal, .size16)
+                                
+                                if itemId != lastItemId {
+                                    PeptideDivider(backgrounColor: .borderGray10)
+                                        .padding(.leading, .size48)
+                                        .background(Color.bgGray11)
+                                        .padding(.horizontal, .size16)
+                                    
+                                }
+                                
                             }
                             
+                            }
+                        }
+                        else if(selectedTab == .servers){
+                            
+                            if mutualServers.isEmpty {
+                                PeptideText(text: "No mutual servers found", 
+                                          font: .peptideBody4, 
+                                          textColor: .textGray07)
+                                    .padding(.all, .padding24)
+                            } else {
+                                let firstItemId = self.mutualServers.first?.id
+                                let lastItemId = self.mutualServers.last?.id
+                                
+                                ForEach(self.mutualServers, id: \.id){ item in
+                                
+                                let itemId = item.id
+                                
+                                HStack(spacing: .zero){
+                                    
+                                    
+                                    if let icon = item.icon {
+                                        LazyImage(source: .file(icon), height: 32, width: 32, clipTo: Circle()) .padding(.trailing, .size12)
+                                    } else {
 
-                            
-                            PeptideText(text: item.name)
-                            
-                            Spacer(minLength: .zero)
-                            
-                        }
-                        .padding(.all, .size12)
-                        .background{
-                            
-                            UnevenRoundedRectangle(topLeadingRadius: itemId == firstItemId ? .radiusMedium : .zero,
-                                                   bottomLeadingRadius: itemId == lastItemId ? .radiusMedium : .zero,
-                                                   bottomTrailingRadius: itemId == lastItemId ? .radiusMedium : .zero,
-                                                   topTrailingRadius: itemId == firstItemId ? .radiusMedium : .zero)
-                            .fill(Color.bgGray11)
-                            
-                        }
-                        .padding(.horizontal, .size16)
-                        
-                        if itemId != lastItemId {
-                            PeptideDivider(backgrounColor: .borderGray10)
-                                .padding(.leading, .size48)
-                                .background(Color.bgGray11)
+                                        PeptideText(text: item.name.first?.description ?? "")
+                                            .frame(width: 32, height: 32, alignment: .center)
+                                            .background(.bgGray12, in: .circle)
+                                            .padding(.trailing, .size12)
+
+                                    }
+                                    
+
+                                    
+                                    PeptideText(text: item.name)
+                                    
+                                    Spacer(minLength: .zero)
+                                    
+                                }
+                                .padding(.all, .size12)
+                                .background{
+                                    
+                                    UnevenRoundedRectangle(topLeadingRadius: itemId == firstItemId ? .radiusMedium : .zero,
+                                                           bottomLeadingRadius: itemId == lastItemId ? .radiusMedium : .zero,
+                                                           bottomTrailingRadius: itemId == lastItemId ? .radiusMedium : .zero,
+                                                           topTrailingRadius: itemId == firstItemId ? .radiusMedium : .zero)
+                                    .fill(Color.bgGray11)
+                                    
+                                }
                                 .padding(.horizontal, .size16)
+                                
+                                if itemId != lastItemId {
+                                    PeptideDivider(backgrounColor: .borderGray10)
+                                        .padding(.leading, .size48)
+                                        .background(Color.bgGray11)
+                                        .padding(.horizontal, .size16)
+                                    
+                                }
+                                
+                            }
                             
+                            }
                         }
-                        
                     }
-                    
+                    .padding(.bottom, .padding16)
                 }
+                .frame(minHeight: 100)
                 
             }
-        }
-        .padding(top: .padding24, bottom: .padding24)
-        .background{
-            RoundedRectangle(cornerRadius: .radiusMedium)
-                .fill(Color.bgGray12)
         }
         .task {
             // Fetch mutual friends and servers if user is not the current user

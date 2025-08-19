@@ -13,6 +13,47 @@ struct DiscoverItemView: View {
     var isMember: Bool = false
     @EnvironmentObject var viewState: ViewState
     
+    // Helper function to determine the display color
+    private var displayColor: Color {
+        if let colorHex = discoverItem.color, !colorHex.isEmpty, colorHex.hasPrefix("#") {
+            // Parse custom color from CSV
+            print("🎨 [DiscoverItemView] Using custom color \(colorHex) for \(discoverItem.title)")
+            return Color(hex: colorHex) ?? (discoverItem.isNew ? .textYellow07 : .textDefaultGray01)
+        } else if discoverItem.isNew {
+            // Use yellow for new items
+            return .textYellow07
+        } else {
+            // Use default gray for normal items
+            return .textDefaultGray01
+        }
+    }
+    
+    private var iconColor: Color {
+        if let colorHex = discoverItem.color, !colorHex.isEmpty, colorHex.hasPrefix("#") {
+            // Parse custom color from CSV
+            return Color(hex: colorHex) ?? (discoverItem.isNew ? .iconYellow07 : .iconDefaultGray01)
+        } else if discoverItem.isNew {
+            // Use yellow for new items
+            return .iconYellow07
+        } else {
+            // Use default gray for normal items
+            return .iconDefaultGray01
+        }
+    }
+    
+    private var arrowIconColor: Color {
+        if isMember {
+            return .iconGreen07
+        } else if let colorHex = discoverItem.color, !colorHex.isEmpty, colorHex.hasPrefix("#") {
+            // Parse custom color from CSV
+            return Color(hex: colorHex) ?? (discoverItem.isNew ? .iconYellow07 : .iconGray07)
+        } else if discoverItem.isNew {
+            return .iconYellow07
+        } else {
+            return .iconGray07
+        }
+    }
+    
     var body: some View {
         
         Button{
@@ -28,14 +69,14 @@ struct DiscoverItemView: View {
                 
                 PeptideIcon(iconName: self.discoverItem.disabled ? .peptideLock : .peptideTeamUsers,
                             size: .size24,
-                            color: discoverItem.isNew ? .iconYellow07 : .iconDefaultGray01)
+                            color: iconColor)
                 
                 VStack(alignment: .leading, spacing: .spacing2){
                     
                     HStack(spacing: .spacing4) {
                         PeptideText(text: discoverItem.title,
                                     font: .peptideCallout,
-                                    textColor: discoverItem.isNew ? .textYellow07 : .textDefaultGray01,
+                                    textColor: displayColor,
                                     alignment: .leading)
                         
                         // Show member badge if user is a member
@@ -62,7 +103,7 @@ struct DiscoverItemView: View {
                 
                 PeptideIcon(iconName: isMember ? .peptideDoneCircle : .peptideArrowRight,
                             size: .size20,
-                            color: isMember ? .iconGreen07 : (discoverItem.isNew ? .iconYellow07 : .iconGray07))
+                            color: arrowIconColor)
                 
                 
             }

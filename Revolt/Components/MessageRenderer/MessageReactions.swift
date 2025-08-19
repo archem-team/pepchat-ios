@@ -247,8 +247,11 @@ struct MessageReactions: View {
         let messageId = message.id
         let channelId = channel.id
         
+        print("🔥 SENDING REACTION: emoji=\(emoji), messageId=\(messageId), channelId=\(channelId)")
+        
         Task {
-            await viewState.http.reactMessage(channel: channelId, message: messageId, emoji: emoji)
+            let result = await viewState.http.reactMessage(channel: channelId, message: messageId, emoji: emoji)
+            print("🔥 REACTION API RESULT: \(result)")
         }
     }
 }

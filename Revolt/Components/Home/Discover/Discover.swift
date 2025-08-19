@@ -14,4 +14,5 @@ struct DiscoverItem {
     let isNew : Bool
     let sortOrder: Int
     let disabled: Bool
+    let color: String?
 }

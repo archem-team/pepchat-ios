@@ -1223,8 +1223,23 @@ struct InnerContents: UIViewRepresentable {
         let attrString = NSMutableAttributedString()
         
         if !content.isEmpty {
+            // Pre-process channel mentions before markdown parsing to avoid conflicts
+            var processedContent = content
+            
+            // Replace channel mentions with placeholders before markdown parsing
+            let channelMentionRegex = /<#([A-Za-z0-9]+)>/
+            let channelMatches = Array(processedContent.matches(of: channelMentionRegex))
+            
+            var channelPlaceholders: [String: String] = [:]
+            for (index, match) in channelMatches.enumerated() {
+                let placeholder = "CHANNEL_PLACEHOLDER_\(index)"
+                let originalMatch = String(processedContent[match.range])
+                channelPlaceholders[placeholder] = originalMatch
+                processedContent = processedContent.replacingOccurrences(of: originalMatch, with: placeholder)
+            }
+            
             do {
-                if let contentData = content.data(using: .utf8) {
+                if let contentData = processedContent.data(using: .utf8) {
                     let parsedAttrString = try NSMutableAttributedString(
                         markdown: contentData, 
                         options: .init(
@@ -1233,7 +1248,25 @@ struct InnerContents: UIViewRepresentable {
                             failurePolicy: .returnPartiallyParsedIfPossible
                         )
                     )
-                    attrString.append(parsedAttrString)
+                    
+                    // Restore channel mentions after markdown parsing
+                    var finalString = parsedAttrString.string
+                    for (placeholder, originalMention) in channelPlaceholders {
+                        finalString = finalString.replacingOccurrences(of: placeholder, with: originalMention)
+                    }
+                    
+                    let finalAttrString = NSMutableAttributedString(string: finalString)
+                    
+                    // Copy attributes from parsed string to final string
+                    parsedAttrString.enumerateAttributes(in: NSRange(location: 0, length: parsedAttrString.length), options: []) { attrs, range, _ in
+                        let parsedSubstring = (parsedAttrString.string as NSString).substring(with: range)
+                        if let finalRange = finalAttrString.string.range(of: parsedSubstring) {
+                            let nsRange = NSRange(finalRange, in: finalAttrString.string)
+                            finalAttrString.addAttributes(attrs, range: nsRange)
+                        }
+                    }
+                    
+                    attrString.append(finalAttrString)
                 } else {
                     // Fallback if UTF-8 encoding fails
                     attrString.append(NSAttributedString(string: content))
@@ -1244,6 +1277,9 @@ struct InnerContents: UIViewRepresentable {
             }
         }
         
+        // Debug: Check content before processing
+        print("🔍 Before processing - Content: \(attrString.string)")
+        
         // Apply styling and process URLs
         fixAttributedStringStyling(for: attrString)
         
@@ -1252,6 +1288,9 @@ struct InnerContents: UIViewRepresentable {
         
         // Process channel mentions: <#channel_id>
         processChannelMentions(in: attrString)
+        
+        // Debug: Check content after processing
+        print("🔍 After processing - Content: \(attrString.string)")
         
         // Process emoji syntax: :emoji_id:
         processEmojiCodes(in: attrString, textview: textview)
@@ -1600,12 +1639,21 @@ struct InnerContents: UIViewRepresentable {
     // Process channel mentions: <#channel_id>
     private func processChannelMentions(in attrString: NSMutableAttributedString) {
         // FIXED: Collect matches first to avoid offset calculation issues
-        let channelMentionMatches = Array(attrString.string.matches(of: /<#(\w{26})>/))
+        let channelMentionMatches = Array(attrString.string.matches(of: /<#([A-Za-z0-9]+)>/))
+        
+        // Debug: Print found matches
+        print("🔍 Channel mention processing: Found \(channelMentionMatches.count) matches in: \(attrString.string)")
+        if attrString.string.contains("<#") {
+            print("🔍 STRING CONTAINS <# - processing should happen!")
+        }
         
         for match in channelMentionMatches.reversed() {
             let id = match.output.1
+            print("🔍 Processing channel ID: \(id)")
             
-            if let channel = viewState.channels[String(id)] {
+            // Try to find channel in both channels and allEventChannels like MessageCell.swift does
+            if let channel = viewState.channels[String(id)] ?? viewState.allEventChannels[String(id)] {
+                print("✅ Found channel: \(channel.getName(viewState)) for ID: \(id)")
                 
                 // Safely calculate the offset using NSRange instead of utf16Offset
                 let nsRange = NSRange(match.range, in: attrString.string)
@@ -1623,6 +1671,19 @@ struct InnerContents: UIViewRepresentable {
                 let channelName = channel.getName(viewState)
                 attrString.deleteCharacters(in: nsRange)
                 attrString.insert(NSAttributedString(string: "#\(channelName)", attributes: currentAttrs), at: nsRange.location)
+            } else {
+                print("❌ Channel not found for ID: \(id)")
+                // If channel not found, replace with #unknown-channel to avoid showing raw ID (like MessageCell.swift)
+                let nsRange = NSRange(match.range, in: attrString.string)
+                guard nsRange.location != NSNotFound && 
+                      nsRange.location >= 0 && 
+                      nsRange.location + nsRange.length <= attrString.length else {
+                    continue
+                }
+                
+                let currentAttrs = attrString.attributes(at: nsRange.location, effectiveRange: nil)
+                attrString.deleteCharacters(in: nsRange)
+                attrString.insert(NSAttributedString(string: "#unknown-channel", attributes: currentAttrs), at: nsRange.location)
             }
         }
     }
@@ -1654,10 +1715,14 @@ struct InnerContents: UIViewRepresentable {
             let emojiSize = CGSize(width: 20, height: 20)
             attachment.bounds = CGRect(x: 0, y: -4, width: emojiSize.width, height: emojiSize.height)
 
-            KF.url(URL(string: "https://peptide.chat/autumn/emojis/\(id)")!)
-                .placeholder(.none)
-                .appendProcessor(ResizingImageProcessor(referenceSize: emojiSize, mode: .aspectFit))
-                .set(to: attachment, attributedView: textview)
+            // Use dynamic API endpoint for emoji loading
+            if let apiInfo = viewState.apiInfo,
+               let url = URL(string: "\(apiInfo.features.autumn.url)/emojis/\(id)") {
+                KF.url(url)
+                    .placeholder(.none)
+                    .appendProcessor(ResizingImageProcessor(referenceSize: emojiSize, mode: .aspectFit))
+                    .set(to: attachment, attributedView: textview)
+            }
 
             let attachmentString = NSMutableAttributedString(attachment: attachment)
             attachmentString.addAttributes([
@@ -1695,7 +1760,7 @@ struct InnerContents: UIViewRepresentable {
                     let emojiSize = CGSize(width: 20, height: 20)
                     attachment.bounds = CGRect(x: 0, y: -4, width: emojiSize.width, height: emojiSize.height)
                     
-                    let customEmojiURL = EmojiParser.parseEmoji(emoji)
+                    let customEmojiURL = EmojiParser.parseEmoji(emoji, apiInfo: viewState.apiInfo)
                     if let url = URL(string: customEmojiURL) {
                         KF.url(url)
                             .placeholder(.none)

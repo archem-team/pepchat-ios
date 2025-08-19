@@ -36,19 +36,49 @@ public  enum Badges: Int, CaseIterable {
         }
     }
     
+    /// Extract all badges from a bitfield value
+    static func allBadgesFromCode(code: Int?) -> [Badges] {
+        guard let code = code, code > 0 else { return [] }
+        
+        var badges: [Badges] = []
+        for badge in Badges.allCases {
+            if (code & badge.rawValue) != 0 {
+                badges.append(badge)
+            }
+        }
+        return badges
+    }
+    
     public func getImage() -> String {
         switch self{
-        case .developer: return "developer.png"
-        case .translator: return "translator.png"
-        case .supporter: return "supporter.png"
-        case .responsible_disclosure: return "responsible_disclosure.png"
-        case .founder: return "founder.png"
-        case .moderation: return "moderation.png"
-        case .active_supporter: return "active_supporter.png"
-        case .paw: return "paw.png"
-        case .early_adopter: return "early_adopter.png"
-        case .amog: return "amog.png"
-        case .amorbus: return "amorbus.png"
+        case .developer: return "developer"
+        case .translator: return "translator"
+        case .supporter: return "supporter"
+        case .responsible_disclosure: return "verified" // fallback to verified badge
+        case .founder: return "founder"
+        case .moderation: return "moderation"
+        case .active_supporter: return "supporter" // fallback to supporter badge
+        case .paw: return "paw"
+        case .early_adopter: return "early_adopter"
+        case .amog: return "amog"
+        case .amorbus: return "amorbus"
+        }
+    }
+    
+    /// Get the remote URL for the badge
+    public func getRemoteURL() -> String {
+        switch self{
+        case .developer: return "https://peptide.chat/assets/badges/developer.png"
+        case .translator: return "https://peptide.chat/assets/badges/first_100_members.svg"
+        case .supporter: return "https://peptide.chat/assets/badges/supporter.png"
+        case .responsible_disclosure: return "https://peptide.chat/assets/badges/trusted-seller.png"
+        case .founder: return "https://peptide.chat/assets/badges/founder.svg"
+        case .moderation: return "https://peptide.chat/assets/badges/administrator.png"
+        case .active_supporter: return "https://peptide.chat/assets/badges/supporter.png" // same as supporter
+        case .paw: return "https://peptide.chat/assets/badges/clown.png"
+        case .early_adopter: return "https://peptide.chat/assets/badges/top-contributor.png"
+        case .amog: return "https://peptide.chat/assets/badges/karen.png"
+        case .amorbus: return "https://peptide.chat/assets/badges/gump.png"
         }
     }
     

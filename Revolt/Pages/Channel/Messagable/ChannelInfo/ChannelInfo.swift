@@ -141,6 +141,9 @@ struct UserDisplay: View {
                                    onBanTap: {
                 isPresentedUserOpitonSheet.toggle()
                 isPresentedBanMemberSheet.toggle()
+            },
+                                   onRemoveUser: {
+                removeUser()
             })
         }
         .popup(isPresented: $isPresentedTransferOwnershipSheet, view: {
@@ -600,6 +603,12 @@ struct ChannelInfo: View {
                                             Task {
                                                 if(self.channel.isTextChannel){
                                                     await fetchMembers()
+                                                } else {
+                                                    // For group channels, trigger a view refresh by updating the ViewState
+                                                    // This will cause the users computed property to recalculate
+                                                    await MainActor.run {
+                                                        self.viewState.objectWillChange.send()
+                                                    }
                                                 }
                                             }
                                         }

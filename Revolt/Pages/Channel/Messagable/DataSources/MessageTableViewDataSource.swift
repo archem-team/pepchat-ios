@@ -137,6 +137,10 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
         //print("📱 Configuring cell at row \(indexPath.row) with message ID: \(messageId)")
         
         if let message = viewModelRef.viewState.messages[messageId] {
+            // Debug log for reactions
+            if let reactions = message.reactions, !reactions.isEmpty {
+                print("🔥 DATASOURCE: Message \(messageId) has reactions: \(reactions.keys.joined(separator: ", "))")
+            }
             
             // Check if this is a system message
             if message.system != nil {

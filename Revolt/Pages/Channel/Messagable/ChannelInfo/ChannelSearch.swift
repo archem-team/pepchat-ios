@@ -225,26 +225,22 @@ struct ChannelSearch: View {
         isNavigatingToMessage = true
         
         // Create the appropriate URL for the message based on whether it's in a server or DM
-        let messageURL: URL
-        
-        if let targetChannel = viewState.channels[message.channel] {
-            if let serverId = targetChannel.server {
-                // Server channel - create server URL
-                messageURL = URL(string: "https://peptide.chat/server/\(serverId)/channel/\(message.channel)/\(message.id)")!
-            } else {
-                // DM or group channel - create channel URL
-                messageURL = URL(string: "https://peptide.chat/channel/\(message.channel)/\(message.id)")!
+        Task {
+            let serverId = viewState.channels[message.channel]?.server
+            let messageLink = await generateMessageLink(
+                serverId: serverId,
+                channelId: message.channel,
+                messageId: message.id,
+                viewState: viewState
+            )
+            let messageURL = URL(string: messageLink)!
+            
+            await MainActor.run {
+                print("🔍 Search: Navigating to message URL: \(messageURL.absoluteString)")
+                // Use the existing URL handling system by simulating a URL tap
+                handleMessageURL(messageURL)
             }
-        } else {
-            // Fallback to channel URL if server info not available
-            messageURL = URL(string: "https://peptide.chat/channel/\(message.channel)/\(message.id)")!
         }
-        
-        print("🔍 Search: Navigating to message URL: \(messageURL.absoluteString)")
-        
-        // Use the existing URL handling system by simulating a URL tap
-        // This will trigger the same nearby API call and navigation as clicking a message link
-        handleMessageURL(messageURL)
     }
     
     /// Handles message URL navigation using the existing internal URL system
@@ -437,4 +433,35 @@ struct ChannelSearch: View {
     
     return ChannelSearch(channel: .constant(viewState.channels["0"]!)) // Displays the search view for a specific channel.
         .applyPreviewModifiers(withState: viewState) // Applies preview modifiers to the view.
+}
+
+// MARK: - Helper Functions
+/// Generates a dynamic message link based on the current domain
+private func generateMessageLink(serverId: String?, channelId: String, messageId: String, viewState: ViewState) async -> String {
+    // Get the current base URL and determine the web domain
+    let baseURL = await viewState.baseURL ?? viewState.defaultBaseURL
+    let webDomain: String
+    
+    if baseURL.contains("peptide.chat") {
+        webDomain = "https://peptide.chat"
+    } else if baseURL.contains("app.revolt.chat") {
+        webDomain = "https://app.revolt.chat"
+    } else {
+        // Fallback for other instances - extract domain from API URL
+        if let url = URL(string: baseURL),
+           let host = url.host {
+            webDomain = "https://\(host)"
+        } else {
+            webDomain = "https://app.revolt.chat" // Ultimate fallback
+        }
+    }
+    
+    // Generate proper URL based on channel type
+    if let serverId = serverId, !serverId.isEmpty {
+        // Server channel
+        return "\(webDomain)/server/\(serverId)/channel/\(channelId)/\(messageId)"
+    } else {
+        // DM channel
+        return "\(webDomain)/channel/\(channelId)/\(messageId)"
+    }
 }

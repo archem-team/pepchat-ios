@@ -86,6 +86,25 @@ struct ChannelSettings: View {
                 }
                    
                 
+                // Members button for group channels
+                if case .group_dm_channel(_) = channel {
+                    Button {
+                        self.viewState.path.append(NavigationDestination.channel_info(channel.id, server?.id))
+                    } label: {
+                        PeptideActionButton(icon: .peptideUsers,
+                                            title: "Members")
+                        .frame(minHeight: .size56)
+                        .background{
+                            RoundedRectangle(cornerRadius: .radiusMedium).fill(Color.bgGray11)
+                                .overlay{
+                                    RoundedRectangle(cornerRadius: .radiusMedium)
+                                        .stroke(.borderGray10, lineWidth: .size1)
+                                }
+                        }
+                    }
+                    .padding(.top, .padding16)
+                }
+                
                 if channelPermission.contains(.managePermissions){
                     Button{
                         self.viewState.path.append(NavigationDestination.channel_permissions_settings(serverId: server?.id, channelId: channel.id))

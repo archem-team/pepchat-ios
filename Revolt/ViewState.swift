@@ -107,6 +107,8 @@ enum ChannelSelection: Hashable, Codable {
 enum NavigationDestination: Hashable, Codable {
     case discover
     case settings
+    case about_settings
+    case developer_settings
     case server_settings(String)
     case channel_info(String,String?)
     case add_members_to_channel(String)
@@ -346,31 +348,30 @@ public class ViewState: ObservableObject {
     
     @Published var servers: OrderedDictionary<String, Server> {
         didSet {
-            // OPTIMIZED: Move encoding to background thread with debouncing
-            let servers = self.servers
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(servers) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "servers", data: data)
-                    }
-                }
-            }
+            // DISABLED: Don't save servers to UserDefaults to force refresh from backend
+            // let servers = self.servers
+            // Task.detached(priority: .background) { [weak self] in
+            //     guard let self = self else { return }
+            //     if let data = try? JSONEncoder().encode(servers) {
+            //         await MainActor.run {
+            //             self.debouncedSave(key: "servers", data: data)
+            //         }
+            //     }
+            // }
         }
     }
     @Published var channels: [String: Channel] {
         didSet {
-            // MEMORY MANAGEMENT: Use debounced save for channels
-            // Move JSON encoding off main thread to prevent app hanging
-            let channels = self.channels
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(channels) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "channels", data: data)
-                    }
-                }
-            }
+            // DISABLED: Don't save channels to UserDefaults to force refresh from backend
+            // let channels = self.channels
+            // Task.detached(priority: .background) { [weak self] in
+            //     guard let self = self else { return }
+            //     if let data = try? JSONEncoder().encode(channels) {
+            //         await MainActor.run {
+            //             self.debouncedSave(key: "channels", data: data)
+            //         }
+            //     }
+            // }
         }
     }
     @Published var messages: [String: Message] {
@@ -415,30 +416,30 @@ public class ViewState: ObservableObject {
     }
     @Published var members: [String: [String: Member]] {
         didSet {
-            // OPTIMIZED: Move encoding to background thread with debouncing
-            let members = self.members
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(members) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "members", data: data)
-                    }
-                }
-            }
+            // DISABLED: Don't save members to UserDefaults to force refresh from backend
+            // let members = self.members
+            // Task.detached(priority: .background) { [weak self] in
+            //     guard let self = self else { return }
+            //     if let data = try? JSONEncoder().encode(members) {
+            //         await MainActor.run {
+            //             self.debouncedSave(key: "members", data: data)
+            //         }
+            //     }
+            // }
         }
     }
     @Published var dms: [Channel] {
         didSet {
-            // OPTIMIZED: Move encoding to background thread with debouncing
-            let dms = self.dms
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(dms) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "dms", data: data)
-                    }
-                }
-            }
+            // DISABLED: Don't save DMs to UserDefaults to force refresh from backend
+            // let dms = self.dms
+            // Task.detached(priority: .background) { [weak self] in
+            //     guard let self = self else { return }
+            //     if let data = try? JSONEncoder().encode(dms) {
+            //         await MainActor.run {
+            //             self.debouncedSave(key: "dms", data: data)
+            //         }
+            //     }
+            // }
         }
     }
     
@@ -632,6 +633,9 @@ public class ViewState: ObservableObject {
     @Published var launchNotificationServerId: String? = nil
     @Published var launchNotificationHandled: Bool = false
     
+    // Track the server context when accepting an invite
+    @Published var lastInviteServerContext: String? = nil
+    
     // MEMORY MANAGEMENT: Track previous channel for cleanup
     private var previousChannelId: String? = nil
     
@@ -667,6 +671,21 @@ public class ViewState: ObservableObject {
         // Store and schedule the work item
         saveWorkItems[key] = workItem
         DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + saveDebounceInterval, execute: workItem)
+    }
+    
+    /// Force immediate save of users data without debouncing
+    /// Used when app is terminating to ensure data is persisted
+    public func forceSaveUsers() {
+        // Cancel any pending save for users
+        saveWorkItems["users"]?.cancel()
+        saveWorkItems.removeValue(forKey: "users")
+        
+        // Immediately encode and save users data
+        if let data = try? JSONEncoder().encode(users) {
+            UserDefaults.standard.set(data, forKey: "users")
+            UserDefaults.standard.synchronize() // Force synchronization
+            print("💾 Forced save of users data completed")
+        }
     }
     
     @MainActor
@@ -1166,14 +1185,17 @@ public class ViewState: ObservableObject {
         // print("📱 INIT: Loading data from UserDefaults...")
         
         self.users = ViewState.decodeUserDefaults(forKey: "users", withDecoder: decoder, defaultingTo: [:])
-        self.servers = ViewState.decodeUserDefaults(forKey: "servers", withDecoder: decoder, defaultingTo: [:])
-        self.channels = ViewState.decodeUserDefaults(forKey: "channels", withDecoder: decoder, defaultingTo: [:])
+        // Force refresh servers and channels from backend instead of using cached data
+        self.servers = [:] // ViewState.decodeUserDefaults(forKey: "servers", withDecoder: decoder, defaultingTo: [:])
+        self.channels = [:] // ViewState.decodeUserDefaults(forKey: "channels", withDecoder: decoder, defaultingTo: [:])
         /*self.messages = ViewState.decodeUserDefaults(forKey: "messages", withDecoder: decoder, defaultingTo: [:])
          self.channelMessages = ViewState.decodeUserDefaults(forKey: "channelMessages", withDecoder: decoder, defaultingTo: [:])*/
         self.messages = [:]
         self.channelMessages = [:]
-        self.members = ViewState.decodeUserDefaults(forKey: "members", withDecoder: decoder, defaultingTo: [:])
-        self.dms = ViewState.decodeUserDefaults(forKey: "dms", withDecoder: decoder, defaultingTo: [])
+        // Force refresh members from backend
+        self.members = [:] // ViewState.decodeUserDefaults(forKey: "members", withDecoder: decoder, defaultingTo: [:])
+        // Force refresh DMs from backend
+        self.dms = [] // ViewState.decodeUserDefaults(forKey: "dms", withDecoder: decoder, defaultingTo: [])
         self.emojis = ViewState.decodeUserDefaults(forKey: "emojis", withDecoder: decoder, defaultingTo: [:])
         
         //self.currentSelection = ViewState.decodeUserDefaults(forKey: "currentSelection", withDecoder: decoder, defaultingTo: .dms)
@@ -1239,6 +1261,14 @@ public class ViewState: ObservableObject {
         ) { [weak self] _ in
             Task { [weak self] in
                 await self?.preloadImportantChannels()
+            }
+        }
+        
+        // CLEANUP: Clean up stale unreads on startup
+        // This ensures badge count is accurate even if channels were deleted while app was closed
+        Task {
+            await MainActor.run { [weak self] in
+                self?.cleanupStaleUnreads()
             }
         }
     }
@@ -2266,6 +2296,15 @@ public class ViewState: ObservableObject {
             } else {
                 print("📵 PRELOAD_DISABLED: Skipped automatic preloading after Ready event")
             }
+            
+            // CLEANUP: Clean up stale unreads after Ready event
+            // This ensures that unreads for deleted channels are removed after server sync
+            Task {
+                await MainActor.run {
+                    self.cleanupStaleUnreads()
+                    print("🧹 Cleaned up stale unreads after Ready event")
+                }
+            }
 
         case .message(let m):
             // print("📥 VIEWSTATE: Processing new message - id: \(m.id), channel: \(m.channel)")
@@ -2305,21 +2344,27 @@ public class ViewState: ObservableObject {
             let userMentioned = m.mentions?.contains(where: {
                 $0 == currentUser?.id
             }) ?? false
+            
+            // Check if message is from current user
+            let isFromCurrentUser = m.author == currentUser?.id
                         
             if let unread = unreads[m.channel]{
-                
-                
-                /*if let lastMessageId = channelMessages[m.channel]?.last {
-                    unreads[m.channel]?.last_id = channelMessages[m.channel]?.last
-                }*/
-                
-                if unreads[m.channel]?.mentions != nil && userMentioned {
-                    unreads[m.channel]?.mentions?.append(m.id)
-                } else if userMentioned {
-                    unreads[m.channel]!.mentions = [m.id]
+                // Don't update unread for messages sent by the current user
+                if !isFromCurrentUser {
+                    // Update last_id for messages from other users
+                    // This ensures unread count properly reflects new messages
+                    unreads[m.channel]?.last_id = m.id
+                    
+                    if userMentioned {
+                        if unreads[m.channel]?.mentions != nil {
+                            unreads[m.channel]?.mentions?.append(m.id)
+                        } else {
+                            unreads[m.channel]!.mentions = [m.id]
+                        }
+                    }
                 }
-                
-            } else {
+            } else if !isFromCurrentUser {
+                // Only create unread entry for messages from other users
                 unreads[m.channel] = .init(id: .init(channel: m.channel, user: currentUser?.id ?? ""),
                                            last_id: m.id,
                                            mentions: userMentioned ? [m.id]:[])
@@ -2692,6 +2737,10 @@ public class ViewState: ObservableObject {
                 // Other channel types - store in event channels
                 print("📥 VIEWSTATE: Stored unknown channel type \(channel.id)")
             }
+            
+            // Update app badge count when new channel is created
+            // This ensures unread messages in the new channel are counted
+            updateAppBadgeCount()
             
         case .channel_update(let e):
             
@@ -3480,6 +3529,10 @@ public class ViewState: ObservableObject {
         
         // print("🔄 LAZY_CHANNEL: Loaded \(loadedCount) channels for server \(serverId)")
         // print("🔄 LAZY_CHANNEL: Total active channels now: \(channels.count)")
+        
+        // Update app badge count after loading server channels
+        // This ensures unread messages in the newly loaded channels are counted
+        updateAppBadgeCount()
     }
     
     // LAZY LOADING: Unload channels for a server when user leaves it
@@ -4164,6 +4217,12 @@ public class ViewState: ObservableObject {
         
         servers[response.server.id] = response.server
         
+        // Update app badge count after joining a server
+        // This ensures unread messages in the new channels are counted
+        await MainActor.run {
+            updateAppBadgeCount()
+        }
+        
         return response
     }
     
@@ -4193,6 +4252,11 @@ public class ViewState: ObservableObject {
                         }
                     }
                 }
+            }
+            
+            // Update app badge count after marking server as read
+            await MainActor.run {
+                updateAppBadgeCount()
             }
             
             return true
@@ -5077,14 +5141,55 @@ public class ViewState: ObservableObject {
     func updateAppBadgeCount() {
         guard let application = ViewState.application else { return }
         
-        // SIMPLE TEST: Just count all unreads to see if muting is the issue
-        let totalUnreadCount = unreads.count
+        var totalUnreadCount = 0
+        var totalMentionCount = 0
+        
+        // Iterate through all unreads
+        for (channelId, unread) in unreads {
+            // Check if channel is muted
+            let channelNotificationState = userSettingsStore.cache.notificationSettings.channel[channelId]
+            let isChannelMuted = channelNotificationState == .muted || channelNotificationState == .none
+            
+            // Check if server is muted (if channel belongs to a server)
+            var isServerMuted = false
+            if let channel = channels[channelId], let serverId = channel.server {
+                let serverNotificationState = userSettingsStore.cache.notificationSettings.server[serverId]
+                isServerMuted = serverNotificationState == .muted || serverNotificationState == .none
+            }
+            
+            // Skip if channel or server is muted
+            if isChannelMuted || isServerMuted {
+                continue
+            }
+            
+            // Count mentions
+            if let mentions = unread.mentions, !mentions.isEmpty {
+                totalMentionCount += mentions.count
+            }
+            
+            // Count unread channels (checking if there are unread messages)
+            if let channel = channels[channelId] ?? allEventChannels[channelId] {
+                if let lastUnreadId = unread.last_id, let lastMessageId = channel.last_message_id {
+                    if lastUnreadId < lastMessageId {
+                        totalUnreadCount += 1
+                    }
+                }
+            } else {
+                // Channel doesn't exist anymore - skip it, don't count as unread
+                print("⚠️ Badge: Skipping non-existent channel \(channelId)")
+                continue
+            }
+        }
+        
+        // Total badge count is mentions + unread channels
+        // Mentions are more important, so we add them to the count
+        let finalBadgeCount = totalMentionCount + totalUnreadCount
         
         // Update app badge count
         DispatchQueue.main.async {
             let currentBadge = application.applicationIconBadgeNumber
-            application.applicationIconBadgeNumber = totalUnreadCount
-            print("🔔 Badge: \(currentBadge) -> \(totalUnreadCount) (simple count of \(self.unreads.count) unreads)")
+            application.applicationIconBadgeNumber = finalBadgeCount
+            print("🔔 Badge: \(currentBadge) -> \(finalBadgeCount) (mentions: \(totalMentionCount), unreads: \(totalUnreadCount))")
         }
     }
     
@@ -5102,6 +5207,108 @@ public class ViewState: ObservableObject {
     func refreshAppBadge() {
         print("🔔 Manually refreshing app badge count...")
         updateAppBadgeCount()
+    }
+    
+    /// Debug badge count and print detailed analysis to console
+    func debugBadgeCount() {
+        print("🔍 === BADGE COUNT DEBUG ===")
+        print("📊 Total unreads entries: \(unreads.count)")
+        
+        var totalCount = 0
+        var mutedCount = 0
+        var validCount = 0
+        var missingChannels = 0
+        var channelsWithUnread = 0
+        
+        for (channelId, unread) in unreads {
+            let channel = channels[channelId] ?? allEventChannels[channelId]
+            let channelName = channel?.name ?? "Unknown"
+            let channelExists = channel != nil
+            let isChannelMuted = userSettingsStore.cache.notificationSettings.channel[channelId] == .muted
+            let serverIdForChannel = channel?.server
+            let isServerMuted = serverIdForChannel != nil ? userSettingsStore.cache.notificationSettings.server[serverIdForChannel!] == .muted : false
+            
+            print("  📌 Channel: \(channelName) (\(channelId))")
+            print("     - Channel exists: \(channelExists)")
+            print("     - Last read ID: \(unread.last_id ?? "nil")")
+            print("     - Last message ID: \(channel?.last_message_id ?? "nil")")
+            
+            // Check if has unread
+            var hasUnread = false
+            if let lastUnreadId = unread.last_id, let lastMessageId = channel?.last_message_id {
+                hasUnread = lastUnreadId < lastMessageId
+                print("     - Has unread: \(hasUnread) (\(lastUnreadId) < \(lastMessageId))")
+            }
+            
+            if let mentions = unread.mentions {
+                print("     - Mentions: \(mentions.count) - \(mentions)")
+            }
+            print("     - Channel Muted: \(isChannelMuted)")
+            print("     - Server Muted: \(isServerMuted)")
+            
+            totalCount += 1
+            if !channelExists {
+                missingChannels += 1
+            } else if isChannelMuted || isServerMuted {
+                mutedCount += 1
+            } else {
+                validCount += 1
+                if hasUnread || (unread.mentions?.count ?? 0) > 0 {
+                    channelsWithUnread += 1
+                }
+            }
+        }
+        
+        print("\n📊 Summary:")
+        print("  - Total unread entries: \(totalCount)")
+        print("  - Missing channels: \(missingChannels)")
+        print("  - Muted channels: \(mutedCount)")
+        print("  - Valid (unmuted) channels: \(validCount)")
+        print("  - Channels with actual unread: \(channelsWithUnread)")
+        print("  - Current app badge: \(ViewState.application?.applicationIconBadgeNumber ?? -1)")
+        print("  - Total channels loaded: \(channels.count)")
+        print("  - Total channels stored: \(allEventChannels.count)")
+        print("🔍 === END DEBUG ===\n")
+    }
+    
+    /// Clean up stale unread entries for channels that no longer exist
+    func cleanupStaleUnreads() {
+        print("🧹 Cleaning up stale unreads...")
+        var removedCount = 0
+        var staleChannels: [String] = []
+        
+        for channelId in unreads.keys {
+            // Check if channel exists in our channels dictionary or allEventChannels
+            if channels[channelId] == nil && allEventChannels[channelId] == nil {
+                staleChannels.append(channelId)
+                removedCount += 1
+            }
+        }
+        
+        // Remove stale entries
+        for channelId in staleChannels {
+            unreads.removeValue(forKey: channelId)
+            print("  ❌ Removed stale unread for channel: \(channelId)")
+        }
+        
+        print("🧹 Cleanup complete. Removed \(removedCount) stale entries.")
+        
+        // Update badge count after cleanup
+        updateAppBadgeCount()
+    }
+    
+    /// Force mark all channels as read and clear the app badge
+    func forceMarkAllAsRead() {
+        print("📖 Force marking all channels as read...")
+        let channelCount = unreads.count
+        
+        // Clear all unreads
+        unreads.removeAll()
+        
+        // Clear the app badge
+        clearAppBadge()
+        
+        print("📖 Marked \(channelCount) channels as read and cleared badge")
     }
 }
 
@@ -5371,6 +5578,10 @@ extension ViewState {
                         unreads[unread.id.channel] = unread
                     }
                     // print("🚀 VIEWSTATE: Unreads loaded: \(remoteUnreads.count)")
+                    
+                    // Update app badge count after loading unreads from server
+                    updateAppBadgeCount()
+                    print("🔔 Updated badge count after loading \(remoteUnreads.count) unreads from server")
                 }
             }
         }

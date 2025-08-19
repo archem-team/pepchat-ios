@@ -1499,15 +1499,95 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     }
     
     @objc private func backButtonTapped() {
-        // Navigate to the previous screen
-        if let navigationController = navigationController {
-            navigationController.popViewController(animated: true)
-        } else {
-            dismiss(animated: true)
+        print("🔙 BACK_BUTTON: Tapped - Channel: \(viewModel.channel.id), Server: \(viewModel.channel.server ?? "nil")")
+        print("🔙 BACK_BUTTON: Channel type: \(type(of: viewModel.channel))")
+        print("🔙 BACK_BUTTON: Current path count: \(viewModel.viewState.path.count)")
+        print("🔙 BACK_BUTTON: Current path: \(viewModel.viewState.path)")
+        print("🔙 BACK_BUTTON: lastInviteServerContext: \(viewModel.viewState.lastInviteServerContext ?? "nil")")
+        print("🔙 BACK_BUTTON: currentSelection: \(viewModel.viewState.currentSelection)")
+        print("🔙 BACK_BUTTON: currentChannel: \(viewModel.viewState.currentChannel)")
+        
+        // CRITICAL FIX: For channels with navigation path containing only maybeChannelView(s) (likely from invite),
+        // clear path to show appropriate sidebar/main view instead of previous screen
+        let isOnlyChannelViews = viewModel.viewState.path.allSatisfy { destination in
+            if case .maybeChannelView = destination {
+                return true
+            }
+            return false
         }
         
-        // Call toggle sidebar if available
-        toggleSidebar?()
+        print("🔙 BACK_BUTTON: isOnlyChannelViews: \(isOnlyChannelViews)")
+        print("🔙 BACK_BUTTON: path.isEmpty: \(viewModel.viewState.path.isEmpty)")
+        
+        if isOnlyChannelViews && !viewModel.viewState.path.isEmpty {
+            if let serverId = viewModel.channel.server {
+                // Server channel case
+                print("🔙 BACK_BUTTON: Detected invite-style navigation (server channel with only maybeChannelViews)")
+                print("🔙 BACK_BUTTON: ServerId: \(serverId)")
+                print("🔙 BACK_BUTTON: Clearing path and selecting server \(serverId)")
+                
+                // Clear the navigation path completely
+                viewModel.viewState.path.removeAll()
+                
+                // Clear invite context if it exists
+                viewModel.viewState.lastInviteServerContext = nil
+                
+                // Make sure the correct server is selected
+                viewModel.viewState.selectServer(withId: serverId)
+                
+                // NEW FIX: Force channel list refresh after selecting server to prevent empty lists
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    self.viewModel.viewState.objectWillChange.send()
+                    NotificationCenter.default.post(name: NSNotification.Name("ForceChannelListRefresh"), object: ["serverId": serverId])
+                }
+                
+                print("🔙 BACK_BUTTON: After selectServer - currentSelection: \(viewModel.viewState.currentSelection)")
+                print("🔙 BACK_BUTTON: After selectServer - currentChannel: \(viewModel.viewState.currentChannel)")
+                print("🔙 BACK_BUTTON: Completed invite-style back navigation for server channel")
+            } else {
+                // DM or other non-server channel case
+                print("🔙 BACK_BUTTON: Detected invite-style navigation (non-server channel with only maybeChannelViews)")
+                print("🔙 BACK_BUTTON: Clearing path to return to DMs/main view")
+                
+                // Clear the navigation path completely
+                viewModel.viewState.path.removeAll()
+                
+                // Clear invite context if it exists
+                viewModel.viewState.lastInviteServerContext = nil
+                
+                // Navigate to DMs view
+                viewModel.viewState.selectDms()
+                
+                // NEW FIX: Force DM list refresh after selecting DMs to prevent empty lists
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    self.viewModel.viewState.objectWillChange.send()
+                    NotificationCenter.default.post(name: NSNotification.Name("ForceDMListRefresh"), object: nil)
+                }
+                
+                print("🔙 BACK_BUTTON: Set currentSelection to DMs")
+                print("🔙 BACK_BUTTON: Completed invite-style back navigation for non-server channel")
+            }
+            return
+        }
+        
+        print("🔙 BACK_BUTTON: Using normal navigation path.removeLast()")
+        
+        // For normal navigation with multiple path items, use path.removeLast()
+        if !viewModel.viewState.path.isEmpty {
+            viewModel.viewState.path.removeLast()
+            print("🔙 BACK_BUTTON: Removed last path item, new count: \(viewModel.viewState.path.count)")
+        } else {
+            // Fallback: If no navigation path, try UIKit navigation or toggle sidebar
+            print("🔙 BACK_BUTTON: No navigation path, using fallback")
+            if let navigationController = navigationController {
+                navigationController.popViewController(animated: true)
+            } else {
+                dismiss(animated: true)
+            }
+            
+            // Call toggle sidebar if available
+            toggleSidebar?()
+        }
     }
     
     @objc private func searchButtonTapped() {
@@ -1821,18 +1901,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         guard now.timeIntervalSince(lastMessageChangeNotificationTime) >= 0.1 else { return }
         lastMessageChangeNotificationTime = now
         
-        // CRITICAL FIX: Don't process message changes during nearby loading
-        if messageLoadingState == .loading {
-            print("🔄 BLOCKED: messagesDidChange blocked - nearby loading in progress")
-            return
-        }
-        
-        // CRITICAL FIX: Don't process if target message protection is active
-        if targetMessageProtectionActive {
-            print("🔄 BLOCKED: messagesDidChange blocked - target message protection active")
-            return
-        }
-        
         // Check if this is a reaction update
         var isReactionUpdate = false
         var reactionChannelId: String? = nil
@@ -1843,6 +1911,25 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             reactionMessageId = notificationData["messageId"] as? String
             let updateType = notificationData["type"] as? String
             isReactionUpdate = updateType == "reaction_added" || updateType == "reaction_removed"
+        }
+        
+        // For reaction updates, handle them immediately without blocking conditions
+        if isReactionUpdate {
+            print("🔥 CONTROLLER: Processing reaction update for channel \(reactionChannelId ?? "unknown"), message \(reactionMessageId ?? "unknown")")
+            // Process reaction updates immediately since they don't interfere with loading states
+            // and should always update the UI when received from the backend
+        } else {
+            // CRITICAL FIX: Don't process regular message changes during nearby loading
+            if messageLoadingState == .loading {
+                print("🔄 BLOCKED: messagesDidChange blocked - nearby loading in progress")
+                return
+            }
+            
+            // CRITICAL FIX: Don't process regular message changes if target message protection is active
+            if targetMessageProtectionActive {
+                print("🔄 BLOCKED: messagesDidChange blocked - target message protection active")
+                return
+            }
         }
         
         // For reaction updates, check if it's for this channel
@@ -1858,6 +1945,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
 
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
+                    print("🔥 RELOADING ROW: Reloading row \(indexPath.row) for message \(messageId)")
+                    
+                    // Force check if message has been updated in ViewState
+                    if let updatedMessage = self.viewModel.viewState.messages[messageId] {
+                        print("🔥 FORCE CHECK: Message \(messageId) reactions in ViewState: \(updatedMessage.reactions?.keys.joined(separator: ", ") ?? "none")")
+                    } else {
+                        print("🔥 FORCE CHECK: Message \(messageId) not found in ViewState!")
+                    }
+                    
                     self.tableView.reloadRows(at: [indexPath], with: .none)
                     self.tableView.layoutIfNeeded()
 
@@ -1882,7 +1978,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     }
                 }
             } else {
-                refreshMessages()
+                refreshMessages(forceUpdate: true) // Force update for reactions
             }
             return
         }
@@ -2277,6 +2373,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 DispatchQueue.main.async {
                     self.isAcknowledgingMessage = false
                     self.processRetryQueue()
+                    
+                    // Update app badge count after acknowledging message
+                    self.viewModel.viewState.updateAppBadgeCount()
                 }
             } catch let error as HTTPError {
                 // print("Failed to mark message as seen: \(error)")
@@ -2617,14 +2716,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                                 self.tableView.dataSource = self.dataSource
                                 
                                 // If no new messages were loaded, show a notification to the user
-                                if result.messages.isEmpty {
-                                    // CRITICAL FIX: Update lastEmptyResponseTime when API returns empty messages
-                                    self.lastEmptyResponseTime = Date()
-                                    DispatchQueue.main.async {
-                                        let banner = NotificationBanner(message: "You have reached the beginning of the conversation.")
-                                        banner.show(duration: 2.0)
-                                    }
-                                }
+                                // if result.messages.isEmpty {
+                                //     // CRITICAL FIX: Update lastEmptyResponseTime when API returns empty messages
+                                //     self.lastEmptyResponseTime = Date()
+                                //     DispatchQueue.main.async {
+                                //         let banner = NotificationBanner(message: "You have reached the beginning of the conversation.")
+                                //         banner.show(duration: 2.0)
+                                //     }
+                                // }
                             }
                         } else {
                             // print("❌ BEFORE_CALL: API response was empty")
@@ -2632,11 +2731,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             // CRITICAL FIX: Update lastEmptyResponseTime when API returns empty response
                             self.lastEmptyResponseTime = Date()
                             
-                            // Show notification that there are no more messages
-                            DispatchQueue.main.async {
-                                let banner = NotificationBanner(message: "You have reached the beginning of the conversation.")
-                                banner.show(duration: 2.0)
-                            }
+                            // // Show notification that there are no more messages
+                            // DispatchQueue.main.async {
+                            //     let banner = NotificationBanner(message: "You have reached the beginning of the conversation.")
+                            //     banner.show(duration: 2.0)
+                            // }
                         }
                         
                         // Change state to not loading
@@ -2795,17 +2894,17 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     }
     
     // FAST: Lightweight refresh method with minimal overhead
-    func refreshMessages() {
+    func refreshMessages(forceUpdate: Bool = false) {
         print("🔄 targetMessageProtectionActive: \(targetMessageProtectionActive)")
         
-        // CRITICAL FIX: Don't refresh if we're in the middle of nearby loading
-        if messageLoadingState == .loading {
+        // CRITICAL FIX: Don't refresh if we're in the middle of nearby loading (unless forced for reactions)
+        if messageLoadingState == .loading && !forceUpdate {
             print("🔄 BLOCKED: refreshMessages blocked - nearby loading in progress")
             return
         }
         
-        // CRITICAL FIX: Only block if protection is active AND we don't have a new target message to process
-        if targetMessageProtectionActive && (targetMessageId == nil || targetMessageProcessed) {
+        // CRITICAL FIX: Only block if protection is active AND we don't have a new target message to process (unless forced for reactions)
+        if targetMessageProtectionActive && (targetMessageId == nil || targetMessageProcessed) && !forceUpdate {
             print("🔄 BLOCKED: refreshMessages blocked - target message protection active and no new target")
             return
         }
@@ -2836,8 +2935,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         if !hasActualMessages {
             // print("⚠️ refreshMessages: Only message IDs found, no actual messages - need to load messages")
             
-            // CRITICAL FIX: Don't force reload if target message protection is active
-            if targetMessageProtectionActive {
+            // CRITICAL FIX: Don't force reload if target message protection is active (unless forced for reactions)
+            if targetMessageProtectionActive && !forceUpdate {
                 print("🔄 BLOCKED: Force reload blocked - target message protection active")
                 return
             }
@@ -3898,10 +3997,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             return message
             
-        } catch {
+                } catch {
             print("❌ FETCH_REPLY: Failed to fetch message: \(error)")
             
-    
+            // Check if this is a 404 error (message deleted)
+            if let revoltError = error as? RevoltError,
+               case .HTTPError(_, let statusCode) = revoltError,
+               statusCode == 404 {
+                print("🗑️ FETCH_REPLY: Message \(messageId) was deleted (404)")
+            }
             
             return nil
         }
@@ -4330,8 +4434,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         } else {
                             // Failed to fetch message
                             DispatchQueue.main.async {
-                                let banner = NotificationBanner(message: "Failed to load message for reply")
-                                banner.show(duration: 2.0)
+                                print("❌ REPLY_START: Failed to load message for reply")
                             }
                             return
                         }
@@ -4361,18 +4464,28 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
              print("Mark message as unread: \(message.id)")
         case .copyLink:
             // Copy message link to clipboard
-            // Get server ID from channel or use "direct" if it's a DM
             let channelId = message.channel
-            let serverComponent = viewModel.server?.id ?? "direct"
             
-            // Construct the message link
-            let link = "https://app.revolt.chat/server/\(serverComponent)/channel/\(channelId)/\(message.id)"
-            UIPasteboard.general.string = link
-            // print("Copied message link: \(link)")
+            // Generate proper URL based on channel type and current domain
+            Task {
+                let link = await generateMessageLink(
+                    serverId: viewModel.server?.id,
+                    channelId: channelId,
+                    messageId: message.id,
+                    viewState: viewModel.viewState
+                )
+                
+                await MainActor.run {
+                    UIPasteboard.general.string = link
+                    viewModel.viewState.showAlert(message: "Message Link Copied!", icon: .peptideLink)
+                }
+            }
         case .copyId:
             // Copy message ID to clipboard
             UIPasteboard.general.string = message.id
-            // print("Copied message ID: \(message.id)")
+            Task { @MainActor in
+                viewModel.viewState.showAlert(message: "Message ID Copied!", icon: .peptideId)
+            }
         case .react(let emoji):
             // Handle emoji reaction
             if emoji == "-1" {
@@ -5331,7 +5444,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // CRITICAL FIX: Add timeout protection to prevent infinite loading
         let timeoutTask = Task {
-            try await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds (reduced from 30)
+            try await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds (reduced for better UX)
             print("⏰ TIMEOUT: refreshWithTargetMessage took too long, forcing cleanup")
             await MainActor.run {
                 self.messageLoadingState = .notLoading
@@ -5343,8 +5456,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 self.viewModel.viewState.currentTargetMessageId = nil
                 
                 // Show user-friendly error message
-                let banner = NotificationBanner(message: "Could not load the message. Please try again.")
-                banner.show(duration: 3.0)
+                print("⏰ TIMEOUT: Could not load the message. It may have been deleted.")
             }
         }
         
@@ -5575,46 +5687,22 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     }
                 }
             } else {
-                // Failed to fetch target message directly, fall back to regular loading
-                print("⚠️ FALLBACK: Failed to fetch target message directly, falling back to regular loading")
+                // Failed to fetch target message directly - message likely deleted
+                print("❌ DIRECT_TARGET: Failed to fetch target message directly - likely deleted or inaccessible")
                 
-                // Show loading indicator
-                DispatchQueue.main.async {
-                    self.loadingHeaderView.isHidden = false
-                }
-                
-                // Fall back to loading regular messages
-                print("🔄 FALLBACK: Attempting regular message load as fallback")
-                let fallbackResult = await viewModel.loadMoreMessages(before: nil)
-                
-                // Update UI on main thread
-                DispatchQueue.main.async {
-                    // After loading messages, hide the loading indicator
-                    self.loadingHeaderView.isHidden = true
-                    
-                    // Reset loading states explicitly
+                await MainActor.run {
+                    // Clean up loading states immediately
                     self.messageLoadingState = .notLoading
-                    self.isLoadingMore = false
-                    self.lastSuccessfulLoadTime = Date()
+                    self.loadingHeaderView.isHidden = true
+                    self.targetMessageId = nil
+                    self.viewModel.viewState.currentTargetMessageId = nil
                     
-                    if fallbackResult != nil {
-                        print("✅ FALLBACK: Regular loading succeeded")
-                    self.refreshMessages()
-                        
-                        // Check if target message is now available after regular loading
-                        if self.localMessages.contains(messageId) {
-                            print("🎯 FALLBACK: Target message found after regular loading, scrolling to it")
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                self.scrollToTargetMessage()
-                            }
-                        } else {
-                            print("❌ FALLBACK: Target message still not found after regular loading")
-                        }
-                    } else {
-                        print("❌ FALLBACK: Regular loading also failed")
-                        self.refreshMessages()
-                    }
+                    // Show user-friendly error message
+                    print("❌ DIRECT_TARGET: Showing error message to user - message likely deleted")
                 }
+                
+                // Exit early since message couldn't be loaded
+                return
             }
         }
         
@@ -5626,9 +5714,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         if !finalCheck {
             // print("⚠️ Target message was not found even after loading nearby messages")
             DispatchQueue.main.async {
-                // Display a toast message with more detail
-                let banner = NotificationBanner(message: "Message not found or may have been deleted")
-                banner.show(duration: 3.0)
+                // Display a message with more detail
+                print("❌ FINAL_CHECK: Message not found or may have been deleted")
                 
                 // Clear target message ID since we failed to find it
                 self.targetMessageId = nil
@@ -5792,8 +5879,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Show loading indicator with more specific message
                 DispatchQueue.main.async {
-                    let banner = NotificationBanner(message: "Loading original message...")
-                    banner.show(duration: 2.0)
+                    print("🔄 REPLY_CLICK: Loading original message...")
                 }
                 
                 // Trigger target message refresh with enhanced error handling
@@ -5815,8 +5901,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                                 self.viewModel.viewState.currentTargetMessageId = nil
                                 
                                 // Show error message to user
-                                let banner = NotificationBanner(message: "Could not load the original message. It may have been deleted.")
-                                banner.show(duration: 3.0)
+                                print("❌ REPLY_CLICK: Could not load the original message. It may have been deleted.")
                             }
                         }
                     } catch {
@@ -5830,8 +5915,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             self.tableView.alpha = 1.0
                             self.tableView.tableFooterView = nil
                             
-                            let banner = NotificationBanner(message: "Failed to load message. Please try again.")
-                            banner.show(duration: 3.0)
+                            print("❌ REPLY_CLICK_ERROR: Failed to load message. Please try again.")
                         }
                     }
                 }
@@ -5868,14 +5952,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Show loading message
                 DispatchQueue.main.async {
-                    let banner = NotificationBanner(message: "Navigating to message...")
-                    banner.show(duration: 1.0)
+                    print("🔄 NAVIGATE: Navigating to message...")
                 }
             } else {
                 // Channel not found, show error
                 DispatchQueue.main.async {
-                    let banner = NotificationBanner(message: "Channel not found")
-                    banner.show(duration: 2.0)
+                    print("❌ NAVIGATE: Channel not found")
                 }
             }
         }
@@ -6637,8 +6719,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         }
                     } else {
                         // print("⬇️⬇️⬇️ API returned empty result")
-                        let banner = NotificationBanner(message: "You've reached the end of this conversation")
-                        banner.show(duration: 2.0)
+                        print("ℹ️ LOAD_NEWER: You've reached the end of this conversation")
                     }
                 }
             } catch let error as RevoltError {
@@ -6662,15 +6743,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             minimumAPICallInterval = max(minimumAPICallInterval, min(Double(retryAfter)/1000.0, 30.0))
                             
                             // Show user-friendly message with the retry time
-                            let banner = NotificationBanner(message: "Rate limit reached. Please wait \(formattedTime) seconds before loading more messages.")
-                            banner.show(duration: min(Double(retryAfter)/1000.0, 5.0))
+                            print("⏳ RATE_LIMIT: Please wait \(formattedTime) seconds before loading more messages.")
                             
                             // Update the last API call time to enforce the retry_after delay
                             lastAPICallTime = Date().addingTimeInterval(-minimumAPICallInterval + Double(retryAfter)/1000.0)
                         } else {
                             // Fallback message if we couldn't extract the retry time
-                            let banner = NotificationBanner(message: "Rate limit reached. Please wait a few seconds before loading more messages.")
-                            banner.show(duration: 3.0)
+                            print("⏳ RATE_LIMIT: Please wait a few seconds before loading more messages.")
                             
                             // Set a default delay
                             minimumAPICallInterval = max(minimumAPICallInterval, 5.0)
@@ -8045,6 +8124,37 @@ extension MessageableChannelViewController {
                 // print("⚠️ SCROLL_PRESERVE: Could not find anchor message \(anchorId) in new data")
             }
         }
+    }
+}
+
+// MARK: - Helper Functions
+/// Generates a dynamic message link based on the current domain
+private func generateMessageLink(serverId: String?, channelId: String, messageId: String, viewState: ViewState) async -> String {
+    // Get the current base URL and determine the web domain
+    let baseURL = await viewState.baseURL ?? viewState.defaultBaseURL
+    let webDomain: String
+    
+    if baseURL.contains("peptide.chat") {
+        webDomain = "https://peptide.chat"
+    } else if baseURL.contains("app.revolt.chat") {
+        webDomain = "https://app.revolt.chat"
+    } else {
+        // Fallback for other instances - extract domain from API URL
+        if let url = URL(string: baseURL),
+           let host = url.host {
+            webDomain = "https://\(host)"
+        } else {
+            webDomain = "https://app.revolt.chat" // Ultimate fallback
+        }
+    }
+    
+    // Generate proper URL based on channel type
+    if let serverId = serverId, !serverId.isEmpty {
+        // Server channel
+        return "\(webDomain)/server/\(serverId)/channel/\(channelId)/\(messageId)"
+    } else {
+        // DM channel
+        return "\(webDomain)/channel/\(channelId)/\(messageId)"
     }
 }
 

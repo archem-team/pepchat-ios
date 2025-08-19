@@ -201,9 +201,18 @@ struct DiscoverScrollView: View {
     }
     
     private func loadData() {
-            self.isLoading = true
+        // Check if we're on peptide.chat domain before loading
+        let baseURL = viewState.baseURL ?? viewState.defaultBaseURL
+        if !baseURL.contains("peptide.chat") {
+            print("🌐 [DiscoverScrollView] Not on peptide.chat domain, skipping CSV loading")
+            self.isLoading = false
+            self.discoverItems = [] // Empty list for non-peptide domains
+            return
+        }
+        
+        self.isLoading = true
         print("🌐 [DiscoverScrollView] Loading server list from CSV...")
-            ServerChatDataFetcher.shared.fetchData { result in
+        ServerChatDataFetcher.shared.fetchData { result in
                 DispatchQueue.main.async {
                     
                     self.isLoading = false
@@ -223,7 +232,8 @@ struct DiscoverScrollView: View {
                                              description: $0.description,
                                              isNew: $0.isNew,
                                              sortOrder: $0.sortOrder,
-                                             disabled: $0.disabled)
+                                             disabled: $0.disabled,
+                                             color: $0.color)
                             }
                             .sorted(by: { $0.sortOrder < $1.sortOrder })
                     
@@ -235,6 +245,7 @@ struct DiscoverScrollView: View {
                         print("      📝 Description: \(item.description)")
                         print("      🆕 New: \(item.isNew)")
                         print("      🔒 Disabled: \(item.disabled)")
+                        print("      🎨 Color: \(item.color ?? "none")")
                     }
                     
                     // Check membership for all items asynchronously
@@ -386,6 +397,7 @@ struct ServerChat: Codable {
     let dateAdded: String?
     let price1: String?
     let price2: String?
+    let color: String?
 }
 
 
@@ -426,7 +438,8 @@ class ServerChatDataFetcher {
                             chronological: chronological,
                             dateAdded: row["dateAdded"],
                             price1: row[""],
-                            price2: row[""]
+                            price2: row[""],
+                            color: row["showcolor"]
                         )
                     }
                     print("📋 [ServerChatDataFetcher] Parsed \(serverChats.count) valid servers from CSV")

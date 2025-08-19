@@ -172,6 +172,15 @@ struct YouView: View {
                             
                         }
                         
+                        // Display user badges if they have any
+                        if !currentUser.getAllBadges().isEmpty {
+                            HStack {
+                                UserBadgesView(badges: currentUser.getAllBadges(), badgeSize: 24, spacing: 8)
+                                Spacer()
+                            }
+                            .padding(.top, 8)
+                        }
+                        
                         
                     }
                     .padding(top: .padding16)

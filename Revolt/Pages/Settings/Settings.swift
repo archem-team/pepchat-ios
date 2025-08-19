@@ -104,20 +104,36 @@ struct Settings: View {
             
             
             // Miscellaneous Section
-            /*Section("Misc") {
-             NavigationLink(destination: About()) {
-             settingsItem(icon: "info.circle.fill", title: "About")
-             }
-             NavigationLink(destination: { ExperimentsSettings() }) {
-             settingsItem(icon: "flask.fill", title: "Experiments")
-             }
-             #if DEBUG
-             NavigationLink(destination: { DeveloperSettings() }) {
-             settingsItem(icon: "hammer.fill", title: "Developer")
-             }
-             #endif
-             }
-             .listRowBackground(viewState.theme.background2)*/
+            VStack(spacing: .spacing4){
+                
+                Button(action:{
+                    viewState.path.append(NavigationDestination.about_settings)
+                }, label: {
+                    PeptideActionButton(icon: .peptideInfo,
+                                        title: "About",
+                                        hasArrow: true)
+                })
+                
+                PeptideDivider()
+                    .padding(.leading, .padding48)
+                
+                #if DEBUG
+                Button(action:{
+                    viewState.path.append(NavigationDestination.developer_settings)
+                }, label: {
+                    PeptideActionButton(icon: .peptideInfo,
+                                        title: "Developer",
+                                        hasArrow: true)
+                })
+                
+                PeptideDivider()
+                    .padding(.leading, .padding48)
+                #endif
+                
+            }
+            .backgroundGray11(verticalPadding: .padding4)
+            .padding(.horizontal, .padding16)
+            .padding(.vertical, .padding24)
             
             // Logout Section
             
