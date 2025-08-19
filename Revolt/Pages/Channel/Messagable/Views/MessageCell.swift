@@ -36,6 +36,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     private weak var loadingAlert: UIAlertController?
     private var loadingAlertTimer: Timer?
     
+    // Reply loading timeout work item
+    private var replyLoadingTimeoutWorkItem: DispatchWorkItem?
+    
     // Add access to contentLabel
     var textViewContent: UITextView {
         return contentLabel
@@ -56,6 +59,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         // Clean up any existing loading alert and timer
         loadingAlertTimer?.invalidate()
         loadingAlert?.dismiss(animated: false)
+        
+        // Cancel any pending reply loading timeout
+        replyLoadingTimeoutWorkItem?.cancel()
     }
     private var originalCenter: CGPoint = .zero
     private var swipeReplyIconView: UIView?
@@ -145,6 +151,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         // CRITICAL: Clean up any existing loading alert
         hideReplyLoadingIndicator()
         
+        // Cancel any pending reply loading timeout
+        replyLoadingTimeoutWorkItem?.cancel()
+        
         // PERFORMANCE: Cancel any ongoing image downloads with priority
         avatarImageView.kf.cancelDownloadTask()
         
@@ -207,10 +216,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         bridgeBadgeLabel.isHidden = true
         
         // PERFORMANCE: Reset properties to defaults (avoid retain cycles)
-        currentMessage = nil
-        currentAuthor = nil
-        currentMember = nil
-        viewState = nil
+        // NOTE: Don't reset currentMessage, currentAuthor, currentMember, viewState here 
+        // as they might be needed for delayed UI interactions like reaction taps
+        // They will be properly set in configure() method
         isPendingMessage = false
         
         // PERFORMANCE: Reset swipe state immediately
@@ -618,10 +626,15 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 topAnchor = contentLabel.bottomAnchor
             }
             
+            // Create bottom constraint to ensure embeds contribute to cell height
+            let bottomConstraint = embedContainer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16)
+            bottomConstraint.priority = UILayoutPriority.defaultHigh
+            
             NSLayoutConstraint.activate([
                 embedContainer.topAnchor.constraint(equalTo: topAnchor, constant: topConstant),
                 embedContainer.leadingAnchor.constraint(equalTo: contentLabel.leadingAnchor),
-                embedContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
+                embedContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+                bottomConstraint
             ])
         }
     }
@@ -632,10 +645,20 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         longPressGesture.delegate = self
         contentView.addGestureRecognizer(longPressGesture)
         
+        // Add a long press gesture specifically for links in content label
+        let linkLongPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(handleLinkLongPress))
+        linkLongPressGesture.minimumPressDuration = 0.5
+        linkLongPressGesture.delegate = self
+        contentLabel.addGestureRecognizer(linkLongPressGesture)
+        
+        // Make message long press wait for link long press to fail
+        longPressGesture.require(toFail: linkLongPressGesture)
+        
         // Add a tap gesture to handle taps on the content label specifically
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleContentTap))
         tapGesture.delegate = self
         tapGesture.require(toFail: longPressGesture) // Only trigger if long press fails
+        tapGesture.require(toFail: linkLongPressGesture) // Only trigger if link long press fails
         contentLabel.addGestureRecognizer(tapGesture)
     }
     
@@ -831,7 +854,99 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         // If no link was tapped, do nothing (let other gestures handle it)
     }
     
-    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+    @objc private func handleLinkLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        
+        let location = gesture.location(in: contentLabel)
+        
+        // Check if long press is on a link
+        let textContainer = contentLabel.textContainer
+        let layoutManager = contentLabel.layoutManager
+        let textStorage = contentLabel.textStorage
+        
+        // Convert the tap location to text position
+        let characterIndex = layoutManager.characterIndex(for: location, in: textContainer, fractionOfDistanceBetweenInsertionPoints: nil)
+        
+        // Check if the character at this index has a link attribute
+        if characterIndex < textStorage.length {
+            let attributes = textStorage.attributes(at: characterIndex, effectiveRange: nil)
+            if let url = attributes[.link] as? URL {
+                // Show link-specific context menu
+                showLinkContextMenu(for: url, at: location)
+                return
+            }
+                 }
+     }
+     
+     private func showLinkContextMenu(for url: URL, at location: CGPoint) {
+         // Create haptic feedback
+         let generator = UIImpactFeedbackGenerator(style: .medium)
+         generator.prepare()
+         generator.impactOccurred()
+         
+                   // Find the view controller to present the menu
+          guard let viewController = findParentViewController() else { return }
+         
+         // Create UIAlertController with action sheet style
+         let alertController = UIAlertController(title: url.absoluteString, message: nil, preferredStyle: .actionSheet)
+         
+         // Copy Link action
+         let copyAction = UIAlertAction(title: "Copy Link", style: .default) { _ in
+             UIPasteboard.general.string = url.absoluteString
+             Task { @MainActor in
+                 if let viewState = self.viewState {
+                     viewState.showAlert(message: "Link Copied!", icon: .peptideLink)
+                 }
+             }
+         }
+         
+         // Open Link action
+         let openAction = UIAlertAction(title: "Open Link", style: .default) { _ in
+             // Handle internal peptide.chat links differently
+             if url.absoluteString.hasPrefix("https://peptide.chat/") ||
+                url.absoluteString.hasPrefix("https://app.revolt.chat/") {
+                 self.handleInternalURL(url, from: viewController)
+             } else {
+                 // Open external links in Safari
+                 DispatchQueue.main.async {
+                     UIApplication.shared.open(url)
+                 }
+             }
+         }
+         
+         // Share Link action
+         let shareAction = UIAlertAction(title: "Share Link", style: .default) { _ in
+             let activityController = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+             
+             // For iPad, set source view for popover
+             if let popover = activityController.popoverPresentationController {
+                 popover.sourceView = self.contentLabel
+                 popover.sourceRect = CGRect(origin: location, size: CGSize(width: 1, height: 1))
+             }
+             
+             viewController.present(activityController, animated: true)
+         }
+         
+         // Cancel action
+         let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+         
+         // Add actions to alert controller
+         alertController.addAction(copyAction)
+         alertController.addAction(openAction)
+         alertController.addAction(shareAction)
+         alertController.addAction(cancelAction)
+         
+         // For iPad, set source view for popover
+         if let popover = alertController.popoverPresentationController {
+             popover.sourceView = contentLabel
+             popover.sourceRect = CGRect(origin: location, size: CGSize(width: 1, height: 1))
+         }
+         
+         // Present the menu
+         viewController.present(alertController, animated: true)
+     }
+     
+     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began, let message = currentMessage else { return }
         
         // Show custom option sheet instead of UIAlertController
@@ -1216,13 +1331,18 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             // Find all channel matches
             let channelMatches = channelRegex.matches(in: text, range: range)
             
+            // Debug: Print found matches
+            print("🔍 MessageCell Channel mention processing: Found \(channelMatches.count) matches in: \(text)")
+            
             // Process matches in reverse to avoid index issues when replacing
             for match in channelMatches.reversed() {
                 if let channelIdRange = Range(match.range(at: 1), in: text) {
                     let channelId = String(text[channelIdRange])
                     
                     // Try to find channel in viewState
+                    print("🔍 MessageCell Processing channel ID: \(channelId)")
                     if let channel = viewState.channels[channelId] ?? viewState.allEventChannels[channelId] {
+                        print("✅ MessageCell Found channel: \(channel.getName(viewState)) for ID: \(channelId)")
                         // Get the mention range in the original text
                         let mentionRange = match.range
                         
@@ -1277,6 +1397,28 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         } catch {
                             // print("DEBUG: Error adding attributes to channel mention: \(error)")
                         }
+                    } else {
+                        print("❌ MessageCell Channel not found for ID: \(channelId)")
+                        // Channel not found - replace with #unknown-channel
+                        let mentionRange = match.range
+                        guard mentionRange.location >= 0,
+                              mentionRange.location < mutableAttributedString.length,
+                              mentionRange.location + mentionRange.length <= mutableAttributedString.length else {
+                            continue
+                        }
+                        
+                        let mentionText = "#unknown-channel"
+                        mutableAttributedString.replaceCharacters(in: mentionRange, with: mentionText)
+                        
+                        let newRange = NSRange(location: mentionRange.location, length: (mentionText as NSString).length)
+                        guard newRange.location >= 0,
+                              newRange.location + newRange.length <= mutableAttributedString.length else {
+                            continue
+                        }
+                        
+                        mutableAttributedString.addAttributes([
+                            .foregroundColor: UIColor.systemGray
+                        ], range: newRange)
                     }
                 }
             }
@@ -2208,6 +2350,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 }
             } else {
                 // Reply message not loaded yet - show placeholder
+                // CRITICAL: Only show loading indicator if we expect the message to be loadable
+                // For deleted messages, we should show an error state instead of infinite loading
                 replyLoadingIndicator.startAnimating() // Show loading indicator
                 replyAuthorLabel.isHidden = true
                 replyContentLabel.isHidden = true
@@ -2218,6 +2362,38 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 // Don't automatically load reply messages - only load when user taps
                 // This prevents unnecessary nearby API calls when viewing messages with replies
                 // print("ℹ️ Reply message not loaded yet, will load when user taps")
+                
+                // ENHANCEMENT: Add timeout for loading indicator to prevent infinite loading
+                // If message is not loaded within 10 seconds, assume it's deleted
+                replyLoadingTimeoutWorkItem?.cancel() // Cancel any existing timeout
+                
+                let timeoutWorkItem = DispatchWorkItem { [weak self] in
+                    guard let self = self else { return }
+                    // Check if loading indicator is still running and message still not loaded
+                    if self.replyLoadingIndicator.isAnimating && 
+                       self.currentReplyId == firstReplyId {
+                        
+                        // Double-check if message is still not available
+                        Task { @MainActor in
+                            let currentViewState = self.viewState
+                            if currentViewState?.messages[firstReplyId] == nil {
+                                print("⏰ REPLY_TIMEOUT: Stopping loading indicator for reply \(firstReplyId) - likely deleted")
+                                self.replyLoadingIndicator.stopAnimating()
+                                
+                                // Show "message deleted" placeholder
+                                self.replyAuthorLabel.isHidden = false
+                                self.replyContentLabel.isHidden = false
+                                self.replyAuthorLabel.text = "Deleted Message"
+                                self.replyContentLabel.text = "This message was deleted"
+                                self.replyContentLabel.textColor = UIColor(named: "textGray08") ?? .systemGray2
+                                self.replyContentLabel.font = UIFont.italicSystemFont(ofSize: 12)
+                            }
+                        }
+                    }
+                }
+                
+                replyLoadingTimeoutWorkItem = timeoutWorkItem
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: timeoutWorkItem)
             }
         } else {
             // No replies at all
@@ -2239,6 +2415,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             print("❌ REPLY_TAP_CELL: No currentReplyId found")
             return
         }
+        
+        // Cancel any pending reply loading timeout since user is actively interacting
+        replyLoadingTimeoutWorkItem?.cancel()
         
         print("🔗 REPLY_TAP_CELL: MessageCell reply tap detected!")
         print("🔗 REPLY_TAP_CELL: replyId=\(replyId)")
@@ -2314,6 +2493,24 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                                 print("❌ REPLY_TAP_CELL: Error loading reply message, states reset")
                             }
                         }
+                        
+                        // CRITICAL: Add fallback cleanup in case refreshWithTargetMessage doesn't throw but also doesn't succeed
+                        await MainActor.run {
+                            // Wait a bit then check if message was actually loaded
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                if !viewController.viewModel.messages.contains(replyId) {
+                                    print("⚠️ REPLY_TAP_CELL: Fallback cleanup - message still not loaded after refresh")
+                                    self.hideReplyLoadingIndicator()
+                                    self.showReplyNotFoundMessage()
+                                    
+                                    // Reset loading state
+                                    viewController.messageLoadingState = .notLoading
+                                    viewController.loadingHeaderView.isHidden = true
+                                    viewController.targetMessageId = nil
+                                    viewController.viewModel.viewState.currentTargetMessageId = nil
+                                }
+                            }
+                        }
                     }
                 } else {
                     hideReplyLoadingIndicator()
@@ -2378,6 +2575,24 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                             print("❌ REPLY_TAP_CELL: Error loading reply message (second path), states reset")
                         }
                     }
+                    
+                    // CRITICAL: Add fallback cleanup in case refreshWithTargetMessage doesn't throw but also doesn't succeed
+                    await MainActor.run {
+                        // Wait a bit then check if message was actually loaded
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            if !viewController.viewModel.messages.contains(replyId) {
+                                print("⚠️ REPLY_TAP_CELL: Fallback cleanup (path 2) - message still not loaded after refresh")
+                                self.hideReplyLoadingIndicator()
+                                self.showReplyNotFoundMessage()
+                                
+                                // Reset loading state
+                                viewController.messageLoadingState = .notLoading
+                                viewController.loadingHeaderView.isHidden = true
+                                viewController.targetMessageId = nil
+                                viewController.viewModel.viewState.currentTargetMessageId = nil
+                            }
+                        }
+                    }
                 }
             } else {
                 hideReplyLoadingIndicator()
@@ -2390,6 +2605,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     private func showReplyNotFoundMessage() {
         // First ensure the loading indicator is hidden
         hideReplyLoadingIndicator()
+        
+        // CRITICAL: Also stop the inline reply loading indicator
+        replyLoadingIndicator.stopAnimating()
         
         DispatchQueue.main.async {
             if let viewController = self.findParentViewController() {
@@ -2433,10 +2651,13 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 // Store reference to the alert
                 self.loadingAlert = alertController
                 
-                // Set up automatic timeout to dismiss the alert after 15 seconds
-                self.loadingAlertTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { [weak self] _ in
-                    print("⏰ LOADING_ALERT_TIMEOUT: Auto-dismissing 'Finding message...' alert after 15 seconds")
+                // Set up automatic timeout to dismiss the alert after 8 seconds (reduced for better UX)
+                self.loadingAlertTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: false) { [weak self] _ in
+                    print("⏰ LOADING_ALERT_TIMEOUT: Auto-dismissing 'Finding message...' alert after 8 seconds")
                     self?.hideReplyLoadingIndicator()
+                    
+                    // Show the standard "message not found" alert
+                    self?.showReplyNotFoundMessage()
                 }
                 
                 viewController.present(alertController, animated: true, completion: nil)
@@ -2449,6 +2670,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             // Cancel the timeout timer
             self.loadingAlertTimer?.invalidate()
             self.loadingAlertTimer = nil
+            
+            // CRITICAL: Stop the inline reply loading indicator
+            self.replyLoadingIndicator.stopAnimating()
             
             // Approach 1: Use stored reference if available
             if let loadingAlert = self.loadingAlert {
@@ -2568,7 +2792,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     // MARK: - Reactions Management
     
     private func updateReactions(for message: Message, viewState: ViewState) {
-        // print("🔥 updateReactions called for message: \(message.id) with reactions: \(message.reactions?.keys.joined(separator: ", ") ?? "none")")
+        // CRITICAL FIX: Always get the latest message from ViewState instead of using the passed message
+        let latestMessage = viewState.messages[message.id] ?? message
+        print("🔥 updateReactions called for message: \(message.id)")
+        print("🔥 Original message reactions: \(message.reactions?.keys.joined(separator: ", ") ?? "none")")
+        print("🔥 Latest message reactions: \(latestMessage.reactions?.keys.joined(separator: ", ") ?? "none")")
         
         // CRITICAL FIX: Ensure complete cleanup to prevent duplicate reactions
         reactionsContainerView.subviews.forEach { subview in
@@ -2581,14 +2809,14 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             existingSpacerView.removeFromSuperview()
         }
         
-        // Check if message has reactions
-        guard let reactions = message.reactions, !reactions.isEmpty else {
-            // print("🔥 No reactions found, hiding container")
+        // Check if latest message has reactions
+        guard let reactions = latestMessage.reactions, !reactions.isEmpty else {
+            print("🔥 No reactions found, hiding container")
             reactionsContainerView.isHidden = true
             return
         }
         
-        // print("🔥 Found \(reactions.count) reactions, showing container")
+        print("🔥 Found \(reactions.count) reactions, showing container")
         reactionsContainerView.isHidden = false
         
         // Position spacer below images/content
@@ -2896,6 +3124,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         // Store emoji in container's accessibility label for retrieval
         container.accessibilityLabel = emoji
         
+        // CRITICAL FIX: Store message ID for reaction handling
+        if let message = currentMessage {
+            container.restorationIdentifier = message.id
+        }
+        
         NSLayoutConstraint.activate([
             stackView.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             stackView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
@@ -3055,9 +3288,22 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     }
     
     @objc private func reactionButtonTapped(_ gesture: UITapGestureRecognizer) {
+        print("🔥 REACTION BUTTON TAPPED!")
         guard let containerView = gesture.view,
-              let emoji = containerView.accessibilityLabel,
-              let message = currentMessage else { return }
+              let emoji = containerView.accessibilityLabel else { 
+            print("🔥 ERROR: Missing containerView or emoji")
+            return 
+        }
+        
+        // CRITICAL FIX: Get message from ViewState using stored tag instead of currentMessage
+        guard let messageId = containerView.restorationIdentifier,
+              let viewState = self.viewState,
+              let message = viewState.messages[messageId] else {
+            print("🔥 ERROR: Cannot find message for reaction - messageId: \(containerView.restorationIdentifier ?? "nil")")
+            return
+        }
+        
+        print("🔥 Reaction tap: emoji=\(emoji), message=\(message.id)")
         
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -3073,6 +3319,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         }
         
         // Call the message action handler with the reaction
+        print("🔥 CALLBACK CHECK: onMessageAction is \(onMessageAction == nil ? "NIL" : "SET")")
         onMessageAction?(.react(emoji), message)
     }
     
@@ -3515,8 +3762,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     let emojiSize = CGSize(width: 20, height: 20)
                     attachment.bounds = CGRect(x: 0, y: -4, width: emojiSize.width, height: emojiSize.height)
                     
-                    // Load the emoji from the URL
-                    if let url = URL(string: "https://peptide.chat/autumn/emojis/\(emojiId)") {
+                    // Load the emoji from the URL using dynamic API endpoint
+                    if let apiInfo = viewState?.apiInfo,
+                       let url = URL(string: "\(apiInfo.features.autumn.url)/emojis/\(emojiId)") {
                         // Use Kingfisher to load and set the image
                         KF.url(url)
                             .placeholder(.none)
@@ -3555,7 +3803,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                             let emojiSize = CGSize(width: 20, height: 20)
                             attachment.bounds = CGRect(x: 0, y: -4, width: emojiSize.width, height: emojiSize.height)
                             
-                            let customEmojiURL = EmojiParser.parseEmoji(emoji)
+                            let customEmojiURL = EmojiParser.parseEmoji(emoji, apiInfo: viewState?.apiInfo)
                             if let url = URL(string: customEmojiURL) {
                                 KF.url(url)
                                     .placeholder(.none)
@@ -3645,10 +3893,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         let hasEmbeds = contentView.viewWithTag(2000) != nil
         
         if !hasReactions {
+            // Priority order: embeds (always bottommost when present) -> file attachments -> image attachments -> content
             if hasEmbeds, let embedContainer = contentView.viewWithTag(2000) {
-                let bottomConstraint = embedContainer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16)
-                bottomConstraint.priority = UILayoutPriority.defaultHigh
-                bottomConstraint.isActive = true
+                // Embeds are handled in loadEmbeds() - they already have bottom constraint
+                // Just ensure no conflicting bottom constraints from other elements
+                removeConflictingBottomConstraints()
             } else if hasFileAttachments {
                 let bottomConstraint = fileAttachmentsContainer!.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16)
                 bottomConstraint.priority = UILayoutPriority.defaultHigh
@@ -3666,6 +3915,29 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         let minHeightConstraint = contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 50)
         minHeightConstraint.priority = UILayoutPriority.defaultLow
         minHeightConstraint.isActive = true
+    }
+    
+    private func removeConflictingBottomConstraints() {
+        // Remove bottom constraints from attachment containers when embeds are present
+        // This prevents conflicts since embeds should be the bottommost element
+        var constraintsToRemove: [NSLayoutConstraint] = []
+        
+        for constraint in contentView.constraints {
+            // Remove bottom constraints from image and file containers that connect to contentView
+            if let imageContainer = imageAttachmentsContainer,
+               (constraint.firstItem === imageContainer && constraint.firstAttribute == .bottom && constraint.secondItem === contentView) ||
+               (constraint.secondItem === imageContainer && constraint.secondAttribute == .bottom && constraint.firstItem === contentView) {
+                constraintsToRemove.append(constraint)
+            }
+            
+            if let fileContainer = fileAttachmentsContainer,
+               (constraint.firstItem === fileContainer && constraint.firstAttribute == .bottom && constraint.secondItem === contentView) ||
+               (constraint.secondItem === fileContainer && constraint.secondAttribute == .bottom && constraint.firstItem === contentView) {
+                constraintsToRemove.append(constraint)
+            }
+        }
+        
+        constraintsToRemove.forEach { $0.isActive = false }
     }
 }
 
@@ -3974,7 +4246,7 @@ extension MessageCell {
             let components = url.pathComponents
             print("🔗 MessageCell: Channel URL components: \(components)")
             
-            if components.count >= 3 {
+                                                      if components.count >= 3 {
                 let channelId = components[2]
                 let messageId = components.count >= 4 ? components[3] : nil
                 
@@ -4258,6 +4530,20 @@ extension MessageCell {
             return abs(velocity.x) > abs(velocity.y) * 2 && abs(velocity.x) > 300
         }
         
+        // For link long press gestures on content label, check if it's on a link
+        if let longPressGesture = gestureRecognizer as? UILongPressGestureRecognizer,
+           longPressGesture.view == contentLabel {
+            let location = longPressGesture.location(in: contentLabel)
+            let characterIndex = contentLabel.layoutManager.characterIndex(for: location, in: contentLabel.textContainer, fractionOfDistanceBetweenInsertionPoints: nil)
+            
+            // Only allow long press gesture if it's on a link
+            if characterIndex < contentLabel.textStorage.length {
+                let attributes = contentLabel.textStorage.attributes(at: characterIndex, effectiveRange: nil)
+                return attributes[.link] != nil
+            }
+            return false
+        }
+        
         // For tap gestures on content label, check if it's on a link
         if let tapGesture = gestureRecognizer as? UITapGestureRecognizer,
            tapGesture.view == contentLabel {
@@ -4277,12 +4563,11 @@ extension MessageCell {
     
     // Allow simultaneous recognition with other gesture recognizers (like tableView's pan gesture)
     override func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        // Allow tap gesture to work with long press - tap should fail if long press succeeds
+        // Don't allow simultaneous recognition between tap and long press gestures
         if gestureRecognizer is UITapGestureRecognizer && otherGestureRecognizer is UILongPressGestureRecognizer {
             return false
         }
         
-        // Allow long press to work with tap gesture
         if gestureRecognizer is UILongPressGestureRecognizer && otherGestureRecognizer is UITapGestureRecognizer {
             return false
         }

@@ -451,13 +451,19 @@ struct MessageContentsView: View {
                     copyText(text: viewModel.message.content ?? "")
                     self.viewState.showAlert(message: "Copied Message Text!", icon: .peptideCopy)
                 case .copyLink:
-                    if let server = viewModel.server {
-                        copyUrl(url: URL(string: "https://peptide.chat/server/\(server.id)/channel/\(viewModel.channel.id)/\(viewModel.message.id)")!)
-                    } else {
-                        copyUrl(url: URL(string: "https://peptide.chat/channel/\(viewModel.channel.id)/\(viewModel.message.id)")!)
+                    Task {
+                        let link = await generateMessageLink(
+                            serverId: viewModel.server?.id,
+                            channelId: viewModel.channel.id,
+                            messageId: viewModel.message.id,
+                            viewState: viewState
+                        )
                         
+                        await MainActor.run {
+                            copyUrl(url: URL(string: link)!)
+                            self.viewState.showAlert(message: "Message Link Copied!", icon: .peptideCopy)
+                        }
                     }
-                    self.viewState.showAlert(message: "Message Link Copied!", icon: .peptideCopy)
                 case .copyId:
                     copyText(text: viewModel.message.id)
                     self.viewState.showAlert(message: "Message ID Copied!", icon: .peptideCopy)
@@ -702,5 +708,36 @@ struct InviteFetcher: View {
             }
             isLoading = false
         }
+    }
+}
+
+// MARK: - Helper Functions
+/// Generates a dynamic message link based on the current domain
+private func generateMessageLink(serverId: String?, channelId: String, messageId: String, viewState: ViewState) async -> String {
+    // Get the current base URL and determine the web domain
+    let baseURL = await viewState.baseURL ?? viewState.defaultBaseURL
+    let webDomain: String
+    
+    if baseURL.contains("peptide.chat") {
+        webDomain = "https://peptide.chat"
+    } else if baseURL.contains("app.revolt.chat") {
+        webDomain = "https://app.revolt.chat"
+    } else {
+        // Fallback for other instances - extract domain from API URL
+        if let url = URL(string: baseURL),
+           let host = url.host {
+            webDomain = "https://\(host)"
+        } else {
+            webDomain = "https://app.revolt.chat" // Ultimate fallback
+        }
+    }
+    
+    // Generate proper URL based on channel type
+    if let serverId = serverId, !serverId.isEmpty {
+        // Server channel
+        return "\(webDomain)/server/\(serverId)/channel/\(channelId)/\(messageId)"
+    } else {
+        // DM channel
+        return "\(webDomain)/channel/\(channelId)/\(messageId)"
     }
 }

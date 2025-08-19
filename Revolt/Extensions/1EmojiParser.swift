@@ -7,6 +7,7 @@
 
 import Foundation
 import UIKit
+import Types
 
 /// Emoji dictionary mapping shortcodes to Unicode emoji characters
 /// Based on the TypeScript implementation from emoji.tsx
@@ -416,15 +417,25 @@ class EmojiParser {
     
     /// Parse emoji shortcode and return the appropriate emoji or URL
     /// Based on the TypeScript parseEmoji function
-    static func parseEmoji(_ emoji: String) -> String {
+    static func parseEmoji(_ emoji: String, apiInfo: ApiInfo? = nil) -> String {
         if emoji.hasPrefix("custom:") {
             let filename = String(emoji.dropFirst(7)) // Remove "custom:" prefix
-            return "https://dl.insrt.uk/projects/revolt/emotes/\(filename)"
+            // Use dynamic endpoint if available, fallback to static URL
+            if let apiInfo = apiInfo {
+                return "\(apiInfo.features.autumn.url)/emojis/\(filename)"
+            } else {
+                return "https://dl.insrt.uk/projects/revolt/emotes/\(filename)"
+            }
         }
         
         // For Unicode emojis, we need to convert them to codepoints
         let codepoint = toCodePoint(emoji)
-        return "https://static.revolt.chat/emoji/mutant/\(codepoint).svg"
+        // Use dynamic endpoint if available, fallback to static URL
+        if let apiInfo = apiInfo {
+            return "\(apiInfo.features.autumn.url)/emoji/mutant/\(codepoint).svg"
+        } else {
+            return "https://static.revolt.chat/emoji/mutant/\(codepoint).svg"
+        }
     }
     
     /// Convert Unicode emoji to codepoint string

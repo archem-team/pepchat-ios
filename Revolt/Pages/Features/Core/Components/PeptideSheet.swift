@@ -15,6 +15,7 @@ struct PeptideSheet<Content: View>: View {
     let topPadding: CGFloat
     let horizontalPadding : CGFloat
     let bgColor : Color
+    let maxHeight: CGFloat?
     let content: () -> Content
     
     /// Initialize the sheet
@@ -22,11 +23,13 @@ struct PeptideSheet<Content: View>: View {
          topPadding: CGFloat = 32,
          horizontalPadding : CGFloat = 16,
          bgColor : Color = .bgGray12,
+         maxHeight: CGFloat? = nil,
          @ViewBuilder content: @escaping () -> Content) {
         self._isPresented = isPresented
         self.topPadding = topPadding
         self.horizontalPadding = horizontalPadding
         self.bgColor = bgColor
+        self.maxHeight = maxHeight
         self.content = content
     }
     
@@ -45,7 +48,11 @@ struct PeptideSheet<Content: View>: View {
             }
         }
         .onPreferenceChange(InnerHeightPreferenceKey.self) { newHeight in
-            sheetHeight = newHeight
+            if let maxHeight = maxHeight {
+                sheetHeight = min(newHeight, maxHeight)
+            } else {
+                sheetHeight = newHeight
+            }
         }
         .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)

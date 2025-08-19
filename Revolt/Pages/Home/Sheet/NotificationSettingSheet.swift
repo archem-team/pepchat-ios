@@ -128,6 +128,11 @@ struct NotificationSettingSheet: View {
             let timestamp = "\(Int64(Date().timeIntervalSince1970 * 1000))"
             let keys = viewState.userSettingsStore.prepareNotificationSettings()
             _ = await viewState.http.setSettings(timestamp: timestamp, keys: keys)
+            
+            // Update app badge count when notification settings change
+            await MainActor.run {
+                viewState.updateAppBadgeCount()
+            }
         }
     }
 }

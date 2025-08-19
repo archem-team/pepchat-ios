@@ -103,6 +103,21 @@ class PendingAttachmentsManager: ObservableObject {
         return true
     }
     
+    func addVideo(data: Data, fileName: String) -> Bool {
+        guard pendingAttachments.count < maxAttachments else {
+            return false
+        }
+        
+        // Check file size
+        guard data.count <= maxFileSize else {
+            return false
+        }
+        
+        let attachment = PendingAttachment(data: data, fileName: fileName, type: .video)
+        pendingAttachments.append(attachment)
+        return true
+    }
+    
     // MARK: - Remove Attachments
     
     func removeAttachment(withId id: String) {
@@ -286,6 +301,15 @@ class MessageInputView: UIView {
     
     func addDocument(data: Data, fileName: String) -> Bool {
         let success = pendingAttachmentsManager.addDocument(data: data, fileName: fileName)
+        if success {
+            updateAttachmentPreview()
+            updateSendButtonState()
+        }
+        return success
+    }
+    
+    func addVideo(data: Data, fileName: String) -> Bool {
+        let success = pendingAttachmentsManager.addVideo(data: data, fileName: fileName)
         if success {
             updateAttachmentPreview()
             updateSendButtonState()

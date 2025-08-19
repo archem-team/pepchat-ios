@@ -261,7 +261,10 @@ class RepliesManager: NSObject {
                 if let fetchedMessage = await viewController?.fetchMessageForReply(messageId: message.id, channelId: channelId) {
                     replyMessage = fetchedMessage
                 } else {
-             
+                    // Failed to fetch message - show error and return
+                    await MainActor.run {
+                        viewModel.viewState.showAlert(message: "Could not load message for reply. It may have been deleted.", icon: .peptideWarningCircle)
+                    }
                     return
                 }
             }
@@ -395,7 +398,9 @@ class RepliesManager: NSObject {
             // Copy message content to clipboard
             if let content = message.content {
                 UIPasteboard.general.string = content
-                viewController.showErrorAlert(message: "Message copied to clipboard")
+                Task { @MainActor in
+                    viewModel.viewState.showAlert(message: "Message Copied!", icon: .peptideCopy)
+                }
             }
         case .reply:
             startReply(to: message)
@@ -440,6 +445,11 @@ class RepliesManager: NSObject {
                                         let unreadId = Unread.Id(channel: channelId, user: currentUserId)
                                         await viewState.unreads[channelId] = Unread(id: unreadId, last_id: previousMessageId)
                                     }
+                                    
+                                    // Update app badge count after marking as unread
+                                    await MainActor.run {
+                                        viewState.updateAppBadgeCount()
+                                    }
                                 }
                                 
                                 // CRITICAL: Disable automatic acknowledgment to prevent immediate re-acknowledgment
@@ -461,6 +471,11 @@ class RepliesManager: NSObject {
                         await MainActor.run {
                             Task {
                                 await viewState.unreads.removeValue(forKey: channelId)
+                                
+                                // Update app badge count after marking entire channel as unread
+                                await MainActor.run {
+                                    viewState.updateAppBadgeCount()
+                                }
                             }
                             
                             // CRITICAL: Disable automatic acknowledgment for this case too
@@ -482,19 +497,27 @@ class RepliesManager: NSObject {
             Task {
                 // Capture values at the beginning to avoid async issues
                 let channel = await viewModel.channel
-                let channelServer = await channel.server ?? ""
                 let channelId = await channel.id
                 
-                let messageLink = "https://peptide.chat/server/\(channelServer)/channel/\(channelId)/\(message.id)"
+                // Generate proper URL based on channel type and current domain
+                let messageLink: String = await generateMessageLink(
+                    serverId: channel.server,
+                    channelId: channelId,
+                    messageId: message.id,
+                    viewState: viewModel.viewState
+                )
+                
                 await MainActor.run {
                     UIPasteboard.general.string = messageLink
-                    viewController.showErrorAlert(message: "Message link copied to clipboard")
+                    viewModel.viewState.showAlert(message: "Message Link Copied!", icon: .peptideLink)
                 }
             }
         case .copyId:
             // Copy message ID to clipboard
             UIPasteboard.general.string = message.id
-            viewController.showErrorAlert(message: "Message ID copied to clipboard")
+            Task { @MainActor in
+                viewModel.viewState.showAlert(message: "Message ID Copied!", icon: .peptideId)
+            }
         case .react(let emoji):
             // Handle adding/removing reaction (toggle behavior)
             if emoji == "-1" {
@@ -515,18 +538,20 @@ class RepliesManager: NSObject {
                     
                     if userAlreadyReacted {
                         // Remove reaction (unreact)
-                        await viewState.http.unreactMessage(
+                        let result = await viewState.http.unreactMessage(
                             channel: channelId, 
                             message: message.id, 
                             emoji: emoji
                         )
+                        print("🔥 REMOVE REACTION API RESULT: \(result)")
                     } else {
                         // Add reaction
-                        await viewState.http.reactMessage(
+                        let result = await viewState.http.reactMessage(
                             channel: channelId, 
                             message: message.id, 
                             emoji: emoji
                         )
+                        print("🔥 ADD REACTION API RESULT: \(result)")
                     }
                 }
             }
@@ -642,6 +667,37 @@ extension RepliesManager {
         // Handle the reply click by delegating to handleReplyClick
         print("🔗 RepliesManager: Reply click received for messageId: \(messageId), channelId: \(channelId)")
         handleReplyClick(messageId: messageId, channelId: channelId)
+    }
+}
+
+// MARK: - Helper Functions
+/// Generates a dynamic message link based on the current domain
+private func generateMessageLink(serverId: String?, channelId: String, messageId: String, viewState: ViewState) async -> String {
+    // Get the current base URL and determine the web domain
+    let baseURL = await viewState.baseURL ?? viewState.defaultBaseURL
+    let webDomain: String
+    
+    if baseURL.contains("peptide.chat") {
+        webDomain = "https://peptide.chat"
+    } else if baseURL.contains("app.revolt.chat") {
+        webDomain = "https://app.revolt.chat"
+    } else {
+        // Fallback for other instances - extract domain from API URL
+        if let url = URL(string: baseURL),
+           let host = url.host {
+            webDomain = "https://\(host)"
+        } else {
+            webDomain = "https://app.revolt.chat" // Ultimate fallback
+        }
+    }
+    
+    // Generate proper URL based on channel type
+    if let serverId = serverId, !serverId.isEmpty {
+        // Server channel
+        return "\(webDomain)/server/\(serverId)/channel/\(channelId)/\(messageId)"
+    } else {
+        // DM channel
+        return "\(webDomain)/channel/\(channelId)/\(messageId)"
     }
 }
 

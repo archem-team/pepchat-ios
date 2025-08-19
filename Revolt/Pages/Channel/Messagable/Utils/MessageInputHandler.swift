@@ -378,11 +378,35 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         
         let imagePicker = UIImagePickerController()
         imagePicker.sourceType = sourceType
-        imagePicker.delegate = self // Change delegate to self instead of viewController
+        imagePicker.delegate = self
         imagePicker.allowsEditing = false
-        imagePicker.mediaTypes = ["public.image", "public.movie"] // Allow both images and videos
+        imagePicker.mediaTypes = ["public.image", "public.movie"]
         
-        viewController.present(imagePicker, animated: true)
+        // CRITICAL FIX: Always use overCurrentContext to prevent navigation interference
+        imagePicker.modalPresentationStyle = .overCurrentContext
+        imagePicker.modalTransitionStyle = .coverVertical
+        
+        // For camera, we need to ensure it covers full screen
+        if sourceType == .camera {
+            imagePicker.modalPresentationStyle = .overFullScreen
+        }
+        
+        // CRITICAL: Find the root window to present from to avoid navigation stack issues
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first {
+            
+            // Find the top-most view controller
+            var topController = window.rootViewController
+            while let presentedController = topController?.presentedViewController {
+                topController = presentedController
+            }
+            
+            // Present from the top-most controller
+            topController?.present(imagePicker, animated: true)
+        } else {
+            // Fallback to normal presentation
+            viewController.present(imagePicker, animated: true)
+        }
     }
     
     private func presentDocumentPicker() {
@@ -410,12 +434,12 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         viewController.present(documentPicker, animated: true)
     }
     
-    // New: Use PHPickerViewController for multi-image selection from gallery
+    // New: Use PHPickerViewController for multi-media selection from gallery
     private func presentPhotoPicker() {
         guard let viewController = viewController else { return }
         var config = PHPickerConfiguration()
-        config.selectionLimit = 10 // You can adjust the max number of images
-        config.filter = .images
+        config.selectionLimit = 10 // You can adjust the max number of images/videos
+        config.filter = .any(of: [.images, .videos]) // Allow both images and videos
         let picker = PHPickerViewController(configuration: config)
         picker.delegate = self
         viewController.present(picker, animated: true)
@@ -471,22 +495,60 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
     // MARK: - UIImagePickerControllerDelegate Implementation
     
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-        picker.dismiss(animated: true)
+        // CRITICAL FIX: Store the media first, then dismiss to prevent navigation issues
+        var capturedImage: UIImage? = nil
+        var capturedVideoURL: URL? = nil
         
-        // Handle the selected image
+        // Check if it's an image
         if let image = info[.originalImage] as? UIImage {
-            // Add image to pending attachments instead of sending immediately
-            if let messageInputView = viewController?.messageInputView {
-                let success = messageInputView.addImage(image)
-                if !success {
-                    // Show error if couldn't add (file too large or too many attachments)
-                    DispatchQueue.main.async { [weak self] in
-                        let manager = messageInputView.pendingAttachmentsManager
-                        if !manager.canAddMoreAttachments() {
-                            self?.viewController?.showErrorAlert(message: "Maximum number of attachments reached.")
-                        } else {
-                            self?.viewController?.showErrorAlert(message: "File size exceeds the maximum limit of \(manager.getMaxFileSizeString()).")
+            capturedImage = image
+        }
+        // Check if it's a video
+        else if let videoURL = info[.mediaURL] as? URL {
+            capturedVideoURL = videoURL
+        }
+        
+        // Dismiss picker immediately without animation to prevent navigation corruption
+        picker.dismiss(animated: false) { [weak self] in
+            // Process the media after dismissal is complete
+            if let image = capturedImage {
+                // Handle image
+                DispatchQueue.main.async {
+                    if let messageInputView = self?.viewController?.messageInputView {
+                        let success = messageInputView.addImage(image)
+                        if !success {
+                            // Show error if couldn't add (file too large or too many attachments)
+                            let manager = messageInputView.pendingAttachmentsManager
+                            if !manager.canAddMoreAttachments() {
+                                self?.viewController?.showErrorAlert(message: "Maximum number of attachments reached.")
+                            } else {
+                                self?.viewController?.showErrorAlert(message: "File size exceeds the maximum limit of \(manager.getMaxFileSizeString()).")
+                            }
                         }
+                    }
+                }
+            } else if let videoURL = capturedVideoURL {
+                // Handle video
+                DispatchQueue.main.async {
+                    do {
+                        let videoData = try Data(contentsOf: videoURL)
+                        let fileName = videoURL.lastPathComponent
+                        
+                        if let messageInputView = self?.viewController?.messageInputView {
+                            let success = messageInputView.addVideo(data: videoData, fileName: fileName)
+                            if !success {
+                                // Show error if couldn't add (file too large or too many attachments)
+                                let manager = messageInputView.pendingAttachmentsManager
+                                if !manager.canAddMoreAttachments() {
+                                    self?.viewController?.showErrorAlert(message: "Maximum number of attachments reached.")
+                                } else {
+                                    self?.viewController?.showErrorAlert(message: "File size exceeds the maximum limit of \(manager.getMaxFileSizeString()).")
+                                }
+                            }
+                        }
+                    } catch {
+                        print("❌ Error reading video file: \(error)")
+                        self?.viewController?.showErrorAlert(message: "Failed to read the selected video: \(error.localizedDescription)")
                     }
                 }
             }
@@ -494,7 +556,8 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
     }
     
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-        picker.dismiss(animated: true)
+        // CRITICAL FIX: Dismiss without animation to prevent navigation stack corruption
+        picker.dismiss(animated: false, completion: nil)
     }
     
     // MARK: - PHPickerViewControllerDelegate Implementation
@@ -505,11 +568,50 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         guard let messageInputView = viewController.messageInputView else { return }
         
         for result in results {
+            // Check if it's an image
             if result.itemProvider.canLoadObject(ofClass: UIImage.self) {
                 result.itemProvider.loadObject(ofClass: UIImage.self) { object, error in
                     if let image = object as? UIImage {
                         DispatchQueue.main.async {
-                            _ = messageInputView.addImage(image)
+                            let success = messageInputView.addImage(image)
+                            if !success {
+                                // Show error if couldn't add (file too large or too many attachments)
+                                let manager = messageInputView.pendingAttachmentsManager
+                                if !manager.canAddMoreAttachments() {
+                                    viewController.showErrorAlert(message: "Maximum number of attachments reached.")
+                                } else {
+                                    viewController.showErrorAlert(message: "File size exceeds the maximum limit of \(manager.getMaxFileSizeString()).")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Check if it's a video
+            else if result.itemProvider.hasItemConformingToTypeIdentifier("public.movie") {
+                result.itemProvider.loadFileRepresentation(forTypeIdentifier: "public.movie") { url, error in
+                    if let videoURL = url, error == nil {
+                        do {
+                            let videoData = try Data(contentsOf: videoURL)
+                            let fileName = videoURL.lastPathComponent
+                            
+                            DispatchQueue.main.async {
+                                let success = messageInputView.addVideo(data: videoData, fileName: fileName)
+                                if !success {
+                                    // Show error if couldn't add (file too large or too many attachments)
+                                    let manager = messageInputView.pendingAttachmentsManager
+                                    if !manager.canAddMoreAttachments() {
+                                        viewController.showErrorAlert(message: "Maximum number of attachments reached.")
+                                    } else {
+                                        viewController.showErrorAlert(message: "File size exceeds the maximum limit of \(manager.getMaxFileSizeString()).")
+                                    }
+                                }
+                            }
+                        } catch {
+                            DispatchQueue.main.async {
+                                print("❌ Error reading video file from picker: \(error)")
+                                viewController.showErrorAlert(message: "Failed to read the selected video: \(error.localizedDescription)")
+                            }
                         }
                     }
                 }

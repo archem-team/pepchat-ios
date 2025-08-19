@@ -38,21 +38,29 @@ struct UserSheetHeader: View {
                         if let banner = profile?.background {
                             
                             ZStack {
-                                LazyImage(source: .file(banner), height: 130, clipTo: RoundedRectangle(cornerRadius: .zero))
-                                    .overlay{
-                                        RoundedRectangle(cornerRadius: .zero)
-                                            .fill(Color.bgDefaultPurple13.opacity(0.6))
-                                            .frame(height: 130)
-                                    }
+                                GeometryReader { geometry in
+                                    LazyImage(source: .file(banner), clipTo: RoundedRectangle(cornerRadius: .zero))
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: geometry.size.width, height: 130)
+                                        .clipped()
+                                }
+                                .frame(height: 130)
+                                .overlay{
+                                    RoundedRectangle(cornerRadius: .zero)
+                                        .fill(Color.bgDefaultPurple13.opacity(0.6))
+                                        .frame(height: 130)
+                                }
                             }
                             
                         } else {
-                            Image(.coverPlaceholder)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(height: 130)
-                        
-                                
+                            GeometryReader { geometry in
+                                Image(.coverPlaceholder)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: geometry.size.width, height: 130)
+                                    .clipped()
+                            }
+                            .frame(height: 130)
                         }
                         
                         
@@ -165,6 +173,15 @@ struct UserSheetHeader: View {
                     }
                     
                     
+                }
+                
+                // Display user badges if they have any
+                if !user.getAllBadges().isEmpty {
+                    HStack {
+                        UserBadgesView(badges: user.getAllBadges(), badgeSize: 20, spacing: 6)
+                        Spacer()
+                    }
+                    .padding(.top, 8)
                 }
             }
             .padding(top: .padding16, bottom: .padding20)

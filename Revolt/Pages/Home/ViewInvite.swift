@@ -54,7 +54,8 @@ struct ViewInvite: View {
                         PeptideButton(title : "Got it"){
                             Task {
                                 await MainActor.run {
-                                    viewState.path.removeLast()
+                                    // Clear navigation path completely to return to main app screen
+                                    viewState.path.removeAll()
                                 }
                             }
                         }
@@ -139,8 +140,22 @@ struct ViewInvite: View {
                 }
                 
                 await MainActor.run {
-                    viewState.path.removeLast()
                     isProcessingInvite = false
+                    
+                    print("🎫 INVITE_ACCEPT: Before path change - path count: \(viewState.path.count)")
+                    print("🎫 INVITE_ACCEPT: Before path change - path: \(viewState.path)")
+                    
+                    // CRITICAL: Clear entire navigation path and rebuild for server context
+                    // This ensures back navigation goes to server channel list, not previous screen
+                    viewState.path.removeAll()
+                    
+                    print("🎫 INVITE_ACCEPT: After removeAll - path count: \(viewState.path.count)")
+                    
+                    // Navigate to the channel with clean navigation stack
+                    viewState.path.append(NavigationDestination.maybeChannelView)
+                    
+                    print("🎫 INVITE_ACCEPT: After adding maybeChannelView - path count: \(viewState.path.count)")
+                    print("🎫 INVITE_ACCEPT: Final path: \(viewState.path)")
                 }
                 
             } catch {
@@ -156,7 +171,8 @@ struct ViewInvite: View {
     private func handleDeclineInvite() {
         Task {
             await MainActor.run {
-                viewState.path.removeLast()
+                // Clear navigation path completely to return to main app screen
+                viewState.path.removeAll()
             }
         }
     }
@@ -164,9 +180,21 @@ struct ViewInvite: View {
     private func handleJoinFailure(serverInfo: ServerInfoResponse) async {
         if case .server(let serverInfo) = self.info ?? .none {
             await MainActor.run {
-                viewState.path.removeLast()
                 self.viewState.selectServer(withId: serverInfo.server_id)
+                
+                // Navigate to the invite channel if available
+                if let server = viewState.servers[serverInfo.server_id],
+                   let channelId = server.channels.first {
+                    viewState.selectChannel(inServer: serverInfo.server_id, withId: channelId)
+                }
+                
                 isProcessingInvite = false
+                
+                // CRITICAL: Clear entire navigation path and rebuild for server context
+                viewState.path.removeAll()
+                
+                // Navigate to the channel with clean navigation stack
+                viewState.path.append(NavigationDestination.maybeChannelView)
             }
         } else {
             await MainActor.run {
@@ -184,6 +212,10 @@ struct ViewInvite: View {
                 viewState.channels[channel.id] = channel
                 viewState.channelMessages[channel.id] = []
             }
+            
+            // Update app badge count after adding new channels
+            // This ensures unread messages in the joined channels are counted
+            viewState.updateAppBadgeCount()
         }
     }
     
@@ -279,6 +311,10 @@ struct ViewInvite: View {
             viewState.preloadedChannels.remove(serverInfo.channel_id)
             
             viewState.selectChannel(inServer: serverId, withId: serverInfo.channel_id)
+            
+            // IMPORTANT: For invite navigation, store server context for proper back behavior
+            print("🎫 INVITE_ACCEPT: Setting lastInviteServerContext to \(serverId)")
+            viewState.lastInviteServerContext = serverId
         }
     }
     

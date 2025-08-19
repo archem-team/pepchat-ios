@@ -223,12 +223,15 @@ class PersistentUserSettingsStore: Codable {
     }
 }
 
+// Type alias to avoid direct dependency during compilation
+typealias RevoltViewState = ViewState
+
 class UserSettingsData {
     enum SettingsFetchState {
         case fetching, failed, cached // Different states for settings fetching.
     }
     
-    var viewState: ViewState? // Current state of the view.
+    weak var viewState: RevoltViewState? // Current state of the view
     
     var cache: DiscardableUserStore // Temporary user data cache.
     var cacheState: SettingsFetchState // Current state of the cache.
@@ -256,7 +259,7 @@ class UserSettingsData {
     }
     
     // Initializer for UserSettingsData with specified cache and store.
-    init(viewState: ViewState?, cache: DiscardableUserStore, store: PersistentUserSettingsStore, isLoginUser : Bool) {
+    init(viewState: RevoltViewState?, cache: DiscardableUserStore, store: PersistentUserSettingsStore, isLoginUser : Bool) {
         self.viewState = viewState
         self.cache = cache
         self.cacheState = .cached
@@ -269,7 +272,7 @@ class UserSettingsData {
     }
     
     // Initializer for UserSettingsData with specified store.
-    init(viewState: ViewState?, store: PersistentUserSettingsStore, isLoginUser : Bool) {
+    init(viewState: RevoltViewState?, store: PersistentUserSettingsStore, isLoginUser : Bool) {
         self.viewState = viewState
         self.cache = DiscardableUserStore()
         self.cacheState = .fetching
@@ -283,7 +286,7 @@ class UserSettingsData {
     }
     
     // Default initializer for UserSettingsData.
-    init(viewState: ViewState?, isLoginUser : Bool) {
+    init(viewState: RevoltViewState?, isLoginUser : Bool) {
         self.viewState = viewState
         self.cache = DiscardableUserStore()
         self.cacheState = .fetching
@@ -297,7 +300,7 @@ class UserSettingsData {
     }
     
     // Attempts to read cached and persistent settings data.
-    class func maybeRead(viewState: ViewState?, isLoginUser : Bool) -> UserSettingsData {
+    class func maybeRead(viewState: RevoltViewState?, isLoginUser : Bool) -> UserSettingsData {
         var cache: DiscardableUserStore? = nil
         var store: PersistentUserSettingsStore? = nil
         

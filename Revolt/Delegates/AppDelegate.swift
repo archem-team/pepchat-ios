@@ -159,30 +159,33 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Get the current ViewState
         if let state = ViewState.shared {
             // Force save all important data to UserDefaults immediately
-            print("💾 BACKGROUND: Saving servers (\(state.servers.count)) to UserDefaults")
-            if let serversData = try? JSONEncoder().encode(state.servers) {
-                UserDefaults.standard.set(serversData, forKey: "servers")
-            }
+            // DISABLED: Don't cache servers and channels to force refresh from backend on app launch
+            // print("💾 BACKGROUND: Saving servers (\(state.servers.count)) to UserDefaults")
+            // if let serversData = try? JSONEncoder().encode(state.servers) {
+            //     UserDefaults.standard.set(serversData, forKey: "servers")
+            // }
             
-            print("💾 BACKGROUND: Saving channels (\(state.channels.count)) to UserDefaults")
-            if let channelsData = try? JSONEncoder().encode(state.channels) {
-                UserDefaults.standard.set(channelsData, forKey: "channels")
-            }
+            // print("💾 BACKGROUND: Saving channels (\(state.channels.count)) to UserDefaults")
+            // if let channelsData = try? JSONEncoder().encode(state.channels) {
+            //     UserDefaults.standard.set(channelsData, forKey: "channels")
+            // }
             
             print("💾 BACKGROUND: Saving users (\(state.users.count)) to UserDefaults")
             if let usersData = try? JSONEncoder().encode(state.users) {
                 UserDefaults.standard.set(usersData, forKey: "users")
             }
             
-            print("💾 BACKGROUND: Saving members to UserDefaults")
-            if let membersData = try? JSONEncoder().encode(state.members) {
-                UserDefaults.standard.set(membersData, forKey: "members")
-            }
+            // DISABLED: Don't cache members to force refresh from backend
+            // print("💾 BACKGROUND: Saving members to UserDefaults")
+            // if let membersData = try? JSONEncoder().encode(state.members) {
+            //     UserDefaults.standard.set(membersData, forKey: "members")
+            // }
             
-            print("💾 BACKGROUND: Saving DMs (\(state.dms.count)) to UserDefaults")
-            if let dmsData = try? JSONEncoder().encode(state.dms) {
-                UserDefaults.standard.set(dmsData, forKey: "dms")
-            }
+            // DISABLED: Don't cache DMs to force refresh from backend
+            // print("💾 BACKGROUND: Saving DMs (\(state.dms.count)) to UserDefaults")
+            // if let dmsData = try? JSONEncoder().encode(state.dms) {
+            //     UserDefaults.standard.set(dmsData, forKey: "dms")
+            // }
             
             // Force synchronize UserDefaults
             UserDefaults.standard.synchronize()
@@ -223,6 +226,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     // Handle app termination
     func applicationWillTerminate(_ application: UIApplication) {
         print("📱 APP: Will terminate - final save")
+        
+        // Force save users data immediately before termination
+        if let state = ViewState.shared {
+            state.forceSaveUsers()
+        }
         
         // Perform final save
         applicationDidEnterBackground(application)

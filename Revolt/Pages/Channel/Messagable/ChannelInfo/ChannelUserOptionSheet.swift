@@ -22,6 +22,7 @@ struct ChannelUserOptionSheet: View {
     var onTransferOwnershipTap: () -> Void
     var onKickTap: () -> Void
     var onBanTap: () -> Void
+    var onRemoveUser: () -> Void
     
     var serverPermissions: Permissions{
         if let server = server, let currentUser = viewState.currentUser, let member =  viewState.members[server.id]?[currentUser.id]{
@@ -152,6 +153,7 @@ struct ChannelUserOptionSheet: View {
                             let result = await viewState.http.removeMemberFromGroup(groupId: channel.id, memberId: id)
                             switch result{
                             case .success(_):
+                                self.onRemoveUser()
                                 self.isPresented = false
                                 self.viewState.path.removeLast()
                             case .failure(_):
@@ -228,9 +230,11 @@ struct ChannelUserOptionSheet: View {
                            user: viewState.users["0"]!,
                            member: viewState.members["0"]?["a"],
                            channel: viewState.channels["0"]!,
+                           server: viewState.servers["0"],
                            onTransferOwnershipTap: {},
                            onKickTap: {},
-                           onBanTap: {})
+                           onBanTap: {},
+                           onRemoveUser: {})
         .applyPreviewModifiers(withState: viewState)
         .preferredColorScheme(.dark)
 
