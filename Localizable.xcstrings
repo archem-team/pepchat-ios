@@ -424,6 +424,9 @@
     "Notifications" : {
 
     },
+    "OK" : {
+
+    },
     "One more thing" : {
 
     },
@@ -588,6 +591,9 @@
     "Settings" : {
       "comment" : "Settings Tooltip"
     },
+    "Show Unread Counts" : {
+
+    },
     "Something went wrong. Try again later?" : {
 
     },
@@ -619,6 +625,9 @@
 
     },
     "unknown" : {
+
+    },
+    "Unread Message Counts" : {
 
     },
     "User Management" : {
