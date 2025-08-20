@@ -5146,50 +5146,85 @@ public class ViewState: ObservableObject {
         
         // Iterate through all unreads
         for (channelId, unread) in unreads {
+            // Get channel info
+            let channel = channels[channelId] ?? allEventChannels[channelId]
+            
+            // Skip if channel doesn't exist
+            guard let channel = channel else {
+                print("⚠️ Badge: Skipping non-existent channel \(channelId)")
+                continue
+            }
+            
             // Check if channel is muted
             let channelNotificationState = userSettingsStore.cache.notificationSettings.channel[channelId]
             let isChannelMuted = channelNotificationState == .muted || channelNotificationState == .none
             
-            // Check if server is muted (if channel belongs to a server)
+            // Check if server is muted (only for server channels, not DMs or group DMs)
             var isServerMuted = false
-            if let channel = channels[channelId], let serverId = channel.server {
+            if let serverId = channel.server {
                 let serverNotificationState = userSettingsStore.cache.notificationSettings.server[serverId]
                 isServerMuted = serverNotificationState == .muted || serverNotificationState == .none
             }
+            // For DMs and group DMs, server is nil, so isServerMuted stays false
             
             // Skip if channel or server is muted
             if isChannelMuted || isServerMuted {
                 continue
             }
             
-            // Count mentions
-            if let mentions = unread.mentions, !mentions.isEmpty {
-                totalMentionCount += mentions.count
-            }
-            
-            // Count unread channels (checking if there are unread messages)
-            if let channel = channels[channelId] ?? allEventChannels[channelId] {
-                if let lastUnreadId = unread.last_id, let lastMessageId = channel.last_message_id {
-                    if lastUnreadId < lastMessageId {
-                        totalUnreadCount += 1
+            // Count unread messages (including group DMs)
+            if let lastUnreadId = unread.last_id, let lastMessageId = channel.last_message_id {
+                if lastUnreadId < lastMessageId {
+                    // Try to calculate actual unread count from loaded messages
+                    var unreadMessagesCount = 1 // At least 1 unread message
+                    
+                    if let channelMessageIds = channelMessages[channelId] {
+                        // Find the index of last read message
+                        if let lastReadIndex = channelMessageIds.firstIndex(of: lastUnreadId) {
+                            // Count messages after the last read one
+                            let messagesAfterLastRead = channelMessageIds.count - (lastReadIndex + 1)
+                            if messagesAfterLastRead > 0 {
+                                unreadMessagesCount = messagesAfterLastRead
+                            }
+                        } else {
+                            // If we can't find the last read message in loaded messages,
+                            // estimate based on how many messages we have loaded
+                            if channelMessageIds.count > 0 {
+                                // If the last message in our array is the channel's last message,
+                                // we can estimate unread count
+                                if let lastLoadedMessage = channelMessageIds.last,
+                                   lastLoadedMessage == lastMessageId {
+                                    // We have all messages loaded, count from last_id
+                                    unreadMessagesCount = channelMessageIds.count
+                                } else {
+                                    // We don't have all messages, use a conservative estimate
+                                    unreadMessagesCount = min(channelMessageIds.count, 50) // Cap at 50 for performance
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Add the actual count of unread messages
+                    totalUnreadCount += unreadMessagesCount
+                    
+                    // Debug log
+                    if case .group_dm_channel(let groupDM) = channel {
+                        print("🔔 Badge: Group DM '\(groupDM.name)' has \(unreadMessagesCount) unread messages")
+                    } else {
+                        print("🔔 Badge: Channel '\(channel.name ?? channelId)' has \(unreadMessagesCount) unread messages")
                     }
                 }
-            } else {
-                // Channel doesn't exist anymore - skip it, don't count as unread
-                print("⚠️ Badge: Skipping non-existent channel \(channelId)")
-                continue
             }
         }
         
-        // Total badge count is mentions + unread channels
-        // Mentions are more important, so we add them to the count
-        let finalBadgeCount = totalMentionCount + totalUnreadCount
+        // Total badge count is only unread channels (not mentions)
+        let finalBadgeCount = totalUnreadCount
         
         // Update app badge count
         DispatchQueue.main.async {
             let currentBadge = application.applicationIconBadgeNumber
             application.applicationIconBadgeNumber = finalBadgeCount
-            print("🔔 Badge: \(currentBadge) -> \(finalBadgeCount) (mentions: \(totalMentionCount), unreads: \(totalUnreadCount))")
+            print("🔔 Badge: \(currentBadge) -> \(finalBadgeCount) (total unread messages: \(totalUnreadCount))")
         }
     }
     
@@ -5309,6 +5344,188 @@ public class ViewState: ObservableObject {
         clearAppBadge()
         
         print("📖 Marked \(channelCount) channels as read and cleared badge")
+    }
+    
+    /// Show detailed unread message counts for each channel
+    func showUnreadCounts() {
+        print("\n📊 === UNREAD MESSAGE COUNTS ===")
+        
+        var totalUnreadMessages = 0
+        var totalMentions = 0
+        var channelsWithUnread: [(name: String, id: String, unreadCount: Int, mentionCount: Int)] = []
+        
+        for (channelId, unread) in unreads {
+            let channel = channels[channelId] ?? allEventChannels[channelId]
+            let channelName = channel?.name ?? "Unknown Channel"
+            
+            // Skip if channel doesn't exist
+            guard let channel = channel else {
+                print("❌ Channel \(channelId) not found - skipping")
+                continue
+            }
+            
+            // Check notification settings
+            let isChannelMuted = userSettingsStore.cache.notificationSettings.channel[channelId] == .muted || 
+                                userSettingsStore.cache.notificationSettings.channel[channelId] == .none
+            let serverIdForChannel = channel.server
+            let isServerMuted = serverIdForChannel != nil ? 
+                (userSettingsStore.cache.notificationSettings.server[serverIdForChannel!] == .muted || 
+                 userSettingsStore.cache.notificationSettings.server[serverIdForChannel!] == .none) : false
+            
+            // Calculate unread count
+            var unreadCount = 0
+            if let lastUnreadId = unread.last_id, let lastMessageId = channel.last_message_id {
+                if lastUnreadId < lastMessageId {
+                    // We can't get exact count without fetching messages, but we know there are unread messages
+                    unreadCount = -1 // -1 means "has unread but count unknown"
+                }
+            }
+            
+            let mentionCount = unread.mentions?.count ?? 0
+            
+            if unreadCount != 0 || mentionCount > 0 {
+                let mutedIndicator = (isChannelMuted || isServerMuted) ? " 🔇" : ""
+                channelsWithUnread.append((
+                    name: channelName + mutedIndicator,
+                    id: channelId,
+                    unreadCount: unreadCount,
+                    mentionCount: mentionCount
+                ))
+                
+                if !(isChannelMuted || isServerMuted) {
+                    if unreadCount == -1 {
+                        totalUnreadMessages += 1 // Count as at least 1
+                    } else if unreadCount > 0 {
+                        totalUnreadMessages += unreadCount
+                    }
+                    totalMentions += mentionCount
+                }
+            }
+        }
+        
+        // Sort by mention count first, then by name
+        channelsWithUnread.sort { 
+            if $0.mentionCount != $1.mentionCount {
+                return $0.mentionCount > $1.mentionCount
+            }
+            return $0.name < $1.name
+        }
+        
+        // Print results
+        if channelsWithUnread.isEmpty {
+            print("✅ No channels with unread messages!")
+        } else {
+            print("\n📌 Channels with unread messages:")
+            for channel in channelsWithUnread {
+                let unreadText = channel.unreadCount == -1 ? "Has unread" : "\(channel.unreadCount) unread"
+                let mentionText = channel.mentionCount > 0 ? ", \(channel.mentionCount) mention(s)" : ""
+                print("  • \(channel.name): \(unreadText)\(mentionText)")
+            }
+        }
+        
+        print("\n📊 Summary:")
+        print("  - Total channels with unread: \(channelsWithUnread.count)")
+        print("  - Total unread channels (unmuted): \(totalUnreadMessages)")
+        print("  - Total mentions (unmuted): \(totalMentions)")
+        print("  - Current badge count: \(ViewState.application?.applicationIconBadgeNumber ?? 0)")
+        print("📊 === END UNREAD COUNTS ===\n")
+    }
+    
+    /// Get unread counts as a formatted string for UI display
+    func getUnreadCountsString() -> String {
+        var result = "📊 UNREAD MESSAGE COUNTS\n\n"
+        
+        var channelsWithUnread: [(name: String, id: String, unreadCount: Int, mentionCount: Int, isMuted: Bool)] = []
+        
+        for (channelId, unread) in unreads {
+            let channel = channels[channelId] ?? allEventChannels[channelId]
+            let channelName = channel?.name ?? "Unknown Channel"
+            
+            // Skip if channel doesn't exist
+            guard let channel = channel else {
+                continue
+            }
+            
+            // Check notification settings
+            let isChannelMuted = userSettingsStore.cache.notificationSettings.channel[channelId] == .muted || 
+                                userSettingsStore.cache.notificationSettings.channel[channelId] == .none
+            let serverIdForChannel = channel.server
+            let isServerMuted = serverIdForChannel != nil ? 
+                (userSettingsStore.cache.notificationSettings.server[serverIdForChannel!] == .muted || 
+                 userSettingsStore.cache.notificationSettings.server[serverIdForChannel!] == .none) : false
+            
+            let isMuted = isChannelMuted || isServerMuted
+            
+            // Calculate unread count
+            var unreadCount = 0
+            if let lastUnreadId = unread.last_id, let lastMessageId = channel.last_message_id {
+                if lastUnreadId < lastMessageId {
+                    unreadCount = -1 // -1 means "has unread but count unknown"
+                }
+            }
+            
+            let mentionCount = unread.mentions?.count ?? 0
+            
+            if unreadCount != 0 || mentionCount > 0 {
+                channelsWithUnread.append((
+                    name: channelName,
+                    id: channelId,
+                    unreadCount: unreadCount,
+                    mentionCount: mentionCount,
+                    isMuted: isMuted
+                ))
+            }
+        }
+        
+        // Sort by muted status first, then mention count, then name
+        channelsWithUnread.sort { 
+            if $0.isMuted != $1.isMuted {
+                return !$0.isMuted // Unmuted first
+            }
+            if $0.mentionCount != $1.mentionCount {
+                return $0.mentionCount > $1.mentionCount
+            }
+            return $0.name < $1.name
+        }
+        
+        if channelsWithUnread.isEmpty {
+            result += "✅ No channels with unread messages!"
+        } else {
+            var unmutedCount = 0
+            var mutedCount = 0
+            
+            result += "📌 Unmuted channels:\n"
+            for channel in channelsWithUnread where !channel.isMuted {
+                let unreadText = channel.unreadCount == -1 ? "Has unread" : "\(channel.unreadCount) unread"
+                let mentionText = channel.mentionCount > 0 ? ", \(channel.mentionCount) mention(s)" : ""
+                result += "• \(channel.name): \(unreadText)\(mentionText)\n"
+                unmutedCount += 1
+            }
+            
+            if unmutedCount == 0 {
+                result += "None\n"
+            }
+            
+            result += "\n🔇 Muted channels:\n"
+            for channel in channelsWithUnread where channel.isMuted {
+                let unreadText = channel.unreadCount == -1 ? "Has unread" : "\(channel.unreadCount) unread"
+                let mentionText = channel.mentionCount > 0 ? ", \(channel.mentionCount) mention(s)" : ""
+                result += "• \(channel.name): \(unreadText)\(mentionText)\n"
+                mutedCount += 1
+            }
+            
+            if mutedCount == 0 {
+                result += "None\n"
+            }
+            
+            result += "\n📊 Summary:\n"
+            result += "• Total channels with unread: \(channelsWithUnread.count)\n"
+            result += "• Unmuted channels: \(unmutedCount)\n"
+            result += "• Muted channels: \(mutedCount)\n"
+            result += "• Current badge: \(ViewState.application?.applicationIconBadgeNumber ?? 0)"
+        }
+        
+        return result
     }
 }
 
@@ -5581,7 +5798,7 @@ extension ViewState {
                     
                     // Update app badge count after loading unreads from server
                     updateAppBadgeCount()
-                    print("🔔 Updated badge count after loading \(remoteUnreads.count) unreads from server")
+                    print("🔔 Updated badge count after loading \(remoteUnreads.count) unreads from server (counting actual message counts)")
                 }
             }
         }

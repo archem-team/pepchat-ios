@@ -10,6 +10,8 @@ import SwiftUI
 /// View for managing developer settings in the application.
 struct DeveloperSettings: View {
     @EnvironmentObject var viewState: ViewState
+    @State private var showingUnreadCounts = false
+    @State private var unreadCountsText = ""
 
     var body: some View {
         List {
@@ -54,12 +56,26 @@ struct DeveloperSettings: View {
                     Text("Refresh Badge Count") // Button label.
                 }
                 .listRowBackground(viewState.theme.background2)
+                
+                Button {
+                    viewState.showUnreadCounts() // Also log to console
+                    unreadCountsText = viewState.getUnreadCountsString()
+                    showingUnreadCounts = true
+                } label: {
+                    Text("Show Unread Counts") // Button label.
+                }
+                .listRowBackground(viewState.theme.background2)
             }
         }
         .background(viewState.theme.background) // Background color for the entire list.
         .scrollContentBackground(.hidden) // Hides the background of the scroll view.
         .toolbarBackground(viewState.theme.topBar, for: .automatic) // Sets the toolbar background color.
         .navigationTitle("Developer") // Title for the navigation bar.
+        .alert("Unread Message Counts", isPresented: $showingUnreadCounts) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(unreadCountsText)
+        }
     }
 }
 

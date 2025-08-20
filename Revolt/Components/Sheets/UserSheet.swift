@@ -255,9 +255,9 @@ struct UserSheet: View {
         case .Friend: return "Message"
         case .Blocked: return "Unblock"
         case .BlockedOther: return nil
-        case .Incoming: return "Add Friend"
-        case .None: return "Add Friend"
-        case .Outgoing: return "Pending"
+        case .Incoming: return "Message"
+        case .None: return "Message"
+        case .Outgoing: return "Message"
         case .User: return nil
         default: return nil
             
@@ -271,8 +271,8 @@ struct UserSheet: View {
         case .Blocked: return .peptideUnblock
         case .BlockedOther: return nil
         case .Incoming: return .peptideMessage
-        case .None: return .peptideNewUser
-        case .Outgoing: return .peptideTimeCancelPendingSvg
+        case .None: return .peptideMessage
+        case .Outgoing: return .peptideMessage
         case .User: return nil
         default: return nil
         }
@@ -319,7 +319,7 @@ struct UserSheet: View {
                         PeptideIconWithTitleButton(icon: image, title: title){
                             
                             switch relation {
-                            case .Friend:
+                            case .Friend, .Incoming, .None, .Outgoing:
                                 Task {
                                     await viewState.openDm(with: user.id)
                                     viewState.closeUserSheet()
@@ -344,39 +344,6 @@ struct UserSheet: View {
                                 }
                                 break
                             case .BlockedOther: break
-                            case .Incoming:
-                                Task{
-                                    
-                                    let res = await self.viewState.http.sendFriendRequest(username: "\(user.username)#\(user.discriminator)")
-                                    
-                                    switch res {
-                                    case .success(_):
-                                        var user = self.user
-                                        user.relationship = .Outgoing
-                                        viewState.users[user.id] = user
-                                    case .failure(_):
-                                        self.viewState.showAlert(message: "Something went wronge!", icon: .peptideCloseLiner)
-                                    }
-                                    
-                                }
-                            case .None:
-                                Task{
-                                    
-                                    let res = await self.viewState.http.sendFriendRequest(username: "\(user.username)#\(user.discriminator)")
-                                    
-                                    switch res {
-                                    case .success(_):
-                                        var user = self.user
-                                        user.relationship = .Outgoing
-                                        viewState.users[user.id] = user
-                                    case .failure(_):
-                                        self.viewState.showAlert(message: "Something went wronge!", icon: .peptideCloseLiner)
-                                    }
-                                    
-                                }
-                            case .Outgoing:
-                                self.removeFriendShipType = .withdrawal
-                                self.isShowingUnfriendPopup.toggle()
                             case .User: break
                             default: break
                             }
@@ -389,6 +356,51 @@ struct UserSheet: View {
                         PeptideIconWithTitleButton(icon: .peptideRemoveUser, title: "Unfriend"){
                             
                             self.removeFriendShipType = .unfriend
+                            self.isShowingUnfriendPopup.toggle()
+                        }
+                        
+                    } else if relation == .Incoming {
+                        
+                        PeptideIconWithTitleButton(icon: .peptideNewUser, title: "Add Friend"){
+                            Task{
+                                
+                                let res = await self.viewState.http.sendFriendRequest(username: "\(user.username)#\(user.discriminator)")
+                                
+                                switch res {
+                                case .success(_):
+                                    var user = self.user
+                                    user.relationship = .Outgoing
+                                    viewState.users[user.id] = user
+                                case .failure(_):
+                                    self.viewState.showAlert(message: "Something went wronge!", icon: .peptideCloseLiner)
+                                }
+                                
+                            }
+                        }
+                        
+                    } else if relation == .None {
+                        
+                        PeptideIconWithTitleButton(icon: .peptideNewUser, title: "Add Friend"){
+                            Task{
+                                
+                                let res = await self.viewState.http.sendFriendRequest(username: "\(user.username)#\(user.discriminator)")
+                                
+                                switch res {
+                                case .success(_):
+                                    var user = self.user
+                                    user.relationship = .Outgoing
+                                    viewState.users[user.id] = user
+                                case .failure(_):
+                                    self.viewState.showAlert(message: "Something went wronge!", icon: .peptideCloseLiner)
+                                }
+                                
+                            }
+                        }
+                        
+                    } else if relation == .Outgoing {
+                        
+                        PeptideIconWithTitleButton(icon: .peptideTimeCancelPendingSvg, title: "Pending"){
+                            self.removeFriendShipType = .withdrawal
                             self.isShowingUnfriendPopup.toggle()
                         }
                         
