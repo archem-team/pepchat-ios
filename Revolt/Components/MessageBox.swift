@@ -497,8 +497,8 @@ struct MessageBox: View {
                 textField.inputAccessoryView = nil
                 textField.autocorrectionType = .no
                 
-                // Make sure text field resizing doesn't cause jumps
-                textField.layoutManager.allowsNonContiguousLayout = false
+                // Allow non-contiguous layout to avoid input issues with emoji/IME composition
+                textField.layoutManager.allowsNonContiguousLayout = true
                 
                 // Set return key type to default (allows new lines)
                 textField.returnKeyType = .default
