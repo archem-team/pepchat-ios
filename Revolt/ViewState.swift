@@ -5151,7 +5151,6 @@ public class ViewState: ObservableObject {
             
             // Skip if channel doesn't exist
             guard let channel = channel else {
-                print("⚠️ Badge: Skipping non-existent channel \(channelId)")
                 continue
             }
             
@@ -5172,46 +5171,14 @@ public class ViewState: ObservableObject {
                 continue
             }
             
-            // Count unread messages (including group DMs)
+            // Count unread channels (including group DMs)
             if let lastUnreadId = unread.last_id, let lastMessageId = channel.last_message_id {
                 if lastUnreadId < lastMessageId {
-                    // Try to calculate actual unread count from loaded messages
-                    var unreadMessagesCount = 1 // At least 1 unread message
+                    totalUnreadCount += 1
                     
-                    if let channelMessageIds = channelMessages[channelId] {
-                        // Find the index of last read message
-                        if let lastReadIndex = channelMessageIds.firstIndex(of: lastUnreadId) {
-                            // Count messages after the last read one
-                            let messagesAfterLastRead = channelMessageIds.count - (lastReadIndex + 1)
-                            if messagesAfterLastRead > 0 {
-                                unreadMessagesCount = messagesAfterLastRead
-                            }
-                        } else {
-                            // If we can't find the last read message in loaded messages,
-                            // estimate based on how many messages we have loaded
-                            if channelMessageIds.count > 0 {
-                                // If the last message in our array is the channel's last message,
-                                // we can estimate unread count
-                                if let lastLoadedMessage = channelMessageIds.last,
-                                   lastLoadedMessage == lastMessageId {
-                                    // We have all messages loaded, count from last_id
-                                    unreadMessagesCount = channelMessageIds.count
-                                } else {
-                                    // We don't have all messages, use a conservative estimate
-                                    unreadMessagesCount = min(channelMessageIds.count, 50) // Cap at 50 for performance
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Add the actual count of unread messages
-                    totalUnreadCount += unreadMessagesCount
-                    
-                    // Debug log
+                    // Debug log for group DMs
                     if case .group_dm_channel(let groupDM) = channel {
-                        print("🔔 Badge: Group DM '\(groupDM.name)' has \(unreadMessagesCount) unread messages")
-                    } else {
-                        print("🔔 Badge: Channel '\(channel.name ?? channelId)' has \(unreadMessagesCount) unread messages")
+                        print("🔔 Badge: Counting group DM '\(groupDM.name)' as unread")
                     }
                 }
             }
@@ -5224,7 +5191,7 @@ public class ViewState: ObservableObject {
         DispatchQueue.main.async {
             let currentBadge = application.applicationIconBadgeNumber
             application.applicationIconBadgeNumber = finalBadgeCount
-            print("🔔 Badge: \(currentBadge) -> \(finalBadgeCount) (total unread messages: \(totalUnreadCount))")
+            print("🔔 Badge: \(currentBadge) -> \(finalBadgeCount) (unreads: \(totalUnreadCount))")
         }
     }
     
@@ -5798,7 +5765,7 @@ extension ViewState {
                     
                     // Update app badge count after loading unreads from server
                     updateAppBadgeCount()
-                    print("🔔 Updated badge count after loading \(remoteUnreads.count) unreads from server (counting actual message counts)")
+                    print("🔔 Updated badge count after loading \(remoteUnreads.count) unreads from server (mentions not counted)")
                 }
             }
         }

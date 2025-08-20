@@ -855,11 +855,11 @@ extension MessageInputView: UITextViewDelegate {
     }
     
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        // Safety check for range bounds
-        guard let textViewText = textView.text,
-              range.location >= 0,
-              range.location <= textViewText.count,
-              range.location + range.length <= textViewText.count else {
+        // Safety check for range bounds (use UTF-16 length to handle emoji correctly)
+        guard let textViewText = textView.text else { return true }
+        let nsText = textViewText as NSString
+        guard range.location >= 0,
+              range.location + range.length <= nsText.length else {
             return false
         }
         
