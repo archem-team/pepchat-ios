@@ -1,0 +1,120 @@
+---
+description: API and networking patterns for PepChat backend communication
+globs: ["Revolt/Api/**/*.swift", "**/Http.swift", "**/Websocket.swift"]
+alwaysApply: false
+---
+
+# API and Networking Standards
+
+## HTTP Client Patterns
+
+### API Method Structure
+All API methods should follow this pattern in `Http.swift`:
+```swift
+func methodName(
+    parameter1: String,
+    parameter2: Int = defaultValue,
+    optionalParam: String? = nil
+) async -> Result<ResponseType, RevoltError> {
+    await req(method: .post, route: "/api/endpoint", body: requestBody)
+}
+```
+
+### Request Building
+- Use the `req()` helper method for all HTTP requests
+- Always specify the HTTP method: `.get`, `.post`, `.put`, `.delete`, `.patch`
+- Build routes with proper parameter encoding
+- Use dictionaries for query parameters instead of string concatenation
+
+### Error Handling
+- Return `Result<SuccessType, RevoltError>` for all async API calls
+- Use `RevoltError` enum for standardized error types
+- Log errors appropriately with context information
+- Don't throw exceptions - use Result pattern
+
+### Example API Implementation
+```swift
+func fetchHistory(
+    channel: String,
+    limit: Int = 100,
+    before: String? = nil,
+    after: String? = nil,
+    nearby: String? = nil,
+    sort: String = "Latest",
+    server: String? = nil
+) async -> Result<FetchHistory, RevoltError> {
+    var params: [String: Any] = [
+        "limit": limit,
+        "sort": sort,
+        "include_users": true
+    ]
+    
+    if let before = before { params["before"] = before }
+    if let after = after { params["after"] = after }
+    if let nearby = nearby { params["nearby"] = nearby }
+    if let server = server { params["server"] = server }
+    
+    let route = "/channels/\(channel)/messages"
+    return await req(method: .get, route: route, query: params)
+}
+```
+
+## WebSocket Communication
+
+### Connection Management
+- Use `ViewState.ws` for WebSocket instance
+- Handle connection states: `.connecting`, `.connected`, `.disconnected`
+- Implement automatic reconnection logic
+- Gracefully handle network interruptions
+
+### Message Handling
+- Parse incoming WebSocket messages using Codable protocols
+- Update ViewState appropriately for real-time updates
+- Maintain message order and consistency
+- Handle bulk operations efficiently
+
+### WebSocket Patterns
+```swift
+// Sending messages
+await viewState.ws?.send(payload)
+
+// Handling incoming messages
+func handleWebSocketMessage(_ message: WebSocketMessage) {
+    switch message.type {
+    case .messageCreate:
+        // Update UI state
+    case .messageDelete:
+        // Remove from state
+    }
+}
+```
+
+## State Integration
+
+### ViewState Updates
+- Always update ViewState on main thread for UI changes
+- Use proper state mutation patterns:
+  - `viewState.messages[messageId] = newMessage`
+  - `viewState.channels[channelId] = updatedChannel`
+- Trigger UI updates through published properties
+
+### Caching Strategy
+- Use `MessageCacheManager` for local message storage
+- Implement proper cache invalidation
+- Store user data and channel info persistently
+- Handle offline scenarios gracefully
+
+## Authentication
+- Store session tokens securely using Keychain
+- Include proper headers in all authenticated requests
+- Handle token expiration and refresh
+- Implement MFA support for login flows
+
+## Best Practices
+- Never block the main thread with network operations
+- Use proper timeout values for requests
+- Implement retry logic for transient failures
+- Log network activity for debugging (in debug builds only)
+- Use proper SSL/TLS verification
+- Handle rate limiting from the server
+- Implement proper request deduplication

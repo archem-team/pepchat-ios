@@ -1,0 +1,224 @@
+---
+description: Messaging interface patterns and MessageableChannel guidelines
+globs: ["**/MessageableChannel*.swift", "**/MessageRenderer/**/*.swift", "**/MessageInput*.swift"]
+alwaysApply: false
+---
+
+# Messaging UI Patterns
+
+## MessageableChannel Architecture
+
+### Hybrid UIKit + SwiftUI Approach
+The messaging interface uses UIKit's `UIViewController` wrapped in SwiftUI for optimal performance:
+
+```swift
+struct MessageableChannelViewControllerRepresentable: UIViewControllerRepresentable {
+    @Binding var currentChannel: ChannelSelection
+    
+    func makeUIViewController(context: Context) -> MessageableChannelViewController {
+        return MessageableChannelViewController()
+    }
+    
+    func updateUIViewController(_ uiViewController: MessageableChannelViewController, context: Context) {
+        // Update when bindings change
+    }
+}
+```
+
+### Controller Responsibilities
+- **Message Loading**: Pagination and history fetching
+- **Real-time Updates**: WebSocket message handling
+- **Scroll Management**: Smooth scrolling and position preservation
+- **Input Handling**: Text input and media attachments
+- **Permissions**: Channel-specific permission checking
+
+## Message Rendering
+
+### Message Cell Components
+```swift
+// Use this structure for message cells
+struct MessageCell: View {
+    let message: Message
+    let isHighlighted: Bool
+    let showAuthor: Bool
+    
+    var body: some View {
+        HStack(alignment: .top) {
+            if showAuthor {
+                Avatar(user: message.user)
+                    .frame(width: 40, height: 40)
+            } else {
+                Spacer().frame(width: 40)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                if showAuthor {
+                    MessageHeader(message: message)
+                }
+                MessageContent(message: message)
+                MessageAttachments(attachments: message.attachments)
+            }
+        }
+        .background(isHighlighted ? Color.blue.opacity(0.1) : Color.clear)
+    }
+}
+```
+
+### Message Grouping Logic
+- Group consecutive messages from same author within 5 minutes
+- Always show author for first message in group
+- Show timestamp on hover/long press
+- Handle system messages separately
+
+### Content Rendering
+- **Text**: Support markdown with Down library
+- **Mentions**: Highlight @user and @everyone mentions
+- **Links**: Auto-detect and preview URLs
+- **Embeds**: Rich link previews and media embeds
+- **Reactions**: Display emoji reactions with counts
+
+## Input System
+
+### Text Input Handling
+```swift
+struct MessageInputView: View {
+    @State private var messageText = ""
+    @State private var isTyping = false
+    
+    var body: some View {
+        HStack {
+            TextField("Message", text: $messageText)
+                .onSubmit {
+                    sendMessage()
+                }
+                .onChange(of: messageText) { _, newValue in
+                    handleTypingIndicator(newValue)
+                }
+            
+            Button("Send") {
+                sendMessage()
+            }
+            .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
+}
+```
+
+### File Attachments
+- Support drag & drop for file uploads
+- Show upload progress and thumbnails
+- Handle multiple file selection
+- Validate file types and sizes
+- Compress images appropriately
+
+### Typing Indicators
+- Send typing events via WebSocket
+- Display "User is typing..." indicators
+- Debounce typing events (stop after 3 seconds of no input)
+- Clear indicators on message send
+
+## Real-time Updates
+
+### Message Insertion
+```swift
+func handleNewMessage(_ message: Message) {
+    DispatchQueue.main.async {
+        // Insert message in correct chronological position
+        viewState.channelMessages[channelId]?.insert(message, at: insertionIndex)
+        
+        // Scroll to bottom if user is near bottom
+        if isNearBottom {
+            scrollToBottom()
+        }
+    }
+}
+```
+
+### Message Updates
+- Handle message edits in-place
+- Update reactions dynamically
+- Remove deleted messages with animation
+- Maintain scroll position during updates
+
+## Scroll Management
+
+### Position Preservation
+```swift
+// Save scroll position before updates
+let savedOffset = tableView.contentOffset.y
+let savedContentHeight = tableView.contentSize.height
+
+// After content changes
+let heightDifference = tableView.contentSize.height - savedContentHeight
+let newOffset = CGPoint(x: 0, y: savedOffset + heightDifference)
+tableView.setContentOffset(newOffset, animated: false)
+```
+
+### Smart Scrolling
+- Auto-scroll to bottom for new messages (if user is at bottom)
+- Preserve position when loading history
+- Smooth scroll to target messages from deep links
+- Handle keyboard appearance/dismissal
+
+## Performance Optimizations
+
+### Message Virtualization
+- Use `UITableView` with cell reuse for large message lists
+- Implement lazy loading for message history
+- Cache rendered message content
+- Optimize image loading and caching
+
+### Memory Management
+- Limit in-memory message count (keep last 500 messages)
+- Unload off-screen images
+- Use weak references appropriately
+- Clean up WebSocket listeners on dealloc
+
+## Accessibility
+
+### VoiceOver Support
+```swift
+.accessibilityLabel("Message from \(author.displayName())")
+.accessibilityValue(messageContent)
+.accessibilityHint("Double tap to view message options")
+```
+
+### Dynamic Type
+- Support all Dynamic Type sizes
+- Scale message bubbles appropriately
+- Maintain readable line spacing
+- Test with largest accessibility sizes
+
+## Error Handling
+
+### Message Send Failures
+- Show retry option for failed messages
+- Indicate sending state visually
+- Handle network connectivity issues
+- Queue messages for retry when connection restored
+
+### Loading States
+- Show skeleton loading for message history
+- Display loading indicators for media
+- Handle empty channel states gracefully
+- Show appropriate error messages for failures
+
+## Best Practices
+
+### State Management
+- Keep message state in ViewState for consistency
+- Use message IDs as unique identifiers
+- Handle duplicate message detection
+- Implement proper state cleanup
+
+### Threading
+- Always update UI on main thread
+- Use background queues for heavy processing
+- Avoid blocking the UI thread
+- Handle async operations properly
+
+### Testing
+- Write unit tests for message grouping logic
+- Test scroll position preservation
+- Verify real-time update handling
+- Test with various message types and sizes

@@ -1,0 +1,483 @@
+---
+description: Testing patterns and guidelines for PepChat iOS development
+globs: ["**/*Test*.swift", "**/Test*/**/*.swift"]
+alwaysApply: false
+---
+
+# Testing Guidelines for PepChat
+
+## Testing Strategy
+
+### Test Pyramid Structure
+- **Unit Tests (70%)**: Core business logic, data models, utilities
+- **Integration Tests (20%)**: API communication, state management
+- **UI Tests (10%)**: Critical user flows, accessibility
+
+### Test Organization
+```
+RevoltTests/
+├── UnitTests/
+│   ├── ModelsTests/
+│   ├── APITests/
+│   ├── UtilsTests/
+│   └── ViewStateTests/
+├── IntegrationTests/
+│   ├── WebSocketTests/
+│   ├── AuthenticationTests/
+│   └── MessageFlowTests/
+└── MockHelpers/
+    ├── MockAPI.swift
+    ├── MockWebSocket.swift
+    └── TestFixtures.swift
+```
+
+## Unit Testing Patterns
+
+### Model Testing
+```swift
+import XCTest
+@testable import Types
+
+class MessageTests: XCTestCase {
+    func testMessageInitialization() {
+        // Given
+        let messageId = "test_message_id"
+        let content = "Hello, world!"
+        let authorId = "author_id"
+        let channelId = "channel_id"
+        
+        // When
+        let message = Message(
+            id: messageId,
+            content: content,
+            author: authorId,
+            channel: channelId
+        )
+        
+        // Then
+        XCTAssertEqual(message.id, messageId)
+        XCTAssertEqual(message.content, content)
+        XCTAssertEqual(message.author, authorId)
+        XCTAssertEqual(message.channel, channelId)
+    }
+    
+    func testInviteLinkDetection() {
+        // Given
+        let messageWithInvite = Message(
+            id: "1",
+            content: "Join us at https://peptide.chat/invite/ABC123",
+            author: "user1",
+            channel: "channel1"
+        )
+        
+        let regularMessage = Message(
+            id: "2",
+            content: "Regular message without invite",
+            author: "user1",
+            channel: "channel1"
+        )
+        
+        // When & Then
+        XCTAssertTrue(messageWithInvite.isInviteLink())
+        XCTAssertFalse(regularMessage.isInviteLink())
+    }
+}
+```
+
+### User Model Testing
+```swift
+class UserTests: XCTestCase {
+    func testDisplayNameLogic() {
+        // Test with display name
+        let userWithDisplayName = User(
+            id: "1",
+            username: "testuser",
+            discriminator: "0001",
+            display_name: "Test User"
+        )
+        XCTAssertEqual(userWithDisplayName.displayName(), "Test User")
+        
+        // Test without display name
+        let userWithoutDisplayName = User(
+            id: "2",
+            username: "testuser2",
+            discriminator: "0002"
+        )
+        XCTAssertEqual(userWithoutDisplayName.displayName(), "testuser2#0002")
+    }
+    
+    func testBadgeProcessing() {
+        // Given
+        let userWithBadges = User(
+            id: "1",
+            username: "test",
+            discriminator: "0001",
+            badges: 5 // Some badge combination
+        )
+        
+        // When
+        let badges = userWithBadges.getAllBadges()
+        
+        // Then
+        XCTAssertFalse(badges.isEmpty)
+        // Add specific badge assertions based on your badge system
+    }
+}
+```
+
+## API Testing
+
+### Mock API Client
+```swift
+class MockAPI: APIClientProtocol {
+    var shouldSucceed = true
+    var mockMessages: [Message] = []
+    var mockUsers: [User] = []
+    
+    func fetchHistory(
+        channel: String,
+        limit: Int,
+        before: String?,
+        after: String?,
+        nearby: String?
+    ) async -> Result<FetchHistory, RevoltError> {
+        if shouldSucceed {
+            return .success(FetchHistory(
+                messages: mockMessages,
+                users: mockUsers,
+                members: []
+            ))
+        } else {
+            return .failure(.networkError("Mock error"))
+        }
+    }
+    
+    func sendMessage(
+        channel: String,
+        content: String
+    ) async -> Result<Message, RevoltError> {
+        if shouldSucceed {
+            let message = Message(
+                id: UUID().uuidString,
+                content: content,
+                author: "test_user",
+                channel: channel
+            )
+            return .success(message)
+        } else {
+            return .failure(.networkError("Send failed"))
+        }
+    }
+}
+```
+
+### API Integration Tests
+```swift
+class APIIntegrationTests: XCTestCase {
+    var mockAPI: MockAPI!
+    var viewState: ViewState!
+    
+    override func setUp() {
+        super.setUp()
+        mockAPI = MockAPI()
+        viewState = ViewState()
+        viewState.api = mockAPI
+    }
+    
+    func testFetchMessagesSuccess() async {
+        // Given
+        let channelId = "test_channel"
+        mockAPI.shouldSucceed = true
+        mockAPI.mockMessages = [
+            Message(id: "1", content: "Message 1", author: "user1", channel: channelId),
+            Message(id: "2", content: "Message 2", author: "user2", channel: channelId)
+        ]
+        
+        // When
+        let result = await mockAPI.fetchHistory(channel: channelId, limit: 50)
+        
+        // Then
+        switch result {
+        case .success(let history):
+            XCTAssertEqual(history.messages.count, 2)
+            XCTAssertEqual(history.messages[0].content, "Message 1")
+        case .failure:
+            XCTFail("Expected success but got failure")
+        }
+    }
+    
+    func testSendMessageFailure() async {
+        // Given
+        mockAPI.shouldSucceed = false
+        
+        // When
+        let result = await mockAPI.sendMessage(channel: "test", content: "Hello")
+        
+        // Then
+        switch result {
+        case .success:
+            XCTFail("Expected failure but got success")
+        case .failure(let error):
+            XCTAssertEqual(error.localizedDescription, "Mock error")
+        }
+    }
+}
+```
+
+## ViewState Testing
+
+### State Management Tests
+```swift
+class ViewStateTests: XCTestCase {
+    var viewState: ViewState!
+    
+    override func setUp() {
+        super.setUp()
+        viewState = ViewState()
+    }
+    
+    func testMessageStateUpdates() {
+        // Given
+        let channelId = "test_channel"
+        let message1 = Message(id: "1", content: "First", author: "user1", channel: channelId)
+        let message2 = Message(id: "2", content: "Second", author: "user2", channel: channelId)
+        
+        // When
+        viewState.messages[message1.id] = message1
+        viewState.messages[message2.id] = message2
+        viewState.channelMessages[channelId] = [message1, message2]
+        
+        // Then
+        XCTAssertEqual(viewState.messages.count, 2)
+        XCTAssertEqual(viewState.channelMessages[channelId]?.count, 2)
+        XCTAssertEqual(viewState.channelMessages[channelId]?[0].content, "First")
+    }
+    
+    func testNavigationStateChanges() {
+        // Given
+        let destination = NavigationDestination.settings
+        
+        // When
+        viewState.path.append(destination)
+        
+        // Then
+        XCTAssertEqual(viewState.path.count, 1)
+        XCTAssertEqual(viewState.path[0], destination)
+    }
+    
+    func testCacheClearing() {
+        // Given
+        viewState.messages["1"] = Message(id: "1", content: "Test", author: "user", channel: "channel")
+        viewState.users["1"] = User(id: "1", username: "test", discriminator: "0001")
+        
+        // When
+        viewState.destroyCache()
+        
+        // Then
+        XCTAssertTrue(viewState.messages.isEmpty)
+        XCTAssertTrue(viewState.users.isEmpty)
+        XCTAssertTrue(viewState.channels.isEmpty)
+        XCTAssertTrue(viewState.servers.isEmpty)
+    }
+}
+```
+
+## UI Testing
+
+### Critical User Flows
+```swift
+class PepChatUITests: XCTestCase {
+    var app: XCUIApplication!
+    
+    override func setUp() {
+        super.setUp()
+        app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
+    }
+    
+    func testLoginFlow() {
+        // Test login process
+        let emailField = app.textFields["Email"]
+        let passwordField = app.secureTextFields["Password"]
+        let loginButton = app.buttons["Sign In"]
+        
+        XCTAssertTrue(emailField.exists)
+        XCTAssertTrue(passwordField.exists)
+        XCTAssertTrue(loginButton.exists)
+        
+        emailField.tap()
+        emailField.typeText("test@example.com")
+        
+        passwordField.tap()
+        passwordField.typeText("testpassword")
+        
+        loginButton.tap()
+        
+        // Verify navigation to main app or error handling
+        // This would depend on your test environment setup
+    }
+    
+    func testMessageSending() {
+        // Assuming user is already logged in
+        let messageInput = app.textFields["Message"]
+        let sendButton = app.buttons["Send"]
+        
+        XCTAssertTrue(messageInput.exists)
+        
+        messageInput.tap()
+        messageInput.typeText("Test message")
+        
+        XCTAssertTrue(sendButton.isEnabled)
+        sendButton.tap()
+        
+        // Verify message appears in chat
+        XCTAssertTrue(app.staticTexts["Test message"].exists)
+    }
+    
+    func testAccessibility() {
+        // Test VoiceOver accessibility
+        app.accessibilityActivate()
+        
+        // Verify important elements have accessibility labels
+        let messageInput = app.textFields["Message"]
+        XCTAssertNotNil(messageInput.accessibilityLabel)
+        XCTAssertNotNil(messageInput.accessibilityHint)
+    }
+}
+```
+
+## Test Utilities
+
+### Test Fixtures
+```swift
+struct TestFixtures {
+    static func createMockUser(
+        id: String = "test_user",
+        username: String = "testuser",
+        discriminator: String = "0001"
+    ) -> User {
+        return User(
+            id: id,
+            username: username,
+            discriminator: discriminator,
+            display_name: "Test User"
+        )
+    }
+    
+    static func createMockMessage(
+        id: String = "test_message",
+        content: String = "Test message",
+        author: String = "test_user",
+        channel: String = "test_channel"
+    ) -> Message {
+        return Message(
+            id: id,
+            content: content,
+            author: author,
+            channel: channel
+        )
+    }
+    
+    static func createMockChannel(
+        id: String = "test_channel",
+        name: String = "test-channel"
+    ) -> Channel {
+        return Channel(
+            id: id,
+            name: name,
+            type: .TextChannel
+        )
+    }
+}
+```
+
+### Test Helpers
+```swift
+extension XCTestCase {
+    func waitForElementToAppear(_ element: XCUIElement, timeout: TimeInterval = 5) {
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == true"),
+            object: element
+        )
+        wait(for: [expectation], timeout: timeout)
+    }
+    
+    func waitForCondition(_ condition: @escaping () -> Bool, timeout: TimeInterval = 5) {
+        let expectation = XCTestExpectation(description: "Condition met")
+        
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
+            if condition() {
+                expectation.fulfill()
+                timer.invalidate()
+            }
+        }
+        
+        wait(for: [expectation], timeout: timeout)
+        timer.invalidate()
+    }
+}
+```
+
+## Performance Testing
+
+### Load Testing
+```swift
+class PerformanceTests: XCTestCase {
+    func testMessageLoadingPerformance() {
+        // Test loading large numbers of messages
+        measure {
+            let messages = (1...1000).map { i in
+                TestFixtures.createMockMessage(
+                    id: "msg_\(i)",
+                    content: "Message \(i)"
+                )
+            }
+            
+            let viewState = ViewState()
+            for message in messages {
+                viewState.messages[message.id] = message
+            }
+        }
+    }
+    
+    func testStateUpdatePerformance() {
+        let viewState = ViewState()
+        
+        // Pre-populate with data
+        for i in 1...100 {
+            let message = TestFixtures.createMockMessage(id: "msg_\(i)")
+            viewState.messages[message.id] = message
+        }
+        
+        measure {
+            // Test rapid state updates
+            for i in 101...200 {
+                let message = TestFixtures.createMockMessage(id: "msg_\(i)")
+                viewState.messages[message.id] = message
+            }
+        }
+    }
+}
+```
+
+## Best Practices
+
+### Test Writing Guidelines
+- Use descriptive test names that explain what is being tested
+- Follow Given-When-Then structure for clarity
+- Test both success and failure scenarios
+- Use meaningful assertions with custom failure messages
+- Keep tests focused and independent
+
+### Mock Strategy
+- Create focused mocks that test specific scenarios
+- Use dependency injection for easier testing
+- Mock external dependencies (network, file system)
+- Provide both success and failure mock implementations
+
+### Continuous Integration
+- Run tests on every pull request
+- Use different test environments (simulator versions, iOS versions)
+- Include both unit and UI tests in CI pipeline
+- Monitor test performance and flakiness
