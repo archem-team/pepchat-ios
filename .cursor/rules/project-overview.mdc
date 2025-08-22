@@ -1,0 +1,63 @@
+---
+description: PepChat iOS project overview and core architecture understanding
+globs: ["**/*.swift", "**/*.md", "**/*.plist"]
+alwaysApply: true
+---
+
+# PepChat iOS Project Overview
+
+## About the Project
+PepChat (branded as "Revolt iOS") is a native iOS chat application built with SwiftUI, similar to Discord. It's a modern messaging platform supporting real-time communication, servers, channels, direct messages, and rich media sharing.
+
+## Key Project Facts
+- **Primary Language**: Swift with SwiftUI framework
+- **Target Platforms**: iOS (primary), macOS (conditional compilation support)
+- **Architecture**: MVVM with centralized state management
+- **Real-time Communication**: WebSocket + REST API
+- **Status**: Early development stage, TestFlight available
+- **License**: GNU Affero General Public License v3.0
+
+## Core Features
+- Real-time messaging with WebSocket connection
+- Server and channel management (Discord-like structure)
+- Direct messages and group chats
+- File attachments and media sharing
+- Message reactions, replies, and editing
+- User profiles with presence status
+- Push notifications
+- Multi-factor authentication
+- Deep linking support
+- Theme customization
+
+## Project Structure
+```
+pepchat-ios/
+├── Revolt/              # Main app target
+│   ├── Api/             # HTTP client and WebSocket
+│   ├── Components/      # Reusable UI components
+│   ├── Pages/           # Feature-based screens
+│   ├── Extensions/      # Swift extensions
+│   └── ViewState.swift  # Global state management
+├── Types/               # Shared data models
+├── notificationservice/ # Push notification extension
+└── Tests/              # Unit and UI tests
+```
+
+## Architecture Patterns
+- **State Management**: Centralized `ViewState` with `@StateObject`
+- **Navigation**: Type-safe `NavigationDestination` enum with `NavigationStack`
+- **UI Approach**: Hybrid SwiftUI + UIKit (complex messaging uses UIViewController)
+- **Networking**: Alamofire for HTTP, custom WebSocket implementation
+- **Data Models**: Codable structs in separate Types module
+
+## Brand Guidelines
+- Uses "Peptide" prefix for custom UI components
+- Purple-based color scheme (.bgDefaultPurple13)
+- Inter font family
+- Consistent spacing using .padding24, .size64, etc.
+
+## Development Notes
+- Open `Revolt.xcworkspace` in Xcode (not .xcodeproj)
+- Uses CocoaPods for dependencies
+- Supports iOS 16+ with backward compatibility considerations
+- Extensive use of conditional compilation for platform differences

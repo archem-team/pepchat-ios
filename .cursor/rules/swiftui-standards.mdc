@@ -1,0 +1,101 @@
+---
+description: SwiftUI coding standards and UI component guidelines for PepChat
+globs: ["Revolt/Components/**/*.swift", "Revolt/Pages/**/*.swift", "**/Views/**/*.swift"]
+alwaysApply: false
+---
+
+# SwiftUI Coding Standards for PepChat
+
+## UI Component Conventions
+
+### Peptide Design System
+- **Always use Peptide-prefixed components** instead of native SwiftUI when available:
+  - `PeptideButton` instead of `Button`
+  - `PeptideText` instead of `Text`
+  - `PeptideTextField` instead of `TextField`
+  - `PeptideTemplateView` for consistent page layouts
+
+### Color Guidelines
+- Use semantic color names from the theme system:
+  - `.bgDefaultPurple13` for main backgrounds
+  - `.textGray06` for secondary text
+  - `.iconDefaultGray01` for icons
+- Never use hardcoded hex colors or `Color.red`, `Color.blue`, etc.
+
+### Spacing and Layout
+- Use consistent spacing tokens:
+  - `.padding24` for standard padding
+  - `.size64` for fixed widths
+  - `.zero` for no spacing
+- Prefer `VStack(spacing: .zero)` over default spacing
+
+### Component Structure
+```swift
+struct MyComponent: View {
+    // MARK: - Properties
+    @EnvironmentObject var viewState: ViewState
+    @State private var localState = false
+    
+    // MARK: - Body
+    var body: some View {
+        PeptideTemplateView { _, _ in
+            // Component content
+        }
+    }
+    
+    // MARK: - Private Methods
+    private func handleAction() {
+        // Implementation
+    }
+}
+```
+
+## State Management
+- **Always use `@EnvironmentObject var viewState: ViewState`** for global state access
+- Use `@State` only for local UI state
+- Prefer bindings for two-way data flow: `$viewState.currentChannel`
+- Use `@Environment(\.currentServer)` and `@Environment(\.currentChannel)` for context
+
+## Navigation
+- Use typed navigation destinations: `NavigationDestination.channel_info(channelId, serverId)`
+- Append to path for navigation: `viewState.path.append(destination)`
+- Clear path appropriately: `viewState.path = []` for fresh navigation
+
+## Async Operations
+```swift
+.task {
+    await viewState.backgroundWsTask()
+}
+
+// For user actions
+Task {
+    let result = await viewState.api.sendMessage(content)
+    // Handle result
+}
+```
+
+## Best Practices
+- **Always check for nil values** when accessing ViewState dictionaries
+- Use `viewState.channels[channelId]` with nil coalescing
+- Implement proper loading states with `PeptideLoading()`
+- Use `PeptideWarningTemplateView()` for error states
+- Add proper accessibility labels and hints
+- Keep view files under 500 lines - split into smaller components if needed
+
+## Animation Guidelines
+- Use `withAnimation(.easeInOut)` for smooth transitions
+- Prefer `.transition(.opacity)` for view changes
+- Use `DispatchQueue.main.asyncAfter` sparingly and only when necessary
+
+## Conditional Compilation
+```swift
+#if os(iOS)
+// iOS-specific code
+#elseif os(macOS)
+// macOS-specific code
+#endif
+
+#if DEBUG
+// Debug-only features
+#endif
+```
