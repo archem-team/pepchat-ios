@@ -125,6 +125,20 @@ extension MessageableChannelViewModel {
             }
         }
         
+        // PHASE 1: Cache messages and users to SQLite for future loading
+        if !result.messages.isEmpty {
+            print("📦 CACHE_WRITE: Storing \(result.messages.count) messages and \(result.users.count) users to SQLite cache")
+            MessageCacheManager.shared.cacheMessages(result.messages, for: channel.id)
+            MessageCacheManager.shared.cacheUsers(result.users)
+            
+            // Verify cache write (with small delay for async write)
+            Task {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+                let cached = await MessageCacheManager.shared.loadCachedMessages(for: channel.id, limit: 10)
+                print("📦 CACHE_VERIFY: \(cached.count) messages now cached for channel \(channel.id)")
+            }
+        }
+        
         // CRITICAL FIX: After processing all messages, ensure ALL message authors are available
         // print("🔄 FINAL_CHECK: Ensuring all \(result.messages.count) message authors are in users dictionary")
         for message in result.messages {

@@ -659,18 +659,25 @@ public class ViewState: ObservableObject {
     
     // MEMORY MANAGEMENT: Helper methods
     private func debouncedSave(key: String, data: Data) {
-        // Cancel any existing save operation for this key
-        saveWorkItems[key]?.cancel()
-        
-        // Create a new work item
-        let workItem = DispatchWorkItem { [weak self] in
-            UserDefaults.standard.set(data, forKey: key)
-            self?.saveWorkItems.removeValue(forKey: key)
+        // Ensure thread safety for saveWorkItems access
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Cancel any existing save operation for this key
+            self.saveWorkItems[key]?.cancel()
+            
+            // Create a new work item
+            let workItem = DispatchWorkItem { [weak self] in
+                UserDefaults.standard.set(data, forKey: key)
+                DispatchQueue.main.async {
+                    self?.saveWorkItems.removeValue(forKey: key)
+                }
+            }
+            
+            // Store and schedule the work item
+            self.saveWorkItems[key] = workItem
+            DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + saveDebounceInterval, execute: workItem)
         }
-        
-        // Store and schedule the work item
-        saveWorkItems[key] = workItem
-        DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + saveDebounceInterval, execute: workItem)
     }
     
     /// Force immediate save of users data without debouncing
@@ -1188,10 +1195,11 @@ public class ViewState: ObservableObject {
         // Force refresh servers and channels from backend instead of using cached data
         self.servers = [:] // ViewState.decodeUserDefaults(forKey: "servers", withDecoder: decoder, defaultingTo: [:])
         self.channels = [:] // ViewState.decodeUserDefaults(forKey: "channels", withDecoder: decoder, defaultingTo: [:])
-        /*self.messages = ViewState.decodeUserDefaults(forKey: "messages", withDecoder: decoder, defaultingTo: [:])
-         self.channelMessages = ViewState.decodeUserDefaults(forKey: "channelMessages", withDecoder: decoder, defaultingTo: [:])*/
+        // PHASE 1: Don't persist full messages (too memory intensive) but restore channelMessages IDs
+        // self.messages = ViewState.decodeUserDefaults(forKey: "messages", withDecoder: decoder, defaultingTo: [:])
         self.messages = [:]
-        self.channelMessages = [:]
+        // RESTORE: Load message IDs from previous session for cache-aware loading
+        self.channelMessages = ViewState.decodeUserDefaults(forKey: "channelMessages", withDecoder: decoder, defaultingTo: [:])
         // Force refresh members from backend
         self.members = [:] // ViewState.decodeUserDefaults(forKey: "members", withDecoder: decoder, defaultingTo: [:])
         // Force refresh DMs from backend
@@ -2376,6 +2384,13 @@ public class ViewState: ObservableObject {
             }
             
             messages[m.id] = m
+            
+            // PHASE 1: Cache new WebSocket message to SQLite
+            print("📦 WS_CACHE: Caching new message \(m.id) to SQLite")
+            MessageCacheManager.shared.cacheMessages([m], for: m.channel)
+            if let user = m.user {
+                MessageCacheManager.shared.cacheUsers([user])
+            }
             
             // Check if this message matches a queued message and clean it up
             if let channelQueuedMessages = queuedMessages[m.channel],

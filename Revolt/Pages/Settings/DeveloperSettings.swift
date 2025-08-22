@@ -12,6 +12,8 @@ struct DeveloperSettings: View {
     @EnvironmentObject var viewState: ViewState
     @State private var showingUnreadCounts = false
     @State private var unreadCountsText = ""
+    @State private var showingCacheStats = false
+    @State private var cacheStatsText = ""
 
     var body: some View {
         List {
@@ -66,6 +68,55 @@ struct DeveloperSettings: View {
                 }
                 .listRowBackground(viewState.theme.background2)
             }
+            
+            // PHASE 1: Section for message cache debugging
+            Section("Message Cache (Phase 1)") {
+                Button {
+                    Task {
+                        let stats = await MessageCacheManager.shared.getCacheStats()
+                        cacheStatsText = """
+                        Messages: \(stats.messageCount)
+                        Users: \(stats.userCount)
+                        Size: \(String(format: "%.1f", stats.sizeInMB)) MB
+                        
+                        Cache is working if you see messages > 0 after loading channels.
+                        """
+                        showingCacheStats = true
+                        print("📦 CACHE_STATS: \(cacheStatsText)")
+                    }
+                } label: {
+                    Text("Show Cache Statistics")
+                }
+                .listRowBackground(viewState.theme.background2)
+                
+                Button {
+                    Task {
+                        print("🧹 CACHE_CLEANUP: Starting cache cleanup...")
+                        MessageCacheManager.shared.cleanupOldMessages(olderThan: 7) // Clean messages older than 7 days
+                        print("🧹 CACHE_CLEANUP: Completed")
+                    }
+                } label: {
+                    Text("Clean Old Messages (7+ days)")
+                }
+                .listRowBackground(viewState.theme.background2)
+                
+                Button {
+                    Task {
+                        if let currentChannelId = viewState.currentChannel.id {
+                            let cached = await MessageCacheManager.shared.loadCachedMessages(for: currentChannelId, limit: 10)
+                            print("📦 CACHE_TEST: Found \(cached.count) cached messages for current channel \(currentChannelId)")
+                            for msg in cached.prefix(3) {
+                                print("📦 CACHE_TEST: Message \(msg.id): \(msg.content?.prefix(50) ?? "No content")")
+                            }
+                        } else {
+                            print("📦 CACHE_TEST: No current channel selected")
+                        }
+                    }
+                } label: {
+                    Text("Test Current Channel Cache")
+                }
+                .listRowBackground(viewState.theme.background2)
+            }
         }
         .background(viewState.theme.background) // Background color for the entire list.
         .scrollContentBackground(.hidden) // Hides the background of the scroll view.
@@ -75,6 +126,11 @@ struct DeveloperSettings: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(unreadCountsText)
+        }
+        .alert("Message Cache Statistics", isPresented: $showingCacheStats) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(cacheStatsText)
         }
     }
 }
