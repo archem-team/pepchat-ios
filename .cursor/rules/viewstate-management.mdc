@@ -1,0 +1,278 @@
+---
+description: ViewState patterns and global state management guidelines
+globs: ["**/ViewState.swift", "**/*ViewModel.swift"]
+alwaysApply: false
+---
+
+# ViewState and State Management
+
+## ViewState Architecture
+
+### Centralized State Pattern
+ViewState serves as the single source of truth for the entire application:
+
+```swift
+class ViewState: ObservableObject {
+    // Core app state
+    @Published var state: ConnectionState = .signedOut
+    @Published var sessionToken: String?
+    
+    // Navigation state
+    @Published var path: [NavigationDestination] = []
+    @Published var currentSelection: MainSelection = .dms
+    @Published var currentChannel: ChannelSelection = .home
+    
+    // Data collections
+    @Published var messages: [String: Message] = [:]
+    @Published var channelMessages: [String: [Message]] = [:]
+    @Published var users: [String: User] = [:]
+    @Published var channels: [String: Channel] = [:]
+    @Published var servers: [String: Server] = [:]
+}
+```
+
+### State Categories
+
+#### Authentication State
+- `sessionToken`: JWT token for API authentication
+- `currentUser`: Currently logged-in user information
+- `state`: Connection status (.signedOut, .connecting, .connected)
+
+#### Navigation State
+- `path`: Navigation stack for programmatic navigation
+- `currentSelection`: Current server or DM selection
+- `currentChannel`: Active channel within selection
+- `currentTargetMessageId`: For deep linking to specific messages
+
+#### Data Collections
+Use dictionary-based storage for O(1) lookups:
+- `messages[messageId]`: All loaded messages by ID
+- `channelMessages[channelId]`: Ordered message arrays per channel
+- `users[userId]`: User information cache
+- `channels[channelId]`: Channel metadata
+- `servers[serverId]`: Server information and settings
+
+## State Mutation Patterns
+
+### Safe Data Access
+Always check for nil when accessing state dictionaries:
+```swift
+// ✅ Good - Safe access with nil coalescing
+if let channel = viewState.channels[channelId] {
+    // Use channel safely
+} else {
+    // Handle missing channel
+    return PeptideWarningTemplateView()
+}
+
+// ✅ Good - Using optional binding
+guard let user = viewState.users[userId] else {
+    return EmptyView()
+}
+```
+
+### Updating Collections
+```swift
+// ✅ Correct way to update state
+viewState.messages[messageId] = updatedMessage
+viewState.channelMessages[channelId]?.append(newMessage)
+
+// ❌ Wrong - Don't mutate arrays directly without triggering updates
+viewState.channelMessages[channelId]![0].content = "new content"
+```
+
+### Binding Creation
+Create proper bindings for two-way data flow:
+```swift
+let channelBinding = Binding(
+    get: { viewState.channels[channelId] ?? defaultChannel },
+    set: { newValue in viewState.channels[channelId] = newValue }
+)
+```
+
+## WebSocket Integration
+
+### Real-time State Updates
+```swift
+func handleWebSocketMessage(_ message: WebSocketEvent) {
+    DispatchQueue.main.async {
+        switch message.type {
+        case .messageCreate:
+            let newMessage = message.data
+            self.messages[newMessage.id] = newMessage
+            self.channelMessages[newMessage.channel]?.append(newMessage)
+            
+        case .messageUpdate:
+            let updatedMessage = message.data
+            self.messages[updatedMessage.id] = updatedMessage
+            // Update in channel array if needed
+            
+        case .messageDelete:
+            let messageId = message.data.id
+            self.messages.removeValue(forKey: messageId)
+            // Remove from channel arrays
+        }
+    }
+}
+```
+
+### Connection State Management
+```swift
+func backgroundWsTask() async {
+    guard let token = sessionToken else { 
+        state = .signedOut
+        return 
+    }
+    
+    state = .connecting
+    
+    do {
+        ws = try await WebSocket(token: token)
+        state = .connected
+        await ws?.listen { [weak self] event in
+            self?.handleWebSocketMessage(event)
+        }
+    } catch {
+        state = .signedOut
+        // Handle connection error
+    }
+}
+```
+
+## Environment Integration
+
+### Providing State Context
+```swift
+// In RevoltApp.swift
+@StateObject var state = ViewState.shared ?? ViewState()
+
+var body: some Scene {
+    WindowGroup {
+        ApplicationSwitcher()
+            .environmentObject(state)
+    }
+}
+```
+
+### Environment Values
+Create custom environment values for commonly accessed data:
+```swift
+extension EnvironmentValues {
+    var currentServer: Server? {
+        get { self[CurrentServerKey.self] }
+        set { self[CurrentServerKey.self] = newValue }
+    }
+}
+
+private struct CurrentServerKey: EnvironmentKey {
+    static let defaultValue: Server? = nil
+}
+```
+
+## Navigation Management
+
+### Programmatic Navigation
+```swift
+// Navigate to a specific destination
+viewState.path.append(.channel_info(channelId, serverId))
+
+// Clear navigation stack
+viewState.path = []
+
+// Replace current view
+viewState.path = [.settings]
+```
+
+### Deep Link Handling
+```swift
+func handleDeepLink(url: URL) {
+    // Parse URL and extract components
+    if let channelId = extractChannelId(from: url) {
+        // Clear existing messages for fresh load
+        viewState.channelMessages[channelId] = []
+        
+        // Set navigation state
+        viewState.currentChannel = .channel(channelId)
+        
+        // Handle message ID if present
+        if let messageId = extractMessageId(from: url) {
+            viewState.currentTargetMessageId = messageId
+        }
+        
+        // Navigate
+        viewState.path.append(.maybeChannelView)
+    }
+}
+```
+
+## Performance Considerations
+
+### State Cleanup
+```swift
+func destroyCache() {
+    messages.removeAll()
+    channelMessages.removeAll()
+    users.removeAll()
+    channels.removeAll()
+    servers.removeAll()
+    // Clear other cached data
+}
+```
+
+### Memory Management
+- Limit message history in memory (keep last 500 per channel)
+- Clean up unused data periodically
+- Use weak references for delegate patterns
+- Implement proper cleanup in deinit methods
+
+### Batch Updates
+```swift
+// ✅ Good - Batch multiple updates
+DispatchQueue.main.async {
+    self.messages[id1] = message1
+    self.messages[id2] = message2
+    self.messages[id3] = message3
+    // All updates happen in one transaction
+}
+```
+
+## Error Handling
+
+### State Error Recovery
+```swift
+func handleAPIError(_ error: RevoltError) {
+    switch error {
+    case .authenticationFailed:
+        // Clear session and return to login
+        sessionToken = nil
+        state = .signedOut
+        
+    case .networkError:
+        // Show retry option
+        showRetryAlert = true
+        
+    default:
+        // Handle other errors appropriately
+        break
+    }
+}
+```
+
+## Best Practices
+
+### State Organization
+- Keep ViewState focused on global app state only
+- Use local @State for component-specific UI state
+- Group related properties together
+- Document the purpose of each state property
+
+### Thread Safety
+- Always update @Published properties on main thread
+- Use proper async/await patterns for network calls
+- Avoid race conditions in state updates
+
+### Testing
+- Make ViewState easily testable with dependency injection
+- Create mock ViewState instances for testing
+- Test state transitions and edge cases
+- Verify proper cleanup and memory management

@@ -1,0 +1,361 @@
+---
+description: Debugging, logging, and development workflow guidelines
+globs: ["**/*.swift"]
+alwaysApply: false
+---
+
+# Debugging and Logging Standards
+
+## Logging Conventions
+
+### Log Categories
+Use consistent prefixes for different types of logs:
+```swift
+// Navigation and deep linking
+print("📱 UNIVERSAL_LINK: Received URL: \(url)")
+print("🔄 SCENE_PHASE: Changed from \(oldPhase) to \(newPhase)")
+
+// WebSocket communication
+print("🌐 WEBSOCKET: Connected to server")
+print("📨 WEBSOCKET: Received message type: \(messageType)")
+
+// API requests
+print("🌍 API: GET /channels/\(channelId)/messages")
+print("❌ API_ERROR: Failed to fetch messages: \(error)")
+
+// State management
+print("📊 STATE: Updated channel messages for \(channelId)")
+print("🎯 SCROLL: Scrolling to message \(messageId)")
+
+// Authentication
+print("🔐 AUTH: Login successful for user \(userId)")
+print("🚪 AUTH: User signed out")
+```
+
+### Debug-Only Logging
+```swift
+#if DEBUG
+print("🐛 DEBUG: Message cache size: \(messages.count)")
+print("🔍 DEBUG: Current navigation path: \(viewState.path)")
+#endif
+```
+
+### Conditional Logging
+```swift
+func logMessage(_ message: String, level: LogLevel = .info) {
+    #if DEBUG
+    let timestamp = DateFormatter.iso8601.string(from: Date())
+    print("[\(timestamp)] \(level.emoji) \(message)")
+    #endif
+}
+
+enum LogLevel {
+    case info, warning, error, debug
+    
+    var emoji: String {
+        switch self {
+        case .info: return "ℹ️"
+        case .warning: return "⚠️"
+        case .error: return "❌"
+        case .debug: return "🐛"
+        }
+    }
+}
+```
+
+## Error Tracking
+
+### Sentry Integration
+```swift
+// In RevoltApp.swift
+import Sentry
+
+init() {
+    if !isPreview {
+        SentrySDK.start { options in
+            options.dsn = "your-sentry-dsn"
+            options.tracesSampleRate = 0.1
+            options.profilesSampleRate = 0.1
+            options.attachViewHierarchy = true
+            options.enableAppLaunchProfiling = false
+            options.debug = false
+            options.enableNetworkTracking = false
+        }
+    }
+}
+```
+
+### Error Reporting
+```swift
+func reportError(_ error: Error, context: [String: Any] = [:]) {
+    #if !DEBUG
+    SentrySDK.capture(error: error) { scope in
+        for (key, value) in context {
+            scope.setExtra(value: value, key: key)
+        }
+    }
+    #endif
+    
+    print("❌ ERROR: \(error.localizedDescription)")
+    if !context.isEmpty {
+        print("📋 CONTEXT: \(context)")
+    }
+}
+```
+
+## Development Tools
+
+### Debug Menu
+```swift
+#if DEBUG
+struct DebugMenu: View {
+    @EnvironmentObject var viewState: ViewState
+    
+    var body: some View {
+        List {
+            Section("State") {
+                Button("Clear Cache") {
+                    viewState.destroyCache()
+                }
+                
+                Button("Force Reconnect") {
+                    Task {
+                        await viewState.backgroundWsTask()
+                    }
+                }
+                
+                Button("Simulate Error") {
+                    // Trigger test error
+                }
+            }
+            
+            Section("Navigation") {
+                Button("Clear Navigation Stack") {
+                    viewState.path = []
+                }
+                
+                Text("Current Path: \(viewState.path.count) items")
+            }
+        }
+    }
+}
+#endif
+```
+
+### Performance Monitoring
+```swift
+func measureTime<T>(_ operation: () throws -> T, label: String) rethrows -> T {
+    let startTime = CFAbsoluteTimeGetCurrent()
+    defer {
+        let timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
+        print("⏱️ PERFORMANCE: \(label) took \(String(format: "%.3f", timeElapsed))s")
+    }
+    return try operation()
+}
+
+// Usage
+let messages = measureTime({
+    return loadMessagesFromCache(channelId)
+}, label: "Load messages from cache")
+```
+
+## Testing Utilities
+
+### Mock Data
+```swift
+#if DEBUG
+extension ViewState {
+    static func createMockState() -> ViewState {
+        let state = ViewState()
+        
+        // Add mock users
+        state.users["user1"] = User(
+            id: "user1",
+            username: "testuser",
+            discriminator: "0001"
+        )
+        
+        // Add mock channels
+        state.channels["channel1"] = Channel(
+            id: "channel1",
+            name: "general",
+            type: .TextChannel
+        )
+        
+        // Add mock messages
+        state.messages["msg1"] = Message(
+            id: "msg1",
+            content: "Hello world!",
+            author: "user1",
+            channel: "channel1"
+        )
+        
+        return state
+    }
+}
+#endif
+```
+
+### Preview Helpers
+```swift
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            // Light mode
+            ContentView()
+                .environmentObject(ViewState.createMockState())
+                .preferredColorScheme(.light)
+            
+            // Dark mode
+            ContentView()
+                .environmentObject(ViewState.createMockState())
+                .preferredColorScheme(.dark)
+            
+            // Large text
+            ContentView()
+                .environmentObject(ViewState.createMockState())
+                .environment(\.sizeCategory, .accessibilityExtraExtraExtraLarge)
+        }
+    }
+}
+```
+
+## Network Debugging
+
+### Request/Response Logging
+```swift
+func logAPIRequest<T: Codable>(_ request: URLRequest, response: Result<T, RevoltError>) {
+    #if DEBUG
+    print("🌍 API: \(request.httpMethod ?? "UNKNOWN") \(request.url?.path ?? "unknown")")
+    
+    switch response {
+    case .success(let data):
+        print("✅ API_SUCCESS: Request completed")
+        if let jsonData = try? JSONEncoder().encode(data),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            print("📄 RESPONSE: \(jsonString)")
+        }
+        
+    case .failure(let error):
+        print("❌ API_ERROR: \(error)")
+        if let body = request.httpBody,
+           let bodyString = String(data: body, encoding: .utf8) {
+            print("📤 REQUEST_BODY: \(bodyString)")
+        }
+    }
+    #endif
+}
+```
+
+### WebSocket Debugging
+```swift
+func logWebSocketEvent(_ event: WebSocketEvent) {
+    #if DEBUG
+    print("📨 WEBSOCKET: Received \(event.type)")
+    
+    switch event.type {
+    case .messageCreate:
+        print("📝 NEW_MESSAGE: \(event.data.content ?? "No content")")
+    case .messageUpdate:
+        print("✏️ MESSAGE_EDIT: \(event.data.id)")
+    case .messageDelete:
+        print("🗑️ MESSAGE_DELETE: \(event.data.id)")
+    default:
+        print("📦 WS_EVENT: \(event)")
+    }
+    #endif
+}
+```
+
+## Memory and Performance
+
+### Memory Usage Tracking
+```swift
+func logMemoryUsage(label: String) {
+    #if DEBUG
+    let info = mach_task_basic_info()
+    var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size)/4
+    
+    let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
+        $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+            task_info(mach_task_self_,
+                     task_flavor_t(MACH_TASK_BASIC_INFO),
+                     $0,
+                     &count)
+        }
+    }
+    
+    if kerr == KERN_SUCCESS {
+        let usedMB = Double(info.resident_size) / 1024.0 / 1024.0
+        print("💾 MEMORY [\(label)]: \(String(format: "%.1f", usedMB)) MB")
+    }
+    #endif
+}
+```
+
+### State Size Monitoring
+```swift
+extension ViewState {
+    func logStateSize() {
+        #if DEBUG
+        print("📊 STATE_SIZE:")
+        print("  Messages: \(messages.count)")
+        print("  Users: \(users.count)")
+        print("  Channels: \(channels.count)")
+        print("  Servers: \(servers.count)")
+        
+        for (channelId, messages) in channelMessages {
+            print("  Channel \(channelId): \(messages.count) messages")
+        }
+        #endif
+    }
+}
+```
+
+## Crash Reporting
+
+### Crash Context
+```swift
+func addCrashContext() {
+    SentrySDK.setUser(User(userId: viewState.currentUser?.id))
+    SentrySDK.setTag(value: viewState.state.rawValue, key: "connection_state")
+    SentrySDK.setExtra(value: viewState.path.count, key: "navigation_depth")
+}
+```
+
+### Fatal Error Handling
+```swift
+func handleFatalError(_ message: String, file: String = #file, line: Int = #line) {
+    let errorInfo = "Fatal error: \(message) at \(file):\(line)"
+    print("💀 FATAL: \(errorInfo)")
+    
+    #if !DEBUG
+    SentrySDK.capture(message: errorInfo) { scope in
+        scope.setLevel(.fatal)
+    }
+    #endif
+    
+    fatalError(message, file: file, line: line)
+}
+```
+
+## Best Practices
+
+### Log Management
+- Use appropriate log levels for different types of information
+- Include relevant context in error logs
+- Avoid logging sensitive information (passwords, tokens)
+- Use consistent formatting for easy parsing
+- Clean up verbose logging before release builds
+
+### Debug Features
+- Hide debug features behind #if DEBUG compilation flags
+- Provide easy access to debug information during development
+- Include state inspection tools for complex debugging
+- Test with both debug and release configurations
+
+### Performance
+- Use lazy evaluation for expensive debug operations
+- Avoid impacting release build performance
+- Monitor memory usage in debug builds
+- Profile critical code paths regularly

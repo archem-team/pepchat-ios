@@ -1,0 +1,174 @@
+---
+description: Data model patterns and Types module guidelines
+globs: ["Types/**/*.swift"]
+alwaysApply: false
+---
+
+# Data Models and Types Standards
+
+## Core Data Model Patterns
+
+### Codable Implementation
+All data models must implement `Codable` with proper key mapping:
+```swift
+public struct ModelName: Codable, Equatable, Identifiable {
+    public var id: String
+    public var property: String
+    public var optionalProperty: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id = "_id"  // Map MongoDB ObjectId
+        case property
+        case optionalProperty = "optional_property"  // Snake case mapping
+    }
+}
+```
+
+### Required Protocols
+- **`Identifiable`**: All models that represent entities must have an `id` property
+- **`Codable`**: For JSON serialization/deserialization
+- **`Equatable`**: For SwiftUI state comparison and updates
+- **`Hashable`**: When used in Sets or as Dictionary keys
+
+### Property Guidelines
+- Use `public` access level for all properties in Types module
+- Use optional properties (`String?`) when fields might be missing from API
+- Initialize with proper default values in init methods
+- Use descriptive property names that match business logic
+
+## Core Model Structures
+
+### Message Model
+```swift
+public struct Message: Identifiable, Codable, Equatable {
+    public var id: String
+    public var content: String?
+    public var author: String
+    public var channel: String
+    public var system: SystemMessageContent?
+    public var attachments: [File]?
+    public var mentions: [String]?
+    public var replies: [String]?
+    public var edited: String?
+    public var reactions: [String: [String]]?
+    // ... other properties
+}
+```
+
+### User Model
+```swift
+public struct User: Identifiable, Codable, Equatable, Hashable {
+    public var id: String
+    public var username: String
+    public var discriminator: String
+    public var display_name: String?
+    public var avatar: File?
+    public var status: Status?
+    public var relationship: Relation?
+    // ... other properties
+}
+```
+
+### Channel Types
+Support multiple channel types through enums:
+```swift
+public enum ChannelType: String, Codable {
+    case SavedMessages
+    case DirectMessage
+    case Group
+    case TextChannel
+    case VoiceChannel
+}
+```
+
+## Enum Patterns
+
+### System Message Content
+Use associated values for type-safe system messages:
+```swift
+public enum SystemMessageContent: Equatable {
+    case text(TextSystemMessageContent)
+    case user_added(UserAddedSystemContent)
+    case user_removed(UserRemovedSystemContent)
+    // ... other cases
+}
+```
+
+### Error Handling
+Define specific error types:
+```swift
+public enum RevoltError: Error, Codable {
+    case networkError(String)
+    case authenticationFailed
+    case invalidData
+    case serverError(Int)
+}
+```
+
+## Helper Methods
+
+### Display Name Logic
+```swift
+public func displayName() -> String {
+    return display_name ?? usernameWithDiscriminator()
+}
+
+public func usernameWithDiscriminator() -> String {
+    return "\(username)#\(discriminator)"
+}
+```
+
+### Badge Processing
+```swift
+public func getBadges() -> Badges? {
+    return Badges.fromCode(code: badges)
+}
+
+public func getAllBadges() -> [Badges] {
+    return Badges.allBadgesFromCode(code: badges)
+}
+```
+
+## Validation and Safety
+
+### URL Validation
+```swift
+public func isInviteLink() -> Bool {
+    guard let content = self.content else { return false }
+    let pattern = "https://peptide\\.chat/invite/[A-Za-z0-9]+"
+    // ... regex implementation
+}
+```
+
+### Null Safety
+- Always handle optional properties safely
+- Use nil coalescing operators where appropriate
+- Provide sensible defaults for missing data
+
+## Best Practices
+
+### Initialization
+- Always provide public initializers for all parameters
+- Use default parameter values where logical
+- Initialize all properties explicitly in init methods
+
+### Documentation
+- Add comprehensive documentation comments for all public APIs
+- Explain the purpose and usage of each model
+- Document any special validation or business logic
+
+### Performance
+- Keep models lightweight and focused
+- Avoid computed properties that do expensive operations
+- Use lazy properties for complex calculations
+
+### Consistency
+- Follow naming conventions consistently across all models
+- Use the same patterns for similar functionality
+- Maintain API compatibility when possible
+
+## File Organization
+- One main model per file (e.g., `User.swift`, `Message.swift`)
+- Group related enums and helper structs in the same file
+- Keep the Types module pure - no UIKit or SwiftUI dependencies
+- Export all public types from the main Types module

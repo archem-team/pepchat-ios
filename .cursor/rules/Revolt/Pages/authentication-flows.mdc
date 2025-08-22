@@ -1,0 +1,348 @@
+---
+description: Authentication and login flow patterns for PepChat
+globs: ["Revolt/Pages/Login/**/*.swift", "**/Welcome.swift", "**/Mfa*.swift"]
+alwaysApply: false
+---
+
+# Authentication Flow Patterns
+
+## Login System Architecture
+
+### Authentication States
+```swift
+enum LoginState {
+    case Success
+    case Mfa(ticket: String, methods: [String])
+    case Disabled
+    case Invalid
+    case Onboarding
+}
+```
+
+### Login Flow Structure
+```swift
+struct Login: View {
+    @EnvironmentObject var viewState: ViewState
+    @State private var email = ""
+    @State private var password = ""
+    @State private var isLoading = false
+    @State private var loginState: LoginState?
+    
+    var body: some View {
+        PeptideTemplateView { _, _ in
+            VStack(spacing: .padding24) {
+                // Login form content
+                loginForm
+                
+                // Handle different login states
+                if let state = loginState {
+                    handleLoginState(state)
+                }
+            }
+        }
+    }
+}
+```
+
+## Multi-Factor Authentication
+
+### MFA Flow Implementation
+```swift
+struct Mfa: View {
+    let ticket: String
+    let allowedMethods: [String]
+    @State private var selectedMethod: String
+    
+    var body: some View {
+        VStack {
+            // Method selection
+            ForEach(allowedMethods, id: \.self) { method in
+                MfaMethodButton(method: method, isSelected: method == selectedMethod)
+            }
+            
+            // Method-specific input
+            switch selectedMethod {
+            case "Password":
+                MfaPassword(ticket: ticket)
+            case "Recovery":
+                MfaRecovery(ticket: ticket)
+            case "Totp":
+                MfaOtp(ticket: ticket)
+            default:
+                MFaNoneStep()
+            }
+        }
+    }
+}
+```
+
+### MFA Method Components
+- **MfaPassword**: Password re-entry for verification
+- **MfaRecovery**: Recovery code input with validation
+- **MfaOtp**: TOTP code input with auto-formatting
+- **MFaNoneStep**: Fallback for unsupported methods
+
+## Account Creation
+
+### Registration Flow
+```swift
+struct CreateAccount: View {
+    @State private var email = ""
+    @State private var username = ""
+    @State private var password = ""
+    @State private var confirmPassword = ""
+    @State private var showCaptcha = false
+    
+    var body: some View {
+        OnboardingStage {
+            VStack(spacing: .padding24) {
+                // Registration form
+                PeptideTextField("Email", text: $email)
+                    .keyboardType(.emailAddress)
+                    .textContentType(.emailAddress)
+                
+                PeptideTextField("Username", text: $username)
+                    .textContentType(.username)
+                
+                SecureField("Password", text: $password)
+                    .textContentType(.newPassword)
+                
+                SecureField("Confirm Password", text: $confirmPassword)
+                    .textContentType(.newPassword)
+                
+                if showCaptcha {
+                    HCaptchaView()
+                }
+                
+                PeptideButton("Create Account") {
+                    createAccount()
+                }
+                .disabled(!isFormValid)
+            }
+        }
+    }
+}
+```
+
+### Email Verification
+```swift
+struct VerifyEmail: View {
+    let email: String
+    @State private var verificationCode = ""
+    
+    var body: some View {
+        VStack {
+            PeptideText("Check your email", font: .peptideTitle1)
+            PeptideText("We sent a verification code to \(email)", font: .peptideBody1)
+            
+            PeptideOtp(text: $verificationCode, length: 6)
+                .onSubmit {
+                    verifyCode()
+                }
+            
+            Button("Resend Code") {
+                resendVerificationEmail()
+            }
+        }
+    }
+}
+```
+
+## Session Management
+
+### Token Handling
+```swift
+func handleLoginSuccess(_ response: LoginSuccess) {
+    // Store session token securely
+    viewState.sessionToken = response.token
+    
+    // Update user information
+    viewState.currentUser = User(
+        id: response.user_id,
+        username: response.name,
+        // ... other properties
+    )
+    
+    // Transition to main app
+    withAnimation {
+        viewState.state = .connecting
+    }
+    
+    // Initialize WebSocket connection
+    Task {
+        await viewState.backgroundWsTask()
+    }
+}
+```
+
+### Logout Process
+```swift
+func signOut() {
+    // Clear session data
+    viewState.sessionToken = nil
+    viewState.currentUser = nil
+    
+    // Clear cached data
+    viewState.destroyCache()
+    
+    // Disconnect WebSocket
+    viewState.ws?.disconnect()
+    
+    // Return to login screen
+    withAnimation {
+        viewState.state = .signedOut
+    }
+}
+```
+
+## Password Management
+
+### Password Reset Flow
+```swift
+struct ForgotPassword: View {
+    @State private var email = ""
+    @State private var resetSent = false
+    
+    var body: some View {
+        if resetSent {
+            ForgotPassword_Reset(email: email)
+        } else {
+            VStack {
+                PeptideTextField("Email", text: $email)
+                    .keyboardType(.emailAddress)
+                
+                PeptideButton("Send Reset Link") {
+                    sendPasswordReset()
+                }
+                .disabled(email.isEmpty)
+            }
+        }
+    }
+}
+```
+
+### Password Validation
+```swift
+func validatePassword(_ password: String) -> Bool {
+    // Minimum 8 characters
+    guard password.count >= 8 else { return false }
+    
+    // Contains uppercase, lowercase, and number
+    let hasUppercase = password.rangeOfCharacter(from: .uppercaseLetters) != nil
+    let hasLowercase = password.rangeOfCharacter(from: .lowercaseLetters) != nil
+    let hasNumber = password.rangeOfCharacter(from: .decimalDigits) != nil
+    
+    return hasUppercase && hasLowercase && hasNumber
+}
+```
+
+## HCaptcha Integration
+
+### Captcha Verification
+```swift
+struct HCaptchaView: View {
+    @State private var captchaResponse: String?
+    
+    var body: some View {
+        // Integrate HCaptcha web view
+        WebView(url: captchaURL) { response in
+            captchaResponse = response
+        }
+        .frame(height: 300)
+    }
+}
+```
+
+## Error Handling
+
+### Authentication Errors
+```swift
+func handleAuthError(_ error: RevoltError) {
+    switch error {
+    case .invalidCredentials:
+        showAlert("Invalid email or password")
+        
+    case .accountDisabled:
+        showAlert("Account has been disabled")
+        
+    case .mfaRequired(let ticket, let methods):
+        // Navigate to MFA flow
+        loginState = .Mfa(ticket: ticket, methods: methods)
+        
+    case .emailNotVerified:
+        // Navigate to email verification
+        showEmailVerification = true
+        
+    default:
+        showAlert("Login failed. Please try again.")
+    }
+}
+```
+
+### Rate Limiting
+```swift
+func handleRateLimit(_ retryAfter: TimeInterval) {
+    isLoginDisabled = true
+    retryTimer = Timer.scheduledTimer(withTimeInterval: retryAfter, repeats: false) { _ in
+        isLoginDisabled = false
+    }
+}
+```
+
+## Onboarding Experience
+
+### Welcome Screen
+```swift
+struct Welcome: View {
+    @Binding var wasSignedOut: Bool
+    
+    var body: some View {
+        PeptideTemplateView { _, _ in
+            VStack(spacing: .padding24) {
+                if wasSignedOut {
+                    PeptideText("You have been signed out", font: .peptideBody1)
+                        .foregroundColor(.orange)
+                }
+                
+                Image(.peptideLogo)
+                    .frame(width: 120, height: 120)
+                
+                PeptideText("Welcome to PepChat", font: .peptideTitle1)
+                
+                VStack(spacing: .padding16) {
+                    PeptideButton("Sign In") {
+                        // Navigate to login
+                    }
+                    
+                    PeptideButton("Create Account", style: .secondary) {
+                        // Navigate to registration
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+## Best Practices
+
+### Security
+- Never store passwords in plain text
+- Use secure text input for passwords
+- Implement proper session timeout
+- Clear sensitive data on logout
+- Use Keychain for token storage
+
+### User Experience
+- Provide clear error messages
+- Show loading states during authentication
+- Support autofill for credentials
+- Implement smooth transitions between states
+- Handle network connectivity issues gracefully
+
+### Accessibility
+- Use proper text content types for autofill
+- Provide VoiceOver labels for all inputs
+- Support Dynamic Type for text scaling
+- Ensure sufficient color contrast
+- Make touch targets at least 44pt
