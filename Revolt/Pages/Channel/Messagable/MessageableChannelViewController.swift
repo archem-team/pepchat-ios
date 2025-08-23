@@ -3695,45 +3695,102 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         DispatchQueue.main.async { [weak self] in
                             guard let self = self else { return }
                             
-                            // CRITICAL FIX: Replace cache with full API history instead of just adding new messages
-                            // This ensures we get the complete conversation, not just recent WebSocket messages
-                            print("PERSISTANCE 🔄 CACHE_REFRESH: Replacing cached messages with full API history (\(fetchResult.messages.count) messages)")
+                            // IMPROVED FIX: Intelligent merge instead of complete replacement
+                            // This prevents UI jumping by preserving newer messages that arrived via WebSocket
+                            print("PERSISTANCE 🔄 CACHE_REFRESH: Intelligently merging API response (\(fetchResult.messages.count) messages) with existing messages")
                             
-                            // Sort API messages by creation timestamp to ensure chronological order
-                            let sortedMessages = fetchResult.messages.sorted { msg1, msg2 in
+                            // Get current messages in the channel
+                            let currentMessageIds = self.viewModel.viewState.channelMessages[channelId] ?? []
+                            print("PERSISTANCE 🔄 MERGE_CHECK: Currently have \(currentMessageIds.count) messages in channel")
+                            
+                            // Update ViewState with all messages from API
+                            for message in fetchResult.messages {
+                                self.viewModel.viewState.messages[message.id] = message
+                            }
+                            
+                            // Create a set of API message IDs for quick lookup
+                            let apiMessageIds = Set(fetchResult.messages.map { $0.id })
+                            
+                            // Find newer messages (WebSocket messages that arrived after API call)
+                            // These are messages that exist in current channel but not in API response
+                            var newerMessageIds: [String] = []
+                            for msgId in currentMessageIds {
+                                if !apiMessageIds.contains(msgId) {
+                                    // This message wasn't in the API response, might be newer
+                                    if let message = self.viewModel.viewState.messages[msgId] {
+                                        let messageDate = createdAt(id: message.id)
+                                        // Check if this message is newer than the newest API message
+                                        if let newestApiMessage = fetchResult.messages.max(by: { createdAt(id: $0.id) < createdAt(id: $1.id) }) {
+                                            let newestApiDate = createdAt(id: newestApiMessage.id)
+                                            if messageDate > newestApiDate {
+                                                newerMessageIds.append(msgId)
+                                                print("PERSISTANCE 🔄 NEWER_MSG: Preserving newer WebSocket message \(msgId)")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Combine API messages with newer WebSocket messages
+                            var allMessages: [Message] = fetchResult.messages
+                            for msgId in newerMessageIds {
+                                if let message = self.viewModel.viewState.messages[msgId] {
+                                    allMessages.append(message)
+                                }
+                            }
+                            
+                            // Sort all messages by creation timestamp
+                            let sortedMessages = allMessages.sorted { msg1, msg2 in
                                 let date1 = createdAt(id: msg1.id)
                                 let date2 = createdAt(id: msg2.id)
                                 return date1 < date2
                             }
                             
-                            // Update ViewState with all messages from API
-                            for message in sortedMessages {
-                                self.viewModel.viewState.messages[message.id] = message
-                            }
-                            
-                            // Create the list of sorted message IDs
                             let sortedIds = sortedMessages.map { $0.id }
                             
-                            // Replace our local messages with the complete API response
-                            self.localMessages = sortedIds
-                            self.viewModel.viewState.channelMessages[channelId] = sortedIds
-                            
-                            // Update the data source with complete history
-                            if let localDataSource = self.dataSource as? LocalMessagesDataSource {
-                                localDataSource.updateMessages(sortedIds)
+                            // Only update UI if the message list actually changed
+                            let currentIds = currentMessageIds
+                            if currentIds != sortedIds {
+                                print("PERSISTANCE 🔄 MERGE_UPDATE: Message list changed from \(currentIds.count) to \(sortedIds.count) messages")
+                                
+                                // Update our local messages with the merged result
+                                self.localMessages = sortedIds
+                                self.viewModel.viewState.channelMessages[channelId] = sortedIds
+                                
+                                // Update the data source with merged history
+                                if let localDataSource = self.dataSource as? LocalMessagesDataSource {
+                                    localDataSource.updateMessages(sortedIds)
+                                }
+                                
+                                // Reload table to show merged conversation
+                                self.tableView.reloadData()
+                                
+                                // Only scroll to bottom if user hasn't manually scrolled up AND we added new messages
+                                let hasManuallyScrolledUp = self.lastManualScrollUpTime != nil && 
+                                                           Date().timeIntervalSince(self.lastManualScrollUpTime!) < 10.0
+                                let addedNewMessages = sortedIds.count > currentIds.count
+                                if !hasManuallyScrolledUp && addedNewMessages {
+                                    self.scrollToBottom(animated: true)
+                                    print("PERSISTANCE 🔄 SCROLL: Scrolled to bottom due to new messages")
+                                } else {
+                                    print("PERSISTANCE 🔄 NO_SCROLL: Preserving scroll position - manualScroll: \(hasManuallyScrolledUp), newMessages: \(addedNewMessages)")
+                                }
+                                
+                                print("PERSISTANCE 🔄 CACHE_REFRESH: Successfully merged conversation with \(sortedIds.count) total messages")
+                            } else {
+                                print("PERSISTANCE 🔄 NO_CHANGE: Message list unchanged, skipping UI update to prevent jumping")
                             }
                             
-                            // Reload table to show complete conversation
-                            self.tableView.reloadData()
-                            
-                            // Scroll to bottom if user hasn't manually scrolled up
-                            let hasManuallyScrolledUp = self.lastManualScrollUpTime != nil && 
-                                                       Date().timeIntervalSince(self.lastManualScrollUpTime!) < 10.0
-                            if !hasManuallyScrolledUp {
-                                self.scrollToBottom(animated: true)
+                            // CRITICAL: Always cache the fresh API messages to SQLite, even if UI didn't change
+                            // This ensures the cache stays up to date with latest API data
+                            print("PERSISTANCE 📦 API_CACHE: Caching \(fetchResult.messages.count) fresh API messages to SQLite")
+                            Task.detached(priority: .background) {
+                                MessageCacheManager.shared.cacheMessages(fetchResult.messages, for: channelId)
+                                if !fetchResult.users.isEmpty {
+                                    MessageCacheManager.shared.cacheUsers(fetchResult.users)
+                                }
+                                print("PERSISTANCE 📦 API_CACHE: Successfully cached fresh API data to SQLite")
                             }
-                            
-                            print("PERSISTANCE 🔄 CACHE_REFRESH: Successfully loaded complete conversation with \(sortedIds.count) messages")
                         }
                     } else {
                         print("PERSISTANCE 🔄 CACHE_REFRESH: API returned no new messages")
@@ -7471,6 +7528,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 print("⚡ UI_UPDATE_IMMEDIATE: Updated UI in \(String(format: "%.2f", uiDuration))s")
                 print("⚡ TOTAL_IMMEDIATE_DURATION: \(String(format: "%.2f", totalDuration))s")
                 print("⚡ BREAKDOWN: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s, UI=\(String(format: "%.2f", uiDuration))s")
+            }
+            
+            // CRITICAL: Cache the immediate load results to SQLite for future fast loading
+            print("PERSISTANCE 📦 IMMEDIATE_CACHE: Caching \(result.messages.count) immediate load messages to SQLite")
+            Task.detached(priority: .background) {
+                MessageCacheManager.shared.cacheMessages(result.messages, for: channelId)
+                if !result.users.isEmpty {
+                    MessageCacheManager.shared.cacheUsers(result.users)
+                }
+                print("PERSISTANCE 📦 IMMEDIATE_CACHE: Successfully cached immediate load data to SQLite")
             }
             
         } catch {

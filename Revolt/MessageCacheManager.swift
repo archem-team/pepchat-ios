@@ -450,7 +450,7 @@ class MessageCacheManager {
     }
     
     /// Load cached messages instantly from local storage
-    func loadCachedMessages(for channelId: String, limit: Int = 50) async -> [Message] {
+    func loadCachedMessages(for channelId: String, limit: Int = 20) async -> [Message] {
         return await withCheckedContinuation { continuation in
             dbQueue.async { [weak self] in
                 let messages = self?._loadCachedMessages(for: channelId, limit: limit) ?? []
@@ -459,7 +459,17 @@ class MessageCacheManager {
         }
     }
     
-    private func _loadCachedMessages(for channelId: String, limit: Int) -> [Message] {
+    /// Load cached messages with offset for progressive loading
+    func loadCachedMessages(for channelId: String, limit: Int, offset: Int) async -> [Message] {
+        return await withCheckedContinuation { continuation in
+            dbQueue.async { [weak self] in
+                let messages = self?._loadCachedMessages(for: channelId, limit: limit, offset: offset) ?? []
+                continuation.resume(returning: messages)
+            }
+        }
+    }
+    
+    private func _loadCachedMessages(for channelId: String, limit: Int, offset: Int = 0) -> [Message] {
         print("PERSISTANCE 📦 CACHE_LOAD: Loading messages for channel \(channelId), limit \(limit)")
         if let dbPath = getDatabasePath() {
             print("PERSISTANCE 📦 CACHE_LOAD: Using database path: \(dbPath)")
@@ -486,7 +496,7 @@ class MessageCacheManager {
             SELECT message_data FROM messages 
             WHERE channel_id = ? 
             ORDER BY created_at DESC 
-            LIMIT ?
+            LIMIT ? OFFSET ?
         """
         
         var statement: OpaquePointer?
@@ -503,6 +513,7 @@ class MessageCacheManager {
             
             sqlite3_bind_text(statement, 1, channelIdCString, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
             sqlite3_bind_int(statement, 2, Int32(limit))
+            sqlite3_bind_int(statement, 3, Int32(offset))
             
             // DEBUG: Test direct query without parameters
             print("PERSISTANCE 📦 DEBUG_RAW_QUERY: Testing direct SQL query...")

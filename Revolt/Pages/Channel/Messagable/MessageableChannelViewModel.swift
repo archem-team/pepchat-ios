@@ -50,9 +50,10 @@ extension MessageableChannelViewModel {
         // CRITICAL: Don't include the 'messages' parameter in the API call
         // as it's causing a 500 error
         // Fetch messages from API with reduced limit for faster response
+        let limit = (before == nil && after == nil) ? MessageableChannelConstants.initialMessageLoadLimit : MessageableChannelConstants.messageLoadLimit
         let result = try? await viewState.http.fetchHistory(
             channel: channel.id,
-            limit: 100, // Reduced from 100 to 50 for faster API response
+            limit: limit, // Use 20 for initial load, 50 for additional loads
             before: before,
             after: after,
             sort: sort ?? "Latest",
