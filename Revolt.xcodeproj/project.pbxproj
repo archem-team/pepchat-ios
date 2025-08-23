@@ -261,6 +261,7 @@
 		17F9D7632C9208B500D0BB6F /* MessageReactionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F9D7622C9208B500D0BB6F /* MessageReactionsSheet.swift */; };
 		285F7581BAD6234593D2394F /* RoleDeleteSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958F5095BC835EFD976D8A1F /* RoleDeleteSheet.swift */; };
 		36D461CF77D84B97B94929A9 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 03268FCCFC7D4D1F8B6E9F6F /* Sentry */; };
+		4393DE852E58AF99004C9AED /* MessageCacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4393DE842E58AF99004C9AED /* MessageCacheManager.swift */; };
 		7031993BD3D264C895FFB466 /* CreateServerRoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F75CCC5D94FA80B2DCBD7821 /* CreateServerRoleView.swift */; };
 		911131412D8807F500667031 /* DeleteMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911131402D8807F500667031 /* DeleteMessageView.swift */; };
 		911A24B72D5B83C200ADD85D /* BlockUserPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */; };
@@ -612,6 +613,7 @@
 		17F502552B9BFB2800A3022D /* CreateGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateGroup.swift; sourceTree = "<group>"; };
 		17F555262AFC229900958F2F /* ServerSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSettings.swift; sourceTree = "<group>"; };
 		17F9D7622C9208B500D0BB6F /* MessageReactionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageReactionsSheet.swift; sourceTree = "<group>"; };
+		4393DE842E58AF99004C9AED /* MessageCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCacheManager.swift; sourceTree = "<group>"; };
 		56C3A459C46C9725691178F3 /* RoleColorPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleColorPickerSheet.swift; sourceTree = "<group>"; };
 		911131402D8807F500667031 /* DeleteMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteMessageView.swift; sourceTree = "<group>"; };
 		911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockUserPopup.swift; sourceTree = "<group>"; };
@@ -1481,6 +1483,7 @@
 		D49B705129C4D3FE009494A5 /* Revolt */ = {
 			isa = PBXGroup;
 			children = (
+				4393DE842E58AF99004C9AED /* MessageCacheManager.swift */,
 				DAAA4C0C29F2D16B00F41E52 /* Info.plist */,
 				D49B705229C4D3FE009494A5 /* RevoltApp.swift */,
 				17E019D42AF1937400AB4663 /* Theme.swift */,
@@ -1990,6 +1993,7 @@
 				17CE2E142AE709CE0059FB3A /* UserSheet.swift in Sources */,
 				0505E7D02D022EE900B12713 /* ChannelInfoMoreSheet.swift in Sources */,
 				1764856E2CA383BD00AF8141 /* ServerRolesSettings.swift in Sources */,
+				4393DE852E58AF99004C9AED /* MessageCacheManager.swift in Sources */,
 				05F3042B2DCF485C0058E80E /* MarkdownProcessor.swift in Sources */,
 				059B24BB2DE5BB02007ACFFB /* MessageableChannelViewController+Permissions.swift in Sources */,
 				17429D992B4C931D0036105A /* ChannelOverviewSettings.swift in Sources */,

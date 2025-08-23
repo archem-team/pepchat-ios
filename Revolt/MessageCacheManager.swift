@@ -3,8 +3,8 @@ import SQLite3
 import Types
 import OSLog
 
-/// Helper function to extract creation date from message ID
-func createdAt(id: String) -> Date {
+/// Helper function to extract creation date from message ID (for cache sorting)
+func cacheCreatedAt(id: String) -> Date {
     // Revolt message IDs are ULIDs (Universally Unique Lexicographically Sortable Identifiers)
     // The first 48 bits represent the timestamp in milliseconds since Unix epoch
     
@@ -47,9 +47,13 @@ class MessageCacheManager {
             content TEXT,
             created_at INTEGER NOT NULL,
             edited_at INTEGER,
-            message_data BLOB NOT NULL,
-            INDEX(channel_id, created_at)
+            message_data BLOB NOT NULL
         )
+    """
+    
+    private let createMessagesIndex = """
+        CREATE INDEX IF NOT EXISTS idx_messages_channel_created 
+        ON messages(channel_id, created_at)
     """
     
     private let createUsersTable = """
@@ -73,8 +77,10 @@ class MessageCacheManager {
     
     // MARK: - Initialization
     private init() {
+        print("📦 CACHE_INIT: Initializing MessageCacheManager")
         openDatabase()
         createTables()
+        print("📦 CACHE_INIT: MessageCacheManager initialization complete, db = \(db != nil ? "valid" : "nil")")
     }
     
     deinit {
@@ -99,15 +105,41 @@ class MessageCacheManager {
         
         let dbPath = revoltDir.appendingPathComponent("messages.sqlite").path
         
+        // Check if database file exists before opening
+        let fileExists = FileManager.default.fileExists(atPath: dbPath)
+        
+        if fileExists {
+            // Get file size to verify it's not empty
+            do {
+                let attributes = try FileManager.default.attributesOfItem(atPath: dbPath)
+                let fileSize = attributes[.size] as? NSNumber ?? 0
+            } catch {
+            }
+        }
+        
         if sqlite3_open(dbPath, &db) != SQLITE_OK {
             logger.error("Unable to open database at path: \(dbPath)")
             db = nil
         } else {
             logger.info("Successfully opened message cache database")
             
-            // Enable WAL mode for better performance
+            // Configure database for iOS persistence
             var statement: OpaquePointer?
-            if sqlite3_prepare_v2(db, "PRAGMA journal_mode=WAL", -1, &statement, nil) == SQLITE_OK {
+            
+            // Use DELETE journal mode instead of WAL for better iOS compatibility
+            if sqlite3_prepare_v2(db, "PRAGMA journal_mode=DELETE", -1, &statement, nil) == SQLITE_OK {
+                sqlite3_step(statement)
+            }
+            sqlite3_finalize(statement)
+            
+            // Ensure data is synced to disk
+            if sqlite3_prepare_v2(db, "PRAGMA synchronous=FULL", -1, &statement, nil) == SQLITE_OK {
+                sqlite3_step(statement)
+            }
+            sqlite3_finalize(statement)
+            
+            // Set a reasonable timeout for database operations
+            if sqlite3_prepare_v2(db, "PRAGMA busy_timeout=5000", -1, &statement, nil) == SQLITE_OK {
                 sqlite3_step(statement)
             }
             sqlite3_finalize(statement)
@@ -115,16 +147,45 @@ class MessageCacheManager {
     }
     
     private func createTables() {
-        guard let db = db else { return }
+        guard let db = db else { 
+            return 
+        }
         
-        let tables = [createMessagesTable, createUsersTable, createChannelInfoTable]
         
-        for tableSQL in tables {
-            if sqlite3_exec(db, tableSQL, nil, nil, nil) != SQLITE_OK {
-                let errmsg = String(cString: sqlite3_errmsg(db))
-                logger.error("Error creating table: \(errmsg)")
+        // First check if tables already exist and have data
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='messages'", -1, &statement, nil) == SQLITE_OK {
+            if sqlite3_step(statement) == SQLITE_ROW {
+                let tableExists = sqlite3_column_int(statement, 0) > 0
+                
+                if tableExists {
+                    // Check if table has data
+                    sqlite3_finalize(statement)
+                    if sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM messages", -1, &statement, nil) == SQLITE_OK {
+                        if sqlite3_step(statement) == SQLITE_ROW {
+                            let messageCount = sqlite3_column_int(statement, 0)
+                        }
+                    }
+                }
             }
         }
+        sqlite3_finalize(statement)
+        
+        let tables = [
+            ("messages", createMessagesTable),
+            ("users", createUsersTable), 
+            ("channel_info", createChannelInfoTable),
+            ("messages_index", createMessagesIndex)
+        ]
+        
+        for (tableName, tableSQL) in tables {
+            if sqlite3_exec(db, tableSQL, nil, nil, nil) != SQLITE_OK {
+                let errmsg = String(cString: sqlite3_errmsg(db))
+                logger.error("Error creating \(tableName) table: \(errmsg)")
+            } else {
+            }
+        }
+        
     }
     
     private func closeDatabase() {
@@ -136,15 +197,90 @@ class MessageCacheManager {
     
     // MARK: - Message Operations
     
+    /// Simple test method to verify class is working
+    func testMethod() {
+    }
+    
+    /// Reset corrupted database by deleting the file and recreating
+    func resetDatabase() {
+        
+        // Close current connection
+        closeDatabase()
+        
+        // Delete the corrupted database file
+        let fileManager = FileManager.default
+        if let dbPath = getDatabasePath() {
+            do {
+                if fileManager.fileExists(atPath: dbPath) {
+                    try fileManager.removeItem(atPath: dbPath)
+                }
+            } catch {
+            }
+        }
+        
+        // Recreate fresh database
+        openDatabase()
+        createTables()
+    }
+    
+    private func getDatabasePath() -> String? {
+        let fileManager = FileManager.default
+        guard let documentsPath = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        
+        let revoltDir = documentsPath.appendingPathComponent(Bundle.main.bundleIdentifier!, conformingTo: .directory)
+        
+        // Create directory if it doesn't exist
+        do {
+            try fileManager.createDirectory(at: revoltDir, withIntermediateDirectories: true)
+        } catch {
+            return nil
+        }
+        
+        return revoltDir.appendingPathComponent("messages.sqlite").path
+    }
+    
+    /// Alternative caching function to test if the issue is with the specific function name
+    func storeMessages(_ messages: [Message], channelId: String) {
+        
+        // Simple test: just log the first message ID
+        if let firstMessage = messages.first {
+        }
+        
+        // Call the original function
+        self.cacheMessages(messages, for: channelId)
+    }
+    
     /// Cache messages locally for instant loading
     func cacheMessages(_ messages: [Message], for channelId: String) {
-        dbQueue.async { [weak self] in
-            self?._cacheMessages(messages, for: channelId)
+        
+        // Check if we have messages to cache
+        guard !messages.isEmpty else {
+            return
         }
+        
+        // Check if database is available before queuing
+        guard db != nil else {
+            return
+        }
+        
+        dbQueue.async { [weak self] in
+            
+            guard let self = self else {
+                return
+            }
+            
+            self._cacheMessages(messages, for: channelId)
+        }
+        
     }
     
     private func _cacheMessages(_ messages: [Message], for channelId: String) {
-        guard let db = db else { return }
+        guard let db = db else { 
+            return 
+        }
+        
         
         let insertSQL = """
             INSERT OR REPLACE INTO messages 
@@ -154,55 +290,101 @@ class MessageCacheManager {
         
         var statement: OpaquePointer?
         
-        if sqlite3_prepare_v2(db, insertSQL, -1, &statement, nil) == SQLITE_OK {
+        var successCount = 0
+        var failureCount = 0
+        
+        
+        let result = sqlite3_prepare_v2(db, insertSQL, -1, &statement, nil)
+        
+        if result == SQLITE_OK {
             
             sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
             
-            for message in messages {
-                // Extract basic info
-                let content = extractMessageContent(from: message)
-                let createdAt = Int64(createdAt(id: message.id).timeIntervalSince1970)
-                let editedAt = message.edited?.map { Int64($0.timeIntervalSince1970) }
+            for (index, message) in messages.enumerated() {
                 
-                // Serialize entire message
-                guard let messageData = try? JSONEncoder().encode(message) else {
-                    continue
+                // PROPER: Store the complete Message object as JSON
+                let content = message.content ?? ""
+                let createdAt = Int64(cacheCreatedAt(id: message.id).timeIntervalSince1970)
+                
+                do {
+                    // Store the complete message object
+                    let messageData = try JSONEncoder().encode(message)
+                    
+                    // DEBUG: Verify encoding for first message
+                    if index == 0 {
+                        if let jsonString = String(data: messageData, encoding: .utf8) {
+                            let preview = String(jsonString.prefix(200))
+                        }
+                    }
+                    
+                    // DEBUG: Log what we're storing for first message
+                    if index == 0 {
+                    }
+                    
+                    // Bind parameters with explicit C string conversion
+                    let messageIdCString = message.id.cString(using: .utf8)!
+                    let channelIdCString = channelId.cString(using: .utf8)!
+                    let authorIdCString = message.author.cString(using: .utf8)!
+                    let contentCString = content.cString(using: .utf8)!
+                    
+                    // DEBUG: Verify channel ID before binding
+                    if index == 0 {
+                    }
+                    
+                    sqlite3_bind_text(statement, 1, messageIdCString, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+                    sqlite3_bind_text(statement, 2, channelIdCString, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+                    sqlite3_bind_text(statement, 3, authorIdCString, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+                    sqlite3_bind_text(statement, 4, contentCString, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+                    sqlite3_bind_int64(statement, 5, createdAt)
+                    sqlite3_bind_null(statement, 6) // Skip editedAt for now
+                    
+                        sqlite3_bind_blob(statement, 7, messageData.withUnsafeBytes { $0.baseAddress }, Int32(messageData.count), unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+                    
+                    if sqlite3_step(statement) == SQLITE_DONE {
+                        successCount += 1
+                        if index < 3 { // Log first few for verification
+                            
+                            // DEBUG: Immediately verify what was actually stored
+                            if index == 0 {
+                                sqlite3_reset(statement)
+                                var verifyStatement: OpaquePointer?
+                                if sqlite3_prepare_v2(db, "SELECT channel_id FROM messages WHERE id = ?", -1, &verifyStatement, nil) == SQLITE_OK {
+                                    sqlite3_bind_text(verifyStatement, 1, messageIdCString, -1, nil)
+                                    if sqlite3_step(verifyStatement) == SQLITE_ROW {
+                                        let storedChannelId = String(cString: sqlite3_column_text(verifyStatement, 0))
+                                    }
+                                }
+                                sqlite3_finalize(verifyStatement)
+                            }
+                        }
+                    } else {
+                        let errmsg = String(cString: sqlite3_errmsg(db))
+                        failureCount += 1
+                    }
+                    
+                    sqlite3_reset(statement)
+                } catch {
+                    failureCount += 1
                 }
-                
-                // Bind parameters
-                sqlite3_bind_text(statement, 1, message.id, -1, nil)
-                sqlite3_bind_text(statement, 2, channelId, -1, nil)
-                sqlite3_bind_text(statement, 3, message.author, -1, nil)
-                sqlite3_bind_text(statement, 4, content, -1, nil)
-                sqlite3_bind_int64(statement, 5, createdAt)
-                
-                if let editedAt = editedAt {
-                    sqlite3_bind_int64(statement, 6, editedAt)
-                } else {
-                    sqlite3_bind_null(statement, 6)
-                }
-                
-                sqlite3_bind_blob(statement, 7, messageData.withUnsafeBytes { $0.baseAddress }, Int32(messageData.count), nil)
-                
-                if sqlite3_step(statement) != SQLITE_DONE {
-                    let errmsg = String(cString: sqlite3_errmsg(db))
-                    logger.error("Error inserting message: \(errmsg)")
-                }
-                
-                sqlite3_reset(statement)
             }
             
             sqlite3_exec(db, "COMMIT", nil, nil, nil)
+        } else {
+            let errmsg = String(cString: sqlite3_errmsg(db))
         }
         
         sqlite3_finalize(statement)
         
         // Update channel info
         updateChannelInfo(channelId: channelId, messages: messages)
+        
+        // Force synchronization to disk after caching
+        sqlite3_exec(db, "PRAGMA synchronous=FULL", nil, nil, nil)
+        
     }
     
     /// Load cached messages instantly from local storage
-    func loadCachedMessages(for channelId: String, limit: Int = 50) async -> [Message] {
+    func loadCachedMessages(for channelId: String, limit: Int = 20) async -> [Message] {
         return await withCheckedContinuation { continuation in
             dbQueue.async { [weak self] in
                 let messages = self?._loadCachedMessages(for: channelId, limit: limit) ?? []
@@ -211,33 +393,100 @@ class MessageCacheManager {
         }
     }
     
-    private func _loadCachedMessages(for channelId: String, limit: Int) -> [Message] {
-        guard let db = db else { return [] }
+    /// Load cached messages with offset for progressive loading
+    func loadCachedMessages(for channelId: String, limit: Int, offset: Int) async -> [Message] {
+        return await withCheckedContinuation { continuation in
+            dbQueue.async { [weak self] in
+                let messages = self?._loadCachedMessages(for: channelId, limit: limit, offset: offset) ?? []
+                continuation.resume(returning: messages)
+            }
+        }
+    }
+    
+    private func _loadCachedMessages(for channelId: String, limit: Int, offset: Int = 0) -> [Message] {
+        if let dbPath = getDatabasePath() {
+        }
+        guard let db = db else { 
+            return [] 
+        }
+        
+        // DEBUG: First check what channel IDs are actually in the database
+        var debugStatement: OpaquePointer?
+        if sqlite3_prepare_v2(db, "SELECT DISTINCT channel_id, COUNT(*) FROM messages GROUP BY channel_id", -1, &debugStatement, nil) == SQLITE_OK {
+            while sqlite3_step(debugStatement) == SQLITE_ROW {
+                let storedChannelId = String(cString: sqlite3_column_text(debugStatement, 0))
+                let messageCount = sqlite3_column_int(debugStatement, 1)
+            }
+        }
+        sqlite3_finalize(debugStatement)
         
         let selectSQL = """
             SELECT message_data FROM messages 
             WHERE channel_id = ? 
             ORDER BY created_at DESC 
-            LIMIT ?
+            LIMIT ? OFFSET ?
         """
         
         var statement: OpaquePointer?
         var messages: [Message] = []
         
         if sqlite3_prepare_v2(db, selectSQL, -1, &statement, nil) == SQLITE_OK {
-            sqlite3_bind_text(statement, 1, channelId, -1, nil)
-            sqlite3_bind_int(statement, 2, Int32(limit))
             
-            while sqlite3_step(statement) == SQLITE_ROW {
+            // DEBUG: Check parameter binding
+            let channelIdCString = channelId.cString(using: .utf8)!
+            
+            sqlite3_bind_text(statement, 1, channelIdCString, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            sqlite3_bind_int(statement, 2, Int32(limit))
+            sqlite3_bind_int(statement, 3, Int32(offset))
+            
+            // DEBUG: Test direct query without parameters
+            var testStatement: OpaquePointer?
+            let directSQL = "SELECT COUNT(*) FROM messages WHERE channel_id = '\(channelId)'"
+            if sqlite3_prepare_v2(db, directSQL, -1, &testStatement, nil) == SQLITE_OK {
+                if sqlite3_step(testStatement) == SQLITE_ROW {
+                    let directCount = sqlite3_column_int(testStatement, 0)
+                }
+            }
+            sqlite3_finalize(testStatement)
+            
+            var stepCount = 0
+            var stepResult = sqlite3_step(statement)
+            while stepResult == SQLITE_ROW {
+                stepCount += 1
+                
                 if let blob = sqlite3_column_blob(statement, 0) {
                     let size = sqlite3_column_bytes(statement, 0)
                     let data = Data(bytes: blob, count: Int(size))
                     
-                    if let message = try? JSONDecoder().decode(Message.self, from: data) {
-                        messages.append(message)
+                    // DEBUG: Check what's in the blob data
+                    if stepCount <= 3 {
+                        if let dataString = String(data: data, encoding: .utf8) {
+                            let preview = String(dataString.prefix(200))
+                        } else {
+                        }
                     }
+                    
+                    do {
+                        let message = try JSONDecoder().decode(Message.self, from: data)
+                        messages.append(message)
+                        if stepCount <= 3 {
+                        }
+                    } catch {
+                        if stepCount <= 3 {
+                        }
+                    }
+                } else {
                 }
+                
+                stepResult = sqlite3_step(statement)
             }
+            
+            if stepResult != SQLITE_DONE {
+                let errmsg = String(cString: sqlite3_errmsg(db))
+            } else {
+            }
+        } else {
+            let errmsg = String(cString: sqlite3_errmsg(db))
         }
         
         sqlite3_finalize(statement)
@@ -366,7 +615,7 @@ class MessageCacheManager {
     private func updateChannelInfo(channelId: String, messages: [Message]) {
         guard let db = db, !messages.isEmpty else { return }
         
-        let lastMessage = messages.max { createdAt(id: $0.id) < createdAt(id: $1.id) }
+        let lastMessage = messages.max { cacheCreatedAt(id: $0.id) < cacheCreatedAt(id: $1.id) }
         let now = Int64(Date().timeIntervalSince1970)
         
         let updateSQL = """
@@ -392,10 +641,10 @@ class MessageCacheManager {
         if let system = message.system {
             switch system {
             case .text(let content):
-                return content
+                return content.content
             case .user_added(let userData):
                 return "User \(userData.by ?? "") added \(userData.id)"
-            case .user_remove(let userData):
+            case .user_removed(let userData):
                 return "User \(userData.by ?? "") removed \(userData.id)"
             case .user_joined:
                 return "User joined"
@@ -413,6 +662,10 @@ class MessageCacheManager {
                 return "Channel icon changed"
             case .channel_ownership_changed:
                 return "Channel ownership changed"
+            case .message_pinned:
+                return "Message pinned"
+            case .message_unpinned:
+                return "Message unpinned"
             }
         } else if let content = message.content {
             return content
@@ -435,7 +688,7 @@ class MessageCacheManager {
                 }
                 
                 // Only preload if cache is older than 1 hour
-                let needsRefresh = await self?._needsCacheRefresh(for: channelId) ?? false
+                let needsRefresh = self?._needsCacheRefresh(for: channelId) ?? false
                 if needsRefresh {
                     print("📦 PRELOAD: Refreshing cache for channel \(channelId)")
                     // This would trigger a background API call to refresh messages

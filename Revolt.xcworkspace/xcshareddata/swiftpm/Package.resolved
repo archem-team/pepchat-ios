@@ -1,5 +1,5 @@
 {
-  "originHash" : "bf67e084d0866fa562761c008dd91efbe5d2eaccb4caa4d2d8128ec9bbe978b4",
+  "originHash" : "f6e114c663c5158deb2de005065403ae236fb46cbcd4be8f7501bbbf52434a1e",
   "pins" : [
     {
       "identity" : "alamofire",
@@ -98,6 +98,15 @@
       "state" : {
         "revision" : "5056f3305d3499f44d8815530d560b87082e0cf5",
         "version" : "1.7.1"
+      }
+    },
+    {
+      "identity" : "oggdecoder",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/arkasas/OggDecoder.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "e94c8ca23cf2a66feab53d795117ae513c273db8"
       }
     },
     {

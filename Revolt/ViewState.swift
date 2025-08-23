@@ -659,18 +659,25 @@ public class ViewState: ObservableObject {
     
     // MEMORY MANAGEMENT: Helper methods
     private func debouncedSave(key: String, data: Data) {
-        // Cancel any existing save operation for this key
-        saveWorkItems[key]?.cancel()
-        
-        // Create a new work item
-        let workItem = DispatchWorkItem { [weak self] in
-            UserDefaults.standard.set(data, forKey: key)
-            self?.saveWorkItems.removeValue(forKey: key)
+        // Ensure thread safety for saveWorkItems access
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Cancel any existing save operation for this key
+            self.saveWorkItems[key]?.cancel()
+            
+            // Create a new work item
+            let workItem = DispatchWorkItem { [weak self] in
+                UserDefaults.standard.set(data, forKey: key)
+                DispatchQueue.main.async {
+                    self?.saveWorkItems.removeValue(forKey: key)
+                }
+            }
+            
+            // Store and schedule the work item
+            self.saveWorkItems[key] = workItem
+            DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + saveDebounceInterval, execute: workItem)
         }
-        
-        // Store and schedule the work item
-        saveWorkItems[key] = workItem
-        DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + saveDebounceInterval, execute: workItem)
     }
     
     /// Force immediate save of users data without debouncing
@@ -1181,17 +1188,17 @@ public class ViewState: ObservableObject {
         self.userSettingsStore = UserSettingsData.maybeRead(viewState: nil, isLoginUser: true)
         
 
-        // CRITICAL DEBUG: Add logging for data loading from UserDefaults
+        // Debug logging for data loading from UserDefaults
         // print("📱 INIT: Loading data from UserDefaults...")
         
         self.users = ViewState.decodeUserDefaults(forKey: "users", withDecoder: decoder, defaultingTo: [:])
         // Force refresh servers and channels from backend instead of using cached data
         self.servers = [:] // ViewState.decodeUserDefaults(forKey: "servers", withDecoder: decoder, defaultingTo: [:])
         self.channels = [:] // ViewState.decodeUserDefaults(forKey: "channels", withDecoder: decoder, defaultingTo: [:])
-        /*self.messages = ViewState.decodeUserDefaults(forKey: "messages", withDecoder: decoder, defaultingTo: [:])
-         self.channelMessages = ViewState.decodeUserDefaults(forKey: "channelMessages", withDecoder: decoder, defaultingTo: [:])*/
+        // Don't persist full messages (too memory intensive) but restore channelMessages IDs
         self.messages = [:]
-        self.channelMessages = [:]
+        // Load message IDs from previous session for cache-aware loading
+        self.channelMessages = ViewState.decodeUserDefaults(forKey: "channelMessages", withDecoder: decoder, defaultingTo: [:])
         // Force refresh members from backend
         self.members = [:] // ViewState.decodeUserDefaults(forKey: "members", withDecoder: decoder, defaultingTo: [:])
         // Force refresh DMs from backend
@@ -1323,13 +1330,6 @@ public class ViewState: ObservableObject {
         channelsToPreload.append(contentsOf: activeDMs)
         print("🚀 PRELOAD: Added \(activeDMs.count) DM channels")
         
-        // Always include the specific channel mentioned by user
-        let specificChannelId = "01J7QTT66242A7Q26A2FH5TD48"
-        if !channelsToPreload.contains(specificChannelId) {
-            channelsToPreload.append(specificChannelId)
-            print("🚀 PRELOAD: Added specific channel \(specificChannelId)")
-        }
-        
         print("🚀 PRELOAD: Starting preload for \(channelsToPreload.count) channels")
         
         // Preload channels in parallel for better performance
@@ -1392,8 +1392,8 @@ public class ViewState: ObservableObject {
             // Get server ID if this is a server channel
             let serverId = channel.server
             
-            // SMART LIMIT: Use 10 for specific channel in specific server, 50 for others
-            let messageLimit = (channelId == "01J7QTT66242A7Q26A2FH5TD48" && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : 50
+            // Use progressive loading limit for all channels
+            let messageLimit = 20
             
             // Fetch messages for this channel
             let result = try await http.fetchHistory(
@@ -2376,6 +2376,12 @@ public class ViewState: ObservableObject {
             }
             
             messages[m.id] = m
+            
+            // Cache new WebSocket message to SQLite
+            MessageCacheManager.shared.cacheMessages([m], for: m.channel)
+            if let user = m.user {
+                MessageCacheManager.shared.cacheUsers([user])
+            }
             
             // Check if this message matches a queued message and clean it up
             if let channelQueuedMessages = queuedMessages[m.channel],
@@ -5085,8 +5091,8 @@ public class ViewState: ObservableObject {
         guard !Task.isCancelled else { return }
         
         do {
-            // SMART LIMIT: Use 10 for specific channel in specific server, 20 for others in preload
-            let messageLimit = (channelId == "01J7QTT66242A7Q26A2FH5TD48" && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : maxPreloadedMessagesPerChannel
+            // Use consistent preload limit for all channels
+            let messageLimit = maxPreloadedMessagesPerChannel
             
             let result = try await http.fetchHistory(
                 channel: channelId,
