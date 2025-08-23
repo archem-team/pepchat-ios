@@ -1188,17 +1188,16 @@ public class ViewState: ObservableObject {
         self.userSettingsStore = UserSettingsData.maybeRead(viewState: nil, isLoginUser: true)
         
 
-        // CRITICAL DEBUG: Add logging for data loading from UserDefaults
+        // Debug logging for data loading from UserDefaults
         // print("📱 INIT: Loading data from UserDefaults...")
         
         self.users = ViewState.decodeUserDefaults(forKey: "users", withDecoder: decoder, defaultingTo: [:])
         // Force refresh servers and channels from backend instead of using cached data
         self.servers = [:] // ViewState.decodeUserDefaults(forKey: "servers", withDecoder: decoder, defaultingTo: [:])
         self.channels = [:] // ViewState.decodeUserDefaults(forKey: "channels", withDecoder: decoder, defaultingTo: [:])
-        // PHASE 1: Don't persist full messages (too memory intensive) but restore channelMessages IDs
-        // self.messages = ViewState.decodeUserDefaults(forKey: "messages", withDecoder: decoder, defaultingTo: [:])
+        // Don't persist full messages (too memory intensive) but restore channelMessages IDs
         self.messages = [:]
-        // RESTORE: Load message IDs from previous session for cache-aware loading
+        // Load message IDs from previous session for cache-aware loading
         self.channelMessages = ViewState.decodeUserDefaults(forKey: "channelMessages", withDecoder: decoder, defaultingTo: [:])
         // Force refresh members from backend
         self.members = [:] // ViewState.decodeUserDefaults(forKey: "members", withDecoder: decoder, defaultingTo: [:])
@@ -1330,8 +1329,6 @@ public class ViewState: ObservableObject {
         
         channelsToPreload.append(contentsOf: activeDMs)
         print("🚀 PRELOAD: Added \(activeDMs.count) DM channels")
-        
-        // No hardcoded channels needed
         
         print("🚀 PRELOAD: Starting preload for \(channelsToPreload.count) channels")
         
@@ -2380,8 +2377,7 @@ public class ViewState: ObservableObject {
             
             messages[m.id] = m
             
-            // PHASE 1: Cache new WebSocket message to SQLite
-            print("📦 WS_CACHE: Caching new message \(m.id) to SQLite")
+            // Cache new WebSocket message to SQLite
             MessageCacheManager.shared.cacheMessages([m], for: m.channel)
             if let user = m.user {
                 MessageCacheManager.shared.cacheUsers([user])
