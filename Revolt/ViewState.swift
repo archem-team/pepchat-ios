@@ -1331,12 +1331,7 @@ public class ViewState: ObservableObject {
         channelsToPreload.append(contentsOf: activeDMs)
         print("🚀 PRELOAD: Added \(activeDMs.count) DM channels")
         
-        // Always include the specific channel mentioned by user
-        let specificChannelId = "01J7QTT66242A7Q26A2FH5TD48"
-        if !channelsToPreload.contains(specificChannelId) {
-            channelsToPreload.append(specificChannelId)
-            print("🚀 PRELOAD: Added specific channel \(specificChannelId)")
-        }
+        // No hardcoded channels needed
         
         print("🚀 PRELOAD: Starting preload for \(channelsToPreload.count) channels")
         
@@ -1400,8 +1395,8 @@ public class ViewState: ObservableObject {
             // Get server ID if this is a server channel
             let serverId = channel.server
             
-            // SMART LIMIT: Use 10 for specific channel in specific server, 50 for others
-            let messageLimit = (channelId == "01J7QTT66242A7Q26A2FH5TD48" && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : 50
+            // Use progressive loading limit for all channels
+            let messageLimit = 20
             
             // Fetch messages for this channel
             let result = try await http.fetchHistory(
@@ -5100,8 +5095,8 @@ public class ViewState: ObservableObject {
         guard !Task.isCancelled else { return }
         
         do {
-            // SMART LIMIT: Use 10 for specific channel in specific server, 20 for others in preload
-            let messageLimit = (channelId == "01J7QTT66242A7Q26A2FH5TD48" && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : maxPreloadedMessagesPerChannel
+            // Use consistent preload limit for all channels
+            let messageLimit = maxPreloadedMessagesPerChannel
             
             let result = try await http.fetchHistory(
                 channel: channelId,

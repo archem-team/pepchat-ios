@@ -171,8 +171,8 @@ class MessageableChannelViewModel: ObservableObject {
         // Get the server ID from the channel
         let serverId = channel.server
         
-        // SMART LIMIT: Use 10 for specific channel, 50 for others
-        let messageLimit = (channel.id == "01J7QTT66242A7Q26A2FH5TD48") ? 10 : 50
+        // Use consistent load limit for all channels
+        let messageLimit = MessageableChannelConstants.messageLoadLimit
         
         let result = (try? await viewState.http.fetchHistory(
             channel: channel.id,
