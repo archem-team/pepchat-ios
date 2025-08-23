@@ -2604,17 +2604,17 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             // print("   ViewState: \(self.viewModel.viewState.channelMessages[self.viewModel.channel.id]?.count ?? 0) messages")
                             // print("   TableView: \(self.tableView.numberOfRows(inSection: 0)) rows")
                             
-                            // CRITICAL: If viewModel.messages is empty but viewState has messages, sync them
+                            // If viewModel.messages is empty but viewState has messages, sync them
                             if self.viewModel.messages.isEmpty && !(self.viewModel.viewState.channelMessages[self.viewModel.channel.id]?.isEmpty ?? true) {
                                 // print("⚠️ BEFORE_CALL: ViewModel messages is empty but viewState has \(self.viewModel.viewState.channelMessages[self.viewModel.channel.id]?.count ?? 0) messages - syncing")
                                 self.viewModel.messages = self.viewModel.viewState.channelMessages[self.viewModel.channel.id] ?? []
                             }
-                            // CRITICAL: Also ensure localMessages is synced with viewModel.messages
+                            // Also ensure localMessages is synced with viewModel.messages
                             if self.localMessages.isEmpty && !self.viewModel.messages.isEmpty {
                                 // print("⚠️ BEFORE_CALL: LocalMessages is empty but viewModel has \(self.viewModel.messages.count) messages - syncing")
                                 self.localMessages = self.viewModel.messages
                             }
-                            // CRITICAL: Always sync all three arrays after loading more
+                            // Always sync all three arrays after loading more
                             if let synced = self.viewModel.viewState.channelMessages[self.viewModel.channel.id], !synced.isEmpty {
                                 self.viewModel.messages = synced
                                 self.localMessages = synced
@@ -2623,7 +2623,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                                 // print("⚠️ BEFORE_CALL: Tried to sync but channelMessages was empty, skipping sync to avoid clearing arrays")
                             }
                             
-                            // CRITICAL: Make sure we're using the correct messages array
+                            // Make sure we're using the correct messages array
                             let messagesForDataSource = !self.viewModel.messages.isEmpty ? 
                                 self.viewModel.messages : 
                                 (self.viewModel.viewState.channelMessages[self.viewModel.channel.id] ?? [])
@@ -2632,16 +2632,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             let addedMessagesCount = self.viewModel.messages.count - initialMessagesCount
                             // print("✅ BEFORE_CALL: Loaded \(result.messages.count) messages, added \(addedMessagesCount) new messages")
                             
-                            // CRITICAL FIX: Restore any missing users after loading older messages
+                            // Restore any missing users after loading older messages
                             self.viewModel.viewState.restoreMissingUsersForMessages()
                             
-                            // CRITICAL FIX: Load users specifically for this channel's messages
+                            // Load users specifically for this channel's messages
                             self.viewModel.viewState.loadUsersForVisibleMessages(channelId: self.viewModel.channel.id)
                             
-                            // EMERGENCY FIX: Force restore all users for this channel
+                            // Force restore all users for this channel
                             self.viewModel.viewState.forceRestoreUsersForChannel(channelId: self.viewModel.channel.id)
                             
-                            // FINAL CHECK: Ensure all loaded messages have their authors
+                            // Ensure all loaded messages have their authors
                             let finalMessageIds = self.viewModel.viewState.channelMessages[self.viewModel.channel.id] ?? []
                             var missingAuthors = 0
                             for messageId in finalMessageIds {
@@ -2692,7 +2692,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             // Reload data
                             self.tableView.reloadData()
                             
-                            // CRITICAL: Reset flag after changes complete
+                            // Reset flag after changes complete
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                                 self?.isDataSourceUpdating = false
                                 print("📊 DATA_SOURCE: Marking as stable after loadMoreMessages")
@@ -2704,8 +2704,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                                     messagesArray: messagesForDataSource,
                                     maxRetries: 3
                                 )
-                                
-                                // print("📢 BEFORE_CALL: Added \(addedMessagesCount) older messages, initiated reference scroll")
                             } else {
                                 // If no messages were added, just update data source without reload
                                 self.dataSource = LocalMessagesDataSource(
@@ -2715,27 +2713,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                                 )
                                 self.tableView.dataSource = self.dataSource
                                 
-                                // If no new messages were loaded, show a notification to the user
-                                // if result.messages.isEmpty {
-                                //     // CRITICAL FIX: Update lastEmptyResponseTime when API returns empty messages
-                                //     self.lastEmptyResponseTime = Date()
-                                //     DispatchQueue.main.async {
-                                //         let banner = NotificationBanner(message: "You have reached the beginning of the conversation.")
-                                //         banner.show(duration: 2.0)
-                                //     }
-                                // }
                             }
                         } else {
-                            // print("❌ BEFORE_CALL: API response was empty")
-                            
-                            // CRITICAL FIX: Update lastEmptyResponseTime when API returns empty response
+                            // Update lastEmptyResponseTime when API returns empty response
                             self.lastEmptyResponseTime = Date()
                             
-                            // // Show notification that there are no more messages
-                            // DispatchQueue.main.async {
-                            //     let banner = NotificationBanner(message: "You have reached the beginning of the conversation.")
-                            //     banner.show(duration: 2.0)
-                            // }
                         }
                         
                         // Change state to not loading
@@ -2804,9 +2786,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     // CRITICAL FIX: Reset the older messages loading flag
                     self.isLoadingOlderMessages = false
                     
-                    // Show timeout message
-//                    let banner = NotificationBanner(message: "Loading time exceeded. Please try again.")
-//                    banner.show(duration: 2.0)
                 }
             }
         }
@@ -3245,9 +3224,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 self.cachedMessages = Array(messages) // Update cache too
                 self.lastReturnedRowCount = messages.count
                 
-                // OPTIMIZATION: Clean up cache for messages no longer visible
+                // Clean up cache for messages no longer visible
                 self.cleanupCache(currentMessages: messages)
-                // print("🔄 LocalMessagesDataSource: Updated with \(messages.count) messages")
             }
         }
         
@@ -3399,13 +3377,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 self.tableView.tableFooterView = spinner
             }
         }
-        
-        // Log loading states
-        // print("📱 Current ViewState: channelMessages entries = \(viewModel.viewState.channelMessages.count)")
-        // print("📱 Current LocalMessages: count = \(self.localMessages.count)")
-        
-        // Load messages from the server
-        // print("📱 Starting initial message load for channel: \(viewModel.channel.id)")
         
         if let targetId = self.targetMessageId {
             // We have a specific target message to load
@@ -3635,7 +3606,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // print("📜 Loading regular messages")
         let channelId = viewModel.channel.id
         
-        // PHASE 1 FIX: Check SQLite cache first before memory
+        // Check SQLite cache first before memory
         let cacheStartTime = Date()
         let cachedMessages = await MessageCacheManager.shared.loadCachedMessages(for: channelId, limit: 50)
         let cacheTime = Date().timeIntervalSince(cacheStartTime)
@@ -3665,7 +3636,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             }
             
             
-            // CRITICAL FIX: Continue with API call in background to refresh and get newer messages
+            // Continue with API call in background to refresh and get newer messages
             // This ensures we get the latest messages while showing cached ones immediately
             Task.detached(priority: .background) { [weak self] in
                 
@@ -3677,7 +3648,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         DispatchQueue.main.async { [weak self] in
                             guard let self = self else { return }
                             
-                            // IMPROVED FIX: Intelligent merge instead of complete replacement
+                            // Intelligent merge instead of complete replacement
                             // This prevents UI jumping by preserving newer messages that arrived via WebSocket
                             
                             // Get current messages in the channel
@@ -3755,7 +3726,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             } else {
                             }
                             
-                            // CRITICAL: Always cache the fresh API messages to SQLite, even if UI didn't change
+                            // Always cache the fresh API messages to SQLite, even if UI didn't change
                             // This ensures the cache stays up to date with latest API data
                             Task.detached(priority: .background) {
                                 MessageCacheManager.shared.cacheMessages(fetchResult.messages, for: channelId)
@@ -3839,7 +3810,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             return  // Early return when using memory cache
             
             } else {
-                // CRITICAL FIX: Actually make the API call when memory content is missing
+                // Make the API call when memory content is missing
                 
                 // Show skeleton loading view
                 DispatchQueue.main.async {
@@ -3882,13 +3853,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         // Create the list of sorted message IDs
                         let sortedIds = sortedMessages.map { $0.id }
                         
-                        // CRITICAL: Update our local messages array directly
+                        // Update our local messages array directly
                         await MainActor.run {
                             // Update our local copy
                             self.localMessages = sortedIds
                             // Also update the channel messages in viewState for consistency
                             self.viewModel.viewState.channelMessages[channelId] = sortedIds
-                            // CRITICAL: Ensure viewModel.messages is also synced
+                            // Ensure viewModel.messages is also synced
                             self.viewModel.messages = sortedIds
                         }
                         
@@ -3946,7 +3917,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 // Call API with proper error handling
                 let result = await viewModel.loadMoreMessages(before: nil)
                 
-                // CRITICAL DEBUG: Check the actual API response structure
+                // Check the actual API response structure
                 if let fetchResult = result {
                 } else {
                 }
@@ -3970,7 +3941,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             if let fetchResult = result, !fetchResult.messages.isEmpty {
                     // print("✅ Successfully loaded \(fetchResult.messages.count) messages from API in \(String(format: "%.2f", apiDuration))s")
                     
-                    // CRITICAL FIX: Cache messages to SQLite immediately after API success
+                    // Cache messages to SQLite immediately after API success
                     let cacheManager = MessageCacheManager.shared
                     
                     // SAFE APPROACH: Dispatch cache operation to avoid threading issues
@@ -4025,13 +3996,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 // Create the list of sorted message IDs
                 let sortedIds = sortedMessages.map { $0.id }
                 
-                // CRITICAL: Update our local messages array directly
+                // Update our local messages array directly
                 await MainActor.run {
                     // Update our local copy
                     self.localMessages = sortedIds
                     // Also update the channel messages in viewState for consistency
                     self.viewModel.viewState.channelMessages[channelId] = sortedIds
-                    // CRITICAL: Ensure viewModel.messages is also synced
+                    // Ensure viewModel.messages is also synced
                     self.viewModel.messages = sortedIds
                     
                     }
@@ -7458,7 +7429,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 print("⚡ BREAKDOWN: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s, UI=\(String(format: "%.2f", uiDuration))s")
             }
             
-            // CRITICAL: Cache the immediate load results to SQLite for future fast loading
+            // Cache the immediate load results to SQLite for future fast loading
             Task.detached(priority: .background) {
                 MessageCacheManager.shared.cacheMessages(result.messages, for: channelId)
                 if !result.users.isEmpty {
