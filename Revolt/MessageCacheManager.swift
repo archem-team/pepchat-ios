@@ -104,30 +104,24 @@ class MessageCacheManager {
         }
         
         let dbPath = revoltDir.appendingPathComponent("messages.sqlite").path
-        print("PERSISTANCE 📦 DB_PATH: Opening database at: \(dbPath)")
         
         // Check if database file exists before opening
         let fileExists = FileManager.default.fileExists(atPath: dbPath)
-        print("PERSISTANCE 📦 DB_FILE_CHECK: Database file exists: \(fileExists)")
         
         if fileExists {
             // Get file size to verify it's not empty
             do {
                 let attributes = try FileManager.default.attributesOfItem(atPath: dbPath)
                 let fileSize = attributes[.size] as? NSNumber ?? 0
-                print("PERSISTANCE 📦 DB_FILE_SIZE: Database file size: \(fileSize) bytes")
             } catch {
-                print("PERSISTANCE 📦 DB_FILE_ERROR: Could not get file size: \(error)")
             }
         }
         
         if sqlite3_open(dbPath, &db) != SQLITE_OK {
             logger.error("Unable to open database at path: \(dbPath)")
-            print("PERSISTANCE 📦 DB_ERROR: Failed to open database at path: \(dbPath)")
             db = nil
         } else {
             logger.info("Successfully opened message cache database")
-            print("PERSISTANCE 📦 DB_SUCCESS: Successfully opened database at: \(dbPath)")
             
             // Configure database for iOS persistence
             var statement: OpaquePointer?
@@ -135,21 +129,18 @@ class MessageCacheManager {
             // Use DELETE journal mode instead of WAL for better iOS compatibility
             if sqlite3_prepare_v2(db, "PRAGMA journal_mode=DELETE", -1, &statement, nil) == SQLITE_OK {
                 sqlite3_step(statement)
-                print("PERSISTANCE 📦 DB_CONFIG: Set journal mode to DELETE")
             }
             sqlite3_finalize(statement)
             
             // Ensure data is synced to disk
             if sqlite3_prepare_v2(db, "PRAGMA synchronous=FULL", -1, &statement, nil) == SQLITE_OK {
                 sqlite3_step(statement)
-                print("PERSISTANCE 📦 DB_CONFIG: Set synchronous mode to FULL")
             }
             sqlite3_finalize(statement)
             
             // Set a reasonable timeout for database operations
             if sqlite3_prepare_v2(db, "PRAGMA busy_timeout=5000", -1, &statement, nil) == SQLITE_OK {
                 sqlite3_step(statement)
-                print("PERSISTANCE 📦 DB_CONFIG: Set busy timeout to 5 seconds")
             }
             sqlite3_finalize(statement)
         }
@@ -157,18 +148,15 @@ class MessageCacheManager {
     
     private func createTables() {
         guard let db = db else { 
-            print("PERSISTANCE 📦 DB_ERROR: Database is nil in createTables")
             return 
         }
         
-        print("PERSISTANCE 📦 DB_CREATE: Creating tables...")
         
         // First check if tables already exist and have data
         var statement: OpaquePointer?
         if sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='messages'", -1, &statement, nil) == SQLITE_OK {
             if sqlite3_step(statement) == SQLITE_ROW {
                 let tableExists = sqlite3_column_int(statement, 0) > 0
-                print("PERSISTANCE 📦 DB_TABLE_CHECK: Messages table exists: \(tableExists)")
                 
                 if tableExists {
                     // Check if table has data
@@ -176,7 +164,6 @@ class MessageCacheManager {
                     if sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM messages", -1, &statement, nil) == SQLITE_OK {
                         if sqlite3_step(statement) == SQLITE_ROW {
                             let messageCount = sqlite3_column_int(statement, 0)
-                            print("PERSISTANCE 📦 DB_DATA_CHECK: Found \(messageCount) existing messages in database")
                         }
                     }
                 }
@@ -194,14 +181,11 @@ class MessageCacheManager {
         for (tableName, tableSQL) in tables {
             if sqlite3_exec(db, tableSQL, nil, nil, nil) != SQLITE_OK {
                 let errmsg = String(cString: sqlite3_errmsg(db))
-                print("PERSISTANCE 📦 DB_ERROR: Error creating \(tableName) table: \(errmsg)")
                 logger.error("Error creating \(tableName) table: \(errmsg)")
             } else {
-                print("PERSISTANCE 📦 DB_CREATE: \(tableName) table created successfully")
             }
         }
         
-        print("PERSISTANCE 📦 DB_CREATE: Table creation completed")
     }
     
     private func closeDatabase() {
@@ -215,13 +199,10 @@ class MessageCacheManager {
     
     /// Simple test method to verify class is working
     func testMethod() {
-        print("PERSISTANCE 📦 TEST_METHOD: This method was called successfully!")
-        NSLog("PERSISTANCE 📦 TEST_METHOD: This method was called successfully!")
     }
     
     /// Reset corrupted database by deleting the file and recreating
     func resetDatabase() {
-        print("PERSISTANCE 📦 DB_RESET: Starting database reset...")
         
         // Close current connection
         closeDatabase()
@@ -232,17 +213,14 @@ class MessageCacheManager {
             do {
                 if fileManager.fileExists(atPath: dbPath) {
                     try fileManager.removeItem(atPath: dbPath)
-                    print("PERSISTANCE 📦 DB_RESET: Deleted corrupted database file")
                 }
             } catch {
-                print("PERSISTANCE 📦 DB_RESET: Error deleting database: \(error)")
             }
         }
         
         // Recreate fresh database
         openDatabase()
         createTables()
-        print("PERSISTANCE 📦 DB_RESET: Database reset complete!")
     }
     
     private func getDatabasePath() -> String? {
@@ -257,7 +235,6 @@ class MessageCacheManager {
         do {
             try fileManager.createDirectory(at: revoltDir, withIntermediateDirectories: true)
         } catch {
-            print("PERSISTANCE 📦 DB_PATH_ERROR: Failed to create directory: \(error)")
             return nil
         }
         
@@ -266,12 +243,9 @@ class MessageCacheManager {
     
     /// Alternative caching function to test if the issue is with the specific function name
     func storeMessages(_ messages: [Message], channelId: String) {
-        print("PERSISTANCE 📦 STORE_ENTRY: storeMessages called with \(messages.count) messages for channel \(channelId)")
-        NSLog("PERSISTANCE 📦 STORE_ENTRY: storeMessages called with \(messages.count) messages for channel \(channelId)")
         
         // Simple test: just log the first message ID
         if let firstMessage = messages.first {
-            print("PERSISTANCE 📦 STORE_TEST: First message ID = \(firstMessage.id)")
         }
         
         // Call the original function
@@ -280,52 +254,33 @@ class MessageCacheManager {
     
     /// Cache messages locally for instant loading
     func cacheMessages(_ messages: [Message], for channelId: String) {
-        NSLog("PERSISTANCE 📦 CACHE_ENTRY: cacheMessages called with \(messages.count) messages for channel \(channelId)")
-        print("PERSISTANCE 📦 CACHE_ENTRY: cacheMessages called with \(messages.count) messages for channel \(channelId)")
-        print("PERSISTANCE 📦 CACHE_WRITE: Storing \(messages.count) messages for channel \(channelId)")
         
         // Check if we have messages to cache
-        print("PERSISTANCE 📦 CACHE_CHECK: Checking if messages array is empty...")
         guard !messages.isEmpty else {
-            print("PERSISTANCE 📦 CACHE_ERROR: No messages to cache!")
             return
         }
-        print("PERSISTANCE 📦 CACHE_CHECK: Messages array is not empty, proceeding...")
         
         // Check if database is available before queuing
-        print("PERSISTANCE 📦 CACHE_CHECK: Checking if database is available...")
-        print("PERSISTANCE 📦 CACHE_CHECK: db = \(db != nil ? "valid" : "nil")")
         guard db != nil else {
-            print("PERSISTANCE 📦 CACHE_ERROR: Database is nil before queueing!")
             return
         }
-        print("PERSISTANCE 📦 CACHE_CHECK: Database is available, proceeding to queue...")
         
-        print("PERSISTANCE 📦 CACHE_WRITE: About to queue async operation")
         dbQueue.async { [weak self] in
-            print("PERSISTANCE 📦 CACHE_WRITE_ASYNC: Entered async block")
             
             guard let self = self else {
-                print("PERSISTANCE 📦 CACHE_ERROR: self is nil in async block!")
                 return
             }
             
-            print("PERSISTANCE 📦 CACHE_WRITE_ASYNC: self is valid, calling _cacheMessages")
             self._cacheMessages(messages, for: channelId)
-            print("PERSISTANCE 📦 CACHE_WRITE_ASYNC: Completed async cache write")
         }
         
-        print("PERSISTANCE 📦 CACHE_WRITE: Async operation queued")
     }
     
     private func _cacheMessages(_ messages: [Message], for channelId: String) {
-        print("PERSISTANCE 📦 _CACHE_ENTRY: _cacheMessages called with \(messages.count) messages")
         guard let db = db else { 
-            print("PERSISTANCE 📦 CACHE_ERROR: Database is nil, cannot cache messages")
             return 
         }
         
-        print("PERSISTANCE 📦 CACHE_DB: Database is ready, proceeding with \(messages.count) messages")
         
         let insertSQL = """
             INSERT OR REPLACE INTO messages 
@@ -338,20 +293,14 @@ class MessageCacheManager {
         var successCount = 0
         var failureCount = 0
         
-        print("PERSISTANCE 📦 CACHE_SQL: About to prepare SQL statement")
-        print("PERSISTANCE 📦 CACHE_SQL: SQL = \(insertSQL)")
         
         let result = sqlite3_prepare_v2(db, insertSQL, -1, &statement, nil)
-        print("PERSISTANCE 📦 CACHE_SQL: Prepare result = \(result), SQLITE_OK = \(SQLITE_OK)")
         
         if result == SQLITE_OK {
-            print("PERSISTANCE 📦 CACHE_SQL: SQL statement prepared successfully")
             
             sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
-            print("PERSISTANCE 📦 CACHE_SQL: Transaction started")
             
             for (index, message) in messages.enumerated() {
-                print("PERSISTANCE 📦 CACHE_MSG: Processing message \(index + 1)/\(messages.count): \(message.id)")
                 
                 // PROPER: Store the complete Message object as JSON
                 let content = message.content ?? ""
@@ -363,18 +312,13 @@ class MessageCacheManager {
                     
                     // DEBUG: Verify encoding for first message
                     if index == 0 {
-                        print("PERSISTANCE 📦 DEBUG_ENCODE: Successfully encoded message to \(messageData.count) bytes")
                         if let jsonString = String(data: messageData, encoding: .utf8) {
                             let preview = String(jsonString.prefix(200))
-                            print("PERSISTANCE 📦 DEBUG_ENCODE: JSON preview: \(preview)...")
                         }
                     }
                     
                     // DEBUG: Log what we're storing for first message
                     if index == 0 {
-                        print("PERSISTANCE 📦 DEBUG_STORE: Storing message with channel_id: '\(channelId)'")
-                        print("PERSISTANCE 📦 DEBUG_STORE: Message channel field: '\(message.channel)'")
-                        print("PERSISTANCE 📦 DEBUG_STORE: Channel IDs match: \(channelId == message.channel)")
                     }
                     
                     // Bind parameters with explicit C string conversion
@@ -385,8 +329,6 @@ class MessageCacheManager {
                     
                     // DEBUG: Verify channel ID before binding
                     if index == 0 {
-                        print("PERSISTANCE 📦 DEBUG_BIND: About to bind channel_id: '\(channelId)' (length: \(channelId.count))")
-                        print("PERSISTANCE 📦 DEBUG_BIND: C string length: \(channelIdCString.count)")
                     }
                     
                     sqlite3_bind_text(statement, 1, messageIdCString, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
@@ -401,7 +343,6 @@ class MessageCacheManager {
                     if sqlite3_step(statement) == SQLITE_DONE {
                         successCount += 1
                         if index < 3 { // Log first few for verification
-                            print("PERSISTANCE 📦 CACHE_SUCCESS: Inserted message \(index + 1): \(message.id)")
                             
                             // DEBUG: Immediately verify what was actually stored
                             if index == 0 {
@@ -411,7 +352,6 @@ class MessageCacheManager {
                                     sqlite3_bind_text(verifyStatement, 1, messageIdCString, -1, nil)
                                     if sqlite3_step(verifyStatement) == SQLITE_ROW {
                                         let storedChannelId = String(cString: sqlite3_column_text(verifyStatement, 0))
-                                        print("PERSISTANCE 📦 DEBUG_VERIFY: Stored channel_id: '\(storedChannelId)' (length: \(storedChannelId.count))")
                                     }
                                 }
                                 sqlite3_finalize(verifyStatement)
@@ -419,22 +359,18 @@ class MessageCacheManager {
                         }
                     } else {
                         let errmsg = String(cString: sqlite3_errmsg(db))
-                        print("PERSISTANCE 📦 CACHE_ERROR: Failed to insert message \(index+1)/\(messages.count) - ID: \(message.id) - Error: \(errmsg)")
                         failureCount += 1
                     }
                     
                     sqlite3_reset(statement)
                 } catch {
-                    print("PERSISTANCE 📦 ENCODE_ERROR: Failed to encode message \(index+1)/\(messages.count) - ID: \(message.id) - Error: \(error)")
                     failureCount += 1
                 }
             }
             
             sqlite3_exec(db, "COMMIT", nil, nil, nil)
-            print("PERSISTANCE 📦 CACHE_SQL: Transaction committed successfully")
         } else {
             let errmsg = String(cString: sqlite3_errmsg(db))
-            print("PERSISTANCE 📦 CACHE_ERROR: Failed to prepare SQL statement: \(errmsg)")
         }
         
         sqlite3_finalize(statement)
@@ -445,8 +381,6 @@ class MessageCacheManager {
         // Force synchronization to disk after caching
         sqlite3_exec(db, "PRAGMA synchronous=FULL", nil, nil, nil)
         
-        print("PERSISTANCE 📦 CACHE_COMPLETE: Finished caching - Success: \(successCount), Failures: \(failureCount), Total: \(messages.count) for channel \(channelId)")
-        print("PERSISTANCE 📦 CACHE_SYNC: Forced database sync to disk")
     }
     
     /// Load cached messages instantly from local storage
@@ -470,24 +404,18 @@ class MessageCacheManager {
     }
     
     private func _loadCachedMessages(for channelId: String, limit: Int, offset: Int = 0) -> [Message] {
-        print("PERSISTANCE 📦 CACHE_LOAD: Loading messages for channel \(channelId), limit \(limit)")
         if let dbPath = getDatabasePath() {
-            print("PERSISTANCE 📦 CACHE_LOAD: Using database path: \(dbPath)")
         }
         guard let db = db else { 
-            print("PERSISTANCE 📦 CACHE_LOAD_ERROR: Database is nil")
             return [] 
         }
         
         // DEBUG: First check what channel IDs are actually in the database
         var debugStatement: OpaquePointer?
-        print("PERSISTANCE 📦 DEBUG_CHANNELS: Checking what channel IDs exist in database...")
         if sqlite3_prepare_v2(db, "SELECT DISTINCT channel_id, COUNT(*) FROM messages GROUP BY channel_id", -1, &debugStatement, nil) == SQLITE_OK {
             while sqlite3_step(debugStatement) == SQLITE_ROW {
                 let storedChannelId = String(cString: sqlite3_column_text(debugStatement, 0))
                 let messageCount = sqlite3_column_int(debugStatement, 1)
-                print("PERSISTANCE 📦 DEBUG_CHANNELS: Found channel_id '\(storedChannelId)' with \(messageCount) messages")
-                print("PERSISTANCE 📦 DEBUG_MATCH: Requested '\(channelId)' == Stored '\(storedChannelId)' ? \(channelId == storedChannelId)")
             }
         }
         sqlite3_finalize(debugStatement)
@@ -502,37 +430,29 @@ class MessageCacheManager {
         var statement: OpaquePointer?
         var messages: [Message] = []
         
-        print("PERSISTANCE 📦 CACHE_LOAD: Preparing SQL query")
         if sqlite3_prepare_v2(db, selectSQL, -1, &statement, nil) == SQLITE_OK {
-            print("PERSISTANCE 📦 CACHE_LOAD: SQL prepared successfully")
             
             // DEBUG: Check parameter binding
             let channelIdCString = channelId.cString(using: .utf8)!
-            print("PERSISTANCE 📦 DEBUG_QUERY: Binding channel_id: '\(channelId)' (length: \(channelId.count))")
-            print("PERSISTANCE 📦 DEBUG_QUERY: C string length: \(channelIdCString.count)")
             
             sqlite3_bind_text(statement, 1, channelIdCString, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
             sqlite3_bind_int(statement, 2, Int32(limit))
             sqlite3_bind_int(statement, 3, Int32(offset))
             
             // DEBUG: Test direct query without parameters
-            print("PERSISTANCE 📦 DEBUG_RAW_QUERY: Testing direct SQL query...")
             var testStatement: OpaquePointer?
             let directSQL = "SELECT COUNT(*) FROM messages WHERE channel_id = '\(channelId)'"
             if sqlite3_prepare_v2(db, directSQL, -1, &testStatement, nil) == SQLITE_OK {
                 if sqlite3_step(testStatement) == SQLITE_ROW {
                     let directCount = sqlite3_column_int(testStatement, 0)
-                    print("PERSISTANCE 📦 DEBUG_RAW_QUERY: Direct query found \(directCount) messages")
                 }
             }
             sqlite3_finalize(testStatement)
             
-            print("PERSISTANCE 📦 DEBUG_STEP: Starting to step through prepared statement...")
             var stepCount = 0
             var stepResult = sqlite3_step(statement)
             while stepResult == SQLITE_ROW {
                 stepCount += 1
-                print("PERSISTANCE 📦 DEBUG_STEP: Step \(stepCount) - found row")
                 
                 if let blob = sqlite3_column_blob(statement, 0) {
                     let size = sqlite3_column_bytes(statement, 0)
@@ -540,12 +460,9 @@ class MessageCacheManager {
                     
                     // DEBUG: Check what's in the blob data
                     if stepCount <= 3 {
-                        print("PERSISTANCE 📦 DEBUG_BLOB: Step \(stepCount) - blob size: \(size) bytes")
                         if let dataString = String(data: data, encoding: .utf8) {
                             let preview = String(dataString.prefix(200))
-                            print("PERSISTANCE 📦 DEBUG_BLOB: Data preview: \(preview)...")
                         } else {
-                            print("PERSISTANCE 📦 DEBUG_BLOB: Data is not valid UTF-8")
                         }
                     }
                     
@@ -553,15 +470,12 @@ class MessageCacheManager {
                         let message = try JSONDecoder().decode(Message.self, from: data)
                         messages.append(message)
                         if stepCount <= 3 {
-                            print("PERSISTANCE 📦 DEBUG_STEP: Successfully decoded message \(stepCount): \(message.id)")
                         }
                     } catch {
                         if stepCount <= 3 {
-                            print("PERSISTANCE 📦 DEBUG_DECODE: Failed to decode message at step \(stepCount): \(error)")
                         }
                     }
                 } else {
-                    print("PERSISTANCE 📦 DEBUG_STEP: No blob data at step \(stepCount)")
                 }
                 
                 stepResult = sqlite3_step(statement)
@@ -569,18 +483,14 @@ class MessageCacheManager {
             
             if stepResult != SQLITE_DONE {
                 let errmsg = String(cString: sqlite3_errmsg(db))
-                print("PERSISTANCE 📦 DEBUG_STEP: Step ended with error: \(errmsg)")
             } else {
-                print("PERSISTANCE 📦 DEBUG_STEP: Step completed normally after \(stepCount) rows")
             }
         } else {
             let errmsg = String(cString: sqlite3_errmsg(db))
-            print("PERSISTANCE 📦 CACHE_LOAD_ERROR: Failed to prepare load query: \(errmsg)")
         }
         
         sqlite3_finalize(statement)
         
-        print("PERSISTANCE 📦 CACHE_LOAD: Found \(messages.count) messages in database")
         // Return in chronological order (oldest first)
         return messages.reversed()
     }
