@@ -47,9 +47,7 @@ extension MessageableChannelViewModel {
         // print("   - After: \(after ?? "nil")")
         // print("   - Sort: \(sort ?? "Latest")")
         
-        // CRITICAL: Don't include the 'messages' parameter in the API call
-        // as it's causing a 500 error
-        // Fetch messages from API with reduced limit for faster response
+        // Fetch messages from API with appropriate limit for performance
         let limit = (before == nil && after == nil) ? MessageableChannelConstants.initialMessageLoadLimit : MessageableChannelConstants.messageLoadLimit
         let result = try? await viewState.http.fetchHistory(
             channel: channel.id,
@@ -89,7 +87,7 @@ extension MessageableChannelViewModel {
         // print("📥 LOADING_USERS: Processing \(result.users.count) users from fetchHistory response")
         for user in result.users {
             viewState.users[user.id] = user
-            // CRITICAL FIX: Also store in event users for permanent access
+            // Also store in event users for permanent access
             viewState.allEventUsers[user.id] = user
             // print("📥 LOADING_USERS: Added user \(user.username) (ID: \(user.id)) to both users and allEventUsers")
         }
@@ -105,7 +103,7 @@ extension MessageableChannelViewModel {
         for message in result.messages {
             viewState.messages[message.id] = message
             
-            // CRITICAL FIX: Ensure message author is in users dictionary to prevent black messages
+            // Ensure message author is in users dictionary to prevent black messages
             if viewState.users[message.author] == nil {
                 // Try to get from allEventUsers first
                 if let storedUser = viewState.allEventUsers[message.author] {
@@ -126,21 +124,13 @@ extension MessageableChannelViewModel {
             }
         }
         
-        // PHASE 1: Cache messages and users to SQLite for future loading
+        // Cache messages and users to SQLite for future loading
         if !result.messages.isEmpty {
-            print("📦 CACHE_WRITE: Storing \(result.messages.count) messages and \(result.users.count) users to SQLite cache")
             MessageCacheManager.shared.cacheMessages(result.messages, for: channel.id)
             MessageCacheManager.shared.cacheUsers(result.users)
-            
-            // Verify cache write (with small delay for async write)
-            Task {
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
-                let cached = await MessageCacheManager.shared.loadCachedMessages(for: channel.id, limit: 10)
-                print("📦 CACHE_VERIFY: \(cached.count) messages now cached for channel \(channel.id)")
-            }
         }
         
-        // CRITICAL FIX: After processing all messages, ensure ALL message authors are available
+        // After processing all messages, ensure ALL message authors are available
         // print("🔄 FINAL_CHECK: Ensuring all \(result.messages.count) message authors are in users dictionary")
         for message in result.messages {
             if viewState.users[message.author] == nil {
@@ -198,23 +188,15 @@ extension MessageableChannelViewModel {
                     var existingMessages = viewState.channelMessages[channel.id] ?? []
                     // print("📊 VIEW_MODEL: Current existingMessages: \(existingMessages.count), new messages: \(resultMessageIds.count)")
                     
-                    // Create a reversed copy for better logging
+                    // Add new messages before existing ones (reverse them for chronological order)
                     let reversedNewMessages = resultMessageIds.reversed()
-                    
-                    // Log the first few message IDs
-                    if !reversedNewMessages.isEmpty {
-                        let firstFew = Array(reversedNewMessages.prefix(min(3, reversedNewMessages.count)))
-                        // print("📊 VIEW_MODEL: Adding these messages at beginning: \(firstFew)")
-                    }
-                    
-                    // Add new messages before existing ones (but reverse them for chronological order)
                     let updatedMessages = reversedNewMessages + existingMessages
                     viewState.channelMessages[channel.id] = updatedMessages
                     
-                    // CRITICAL: Create a new explicit copy of the array to ensure value semantics
+                    // Create a new explicit copy of the array to ensure value semantics
                     finalMessageIds = Array(updatedMessages)
                     
-                    // CRITICAL: Update our local messages array to match viewState
+                    // Update our local messages array to match viewState
                     self.messages = finalMessageIds
                     // print("✅ VIEW_MODEL: Messages updated (before)")
                     // print("   - ViewState messages count: \(updatedMessages.count)")
@@ -236,10 +218,10 @@ extension MessageableChannelViewModel {
                     // Update viewState
                     viewState.channelMessages[channel.id] = sortedIds
                     
-                    // CRITICAL: Create a new explicit copy of the array to ensure value semantics
+                    // Create a new explicit copy of the array to ensure value semantics
                     finalMessageIds = Array(sortedIds)
                     
-                    // CRITICAL: Update our local messages array to match viewState with explicit assignment
+                    // Update our local messages array to match viewState with explicit assignment
                     self.messages = finalMessageIds
                     // print("✅ VIEW_MODEL: Messages updated (initial)")
                     // print("   - ViewState messages count: \(sortedIds.count)")
