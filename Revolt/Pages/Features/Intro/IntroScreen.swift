@@ -11,6 +11,7 @@ struct IntroScreen: View {
     @EnvironmentObject private var viewState : ViewState
     @Binding var isIntroDisplayed : Bool
     
+    @StateObject private var platformService = PlatformConfigService()
     @State var baseUrl : String = ""
     @State var urlEdtStatus : PeptideTextFieldState = .default
     @State var confirmButtonStatus : ComponentState = .disabled
@@ -26,7 +27,7 @@ struct IntroScreen: View {
                 .padding(top: .padding8, bottom: .padding32)
             
             
-            PeptideText(text: "Welcome to PepChat!",
+            PeptideText(text: "Welcome to ZekoChat!",
                         font: .peptideTitle1,
                         textColor: .textDefaultGray01,
                         alignment: .center)
@@ -38,19 +39,31 @@ struct IntroScreen: View {
                         alignment: .center)
             .padding(.horizontal, .padding24)
             
-            HStack(spacing: .spacing24){
-                IntroPlatformView(platformName: "PepChat",
-                                  platformImage: .peptidePlatform,
-                                  url: "https://peptide.chat/api"){
-                    baseUrl = $0
+            VStack(spacing: .spacing8) {
+                if platformService.isLoading {
+                    ProgressView("Loading platforms...")
+                        .frame(height: 100)
+                } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: min(platformService.platforms.count, 2)), spacing: .spacing24) {
+                        ForEach(platformService.platforms) { platform in
+                            IntroPlatformView(
+                                platformName: platform.title,
+                                imageURL: platform.image,
+                                url: platform.url
+                            ) {
+                                baseUrl = $0
+                            }
+                        }
+                    }
+                    
+                    if let error = platformService.error {
+                        PeptideText(text: "Using default platforms (API error: \(error))",
+                                    font: .peptideCaption1,
+                                    textColor: .textGray06,
+                                    alignment: .center)
+                        .padding(.top, .padding8)
+                    }
                 }
-                
-                IntroPlatformView(platformName: "Revolt",
-                                  platformImage: .peptideRevolt,
-                                  url: "https://app.revolt.chat/api"){
-                    baseUrl = $0
-                }
-                
             }
             .padding(.vertical, .padding32)
             
@@ -131,7 +144,7 @@ struct IntroScreen: View {
                 
                 Spacer()
                 
-                PeptideText(text: "PepChat v\(Bundle.main.releaseVersionNumber)",
+                PeptideText(text: "ZekoChat v\(Bundle.main.releaseVersionNumber)",
                             font: .peptideFootnote,
                             textColor: .textGray06,
                             alignment: .center)
@@ -141,6 +154,9 @@ struct IntroScreen: View {
                 
             }
             
+        }
+        .task {
+            await platformService.fetchPlatforms()
         }
         /*.navigationDestination(for: IntroPath.self){_ in
             Welcome(wasSignedOut: $wasSignedOut)
@@ -159,4 +175,5 @@ struct IntroScreen: View {
 
 #Preview {
     IntroScreen(isIntroDisplayed: .constant(true))
+        .environmentObject(ViewState())
 }

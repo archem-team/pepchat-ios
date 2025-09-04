@@ -271,7 +271,9 @@ func processBoldMarkdown(_ attributedString: NSMutableAttributedString) {
 // Process italic markdown
 func processItalicMarkdown(_ attributedString: NSMutableAttributedString) {
     let text = attributedString.string
-    let italicPattern = "(?<!\\*)\\*((?!\\*)[^*]+?)\\*(?!\\*)|(?<!_)_((?!_)[^_]+?)_(?!_)"
+    // CRITICAL FIX: Modified regex to avoid matching underscores inside emoji shortcodes
+    // This pattern excludes underscores that are inside :emoji_name: patterns
+    let italicPattern = "(?<!\\*)\\*((?!\\*)[^*]+?)\\*(?!\\*)|(?<!:)(?<!_)_((?!_)(?![a-zA-Z0-9_]*:)[^_]+?)_(?!_)(?!:)"
     
     do {
         let regex = try NSRegularExpression(pattern: italicPattern, options: [])

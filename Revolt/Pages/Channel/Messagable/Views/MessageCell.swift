@@ -3794,6 +3794,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 if let shortcodeRange = Range(match.range(at: 1), in: text) {
                     let shortcode = String(text[shortcodeRange])
                     let fullMatchRange = match.range
+                    print("🔍 MessageCell: Processing shortcode: '\(shortcode)'")
                     
                     // Check if this is an emoji shortcode using EmojiParser
                     if let emoji = EmojiParser.findEmojiByShortcode(shortcode) {
@@ -3817,6 +3818,18 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                             // Handle Unicode emoji - replace with the actual emoji character
                             let emojiAttributedString = NSAttributedString(string: emoji)
                             attributedString.replaceCharacters(in: fullMatchRange, with: emojiAttributedString)
+                        }
+                    } else {
+                        // CRITICAL FIX: If EmojiParser fails, try fallback with viewState
+                        if let viewState = viewState {
+                            let emojiBase = viewState.findEmojiBase(by: shortcode)
+                            if !emojiBase.isEmpty {
+                                let emojiString = String(String.UnicodeScalarView(emojiBase.compactMap(Unicode.Scalar.init)))
+                                if !emojiString.isEmpty {
+                                    let emojiAttributedString = NSAttributedString(string: emojiString)
+                                    attributedString.replaceCharacters(in: fullMatchRange, with: emojiAttributedString)
+                                }
+                            }
                         }
                     }
                 }
