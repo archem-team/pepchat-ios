@@ -84,7 +84,7 @@ struct Welcome: View {
                            //Spacer()
 
                             
-                            PeptideText(text: "Welcome to PepChat!",
+                            PeptideText(text: "Welcome to ZekoChat!",
                                         font: .peptideTitle1,
                                         textColor: .textDefaultGray01,
                                         alignment: .center)

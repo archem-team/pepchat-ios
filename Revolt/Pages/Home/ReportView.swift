@@ -422,21 +422,21 @@ enum ReportStep {
                            case .Message:
                                return (
                                    title: "Thank You!",
-                                   description: "Thank you for helping to keep PepChat safe. We will review your report as soon as possible.",
+                                   description: "Thank you for helping to keep ZekoChat safe. We will review your report as soon as possible.",
                                    selectedTitle: "",
                                    image: .peptideLike
                                )
                            case .Server:
                                return (
                                    title: "Thank You!",
-                                   description: "Thank you for helping to keep PepChat safe. We will review your report as soon as possible.",
+                                   description: "Thank you for helping to keep ZekoChat safe. We will review your report as soon as possible.",
                                    selectedTitle:"",
                                    image: .peptideLike
                                )
                            case .User:
                                return (
                                    title: "Thank You!",
-                                   description: "Thank you for helping to keep PepChat safe. We will review your report as soon as possible.",
+                                   description: "Thank you for helping to keep ZekoChat safe. We will review your report as soon as possible.",
                                    selectedTitle: "",
                                    image: .peptideLike
                                )
