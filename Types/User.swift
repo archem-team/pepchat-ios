@@ -11,6 +11,10 @@ import Foundation
 public struct UserBot: Codable, Equatable, Hashable {
     /// The ID of the user who owns this bot.
     public var owner: String
+    
+    public init(owner: String) {
+        self.owner = owner
+    }
 }
 
 /// An enumeration representing the different presence statuses of a user.
@@ -56,6 +60,10 @@ public struct Status: Codable, Equatable, Hashable {
 public struct UserRelation: Codable, Equatable, Hashable {
     /// The status of the user relation.
     public var status: String
+    
+    public init(status: String) {
+        self.status = status
+    }
 }
 
 /// A structure representing a user, including their ID, username, and other attributes.

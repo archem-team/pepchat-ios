@@ -16,6 +16,13 @@ public struct ServerInvite: Codable, Identifiable {
     public var creator: String // Identifier of the user who created the invite.
     public var channel: String // Identifier of the channel for the invite.
     
+    public init(id: String, server: String, creator: String, channel: String) {
+        self.id = id
+        self.server = server
+        self.creator = creator
+        self.channel = channel
+    }
+    
     enum CodingKeys: String, CodingKey {
         case id = "_id" // Mapping the ID to the JSON key "_id".
         case server, creator, channel // Other properties mapped directly.
@@ -29,6 +36,12 @@ public struct GroupInvite: Codable, Identifiable {
     public var id: String // Unique identifier for the group invite.
     public var creator: String // Identifier of the user who created the invite.
     public var channel: String // Identifier of the channel for the invite.
+    
+    public init(id: String, creator: String, channel: String) {
+        self.id = id
+        self.creator = creator
+        self.channel = channel
+    }
     
     enum CodingKeys: String, CodingKey {
         case id = "_id" // Mapping the ID to the JSON key "_id".

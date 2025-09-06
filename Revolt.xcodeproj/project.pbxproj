@@ -267,6 +267,25 @@
 		7031993BD3D264C895FFB466 /* CreateServerRoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F75CCC5D94FA80B2DCBD7821 /* CreateServerRoleView.swift */; };
 		8564AA702E6C4393004C849C /* RealmManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA6F2E6C4393004C849C /* RealmManager.swift */; };
 		8564AA772E6C4CF7004C849C /* DetachRealm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA762E6C4CF7004C849C /* DetachRealm.swift */; };
+		8564AA8D2E6C5A98004C849C /* ModelMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA7D2E6C5A98004C849C /* ModelMappers.swift */; };
+		8564AA8E2E6C5A98004C849C /* ChannelMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA792E6C5A98004C849C /* ChannelMappers.swift */; };
+		8564AA8F2E6C5A98004C849C /* UserMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA812E6C5A98004C849C /* UserMappers.swift */; };
+		8564AA902E6C5A98004C849C /* ApiModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA832E6C5A98004C849C /* ApiModels.swift */; };
+		8564AA912E6C5A98004C849C /* ApiMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA782E6C5A98004C849C /* ApiMappers.swift */; };
+		8564AA922E6C5A98004C849C /* OtherMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA7E2E6C5A98004C849C /* OtherMappers.swift */; };
+		8564AA932E6C5A98004C849C /* PermissionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA892E6C5A98004C849C /* PermissionModels.swift */; };
+		8564AA942E6C5A98004C849C /* FileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA862E6C5A98004C849C /* FileModels.swift */; };
+		8564AA952E6C5A98004C849C /* UserModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA8B2E6C5A98004C849C /* UserModels.swift */; };
+		8564AA962E6C5A98004C849C /* ChannelModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA842E6C5A98004C849C /* ChannelModels.swift */; };
+		8564AA972E6C5A98004C849C /* MessageMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA7C2E6C5A98004C849C /* MessageMappers.swift */; };
+		8564AA982E6C5A98004C849C /* EmbedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA852E6C5A98004C849C /* EmbedModels.swift */; };
+		8564AA992E6C5A98004C849C /* MessageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA872E6C5A98004C849C /* MessageModels.swift */; };
+		8564AA9A2E6C5A98004C849C /* OtherModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA882E6C5A98004C849C /* OtherModels.swift */; };
+		8564AA9B2E6C5A98004C849C /* PermissionMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA7F2E6C5A98004C849C /* PermissionMappers.swift */; };
+		8564AA9C2E6C5A98004C849C /* EmbedMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA7A2E6C5A98004C849C /* EmbedMappers.swift */; };
+		8564AA9D2E6C5A98004C849C /* FileMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA7B2E6C5A98004C849C /* FileMappers.swift */; };
+		8564AA9E2E6C5A98004C849C /* ServerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA8A2E6C5A98004C849C /* ServerModels.swift */; };
+		8564AA9F2E6C5A98004C849C /* ServerMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA802E6C5A98004C849C /* ServerMappers.swift */; };
 		911131412D8807F500667031 /* DeleteMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911131402D8807F500667031 /* DeleteMessageView.swift */; };
 		911A24B72D5B83C200ADD85D /* BlockUserPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */; };
 		912539CB2D79E569003BAA57 /* Assets 2.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 912539CA2D79E569003BAA57 /* Assets 2.xcassets */; };
@@ -622,6 +641,25 @@
 		56C3A459C46C9725691178F3 /* RoleColorPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleColorPickerSheet.swift; sourceTree = "<group>"; };
 		8564AA6F2E6C4393004C849C /* RealmManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealmManager.swift; sourceTree = "<group>"; };
 		8564AA762E6C4CF7004C849C /* DetachRealm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachRealm.swift; sourceTree = "<group>"; };
+		8564AA782E6C5A98004C849C /* ApiMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiMappers.swift; sourceTree = "<group>"; };
+		8564AA792E6C5A98004C849C /* ChannelMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelMappers.swift; sourceTree = "<group>"; };
+		8564AA7A2E6C5A98004C849C /* EmbedMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbedMappers.swift; sourceTree = "<group>"; };
+		8564AA7B2E6C5A98004C849C /* FileMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileMappers.swift; sourceTree = "<group>"; };
+		8564AA7C2E6C5A98004C849C /* MessageMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageMappers.swift; sourceTree = "<group>"; };
+		8564AA7D2E6C5A98004C849C /* ModelMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelMappers.swift; sourceTree = "<group>"; };
+		8564AA7E2E6C5A98004C849C /* OtherMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OtherMappers.swift; sourceTree = "<group>"; };
+		8564AA7F2E6C5A98004C849C /* PermissionMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionMappers.swift; sourceTree = "<group>"; };
+		8564AA802E6C5A98004C849C /* ServerMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMappers.swift; sourceTree = "<group>"; };
+		8564AA812E6C5A98004C849C /* UserMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserMappers.swift; sourceTree = "<group>"; };
+		8564AA832E6C5A98004C849C /* ApiModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiModels.swift; sourceTree = "<group>"; };
+		8564AA842E6C5A98004C849C /* ChannelModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelModels.swift; sourceTree = "<group>"; };
+		8564AA852E6C5A98004C849C /* EmbedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbedModels.swift; sourceTree = "<group>"; };
+		8564AA862E6C5A98004C849C /* FileModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileModels.swift; sourceTree = "<group>"; };
+		8564AA872E6C5A98004C849C /* MessageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageModels.swift; sourceTree = "<group>"; };
+		8564AA882E6C5A98004C849C /* OtherModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OtherModels.swift; sourceTree = "<group>"; };
+		8564AA892E6C5A98004C849C /* PermissionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionModels.swift; sourceTree = "<group>"; };
+		8564AA8A2E6C5A98004C849C /* ServerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerModels.swift; sourceTree = "<group>"; };
+		8564AA8B2E6C5A98004C849C /* UserModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserModels.swift; sourceTree = "<group>"; };
 		911131402D8807F500667031 /* DeleteMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteMessageView.swift; sourceTree = "<group>"; };
 		911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockUserPopup.swift; sourceTree = "<group>"; };
 		912539CA2D79E569003BAA57 /* Assets 2.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets 2.xcassets"; sourceTree = "<group>"; };
@@ -1484,8 +1522,43 @@
 			children = (
 				8564AA6F2E6C4393004C849C /* RealmManager.swift */,
 				8564AA762E6C4CF7004C849C /* DetachRealm.swift */,
+				8564AA822E6C5A98004C849C /* Mappers */,
+				8564AA8C2E6C5A98004C849C /* Models */,
 			);
 			path = Storage;
+			sourceTree = "<group>";
+		};
+		8564AA822E6C5A98004C849C /* Mappers */ = {
+			isa = PBXGroup;
+			children = (
+				8564AA782E6C5A98004C849C /* ApiMappers.swift */,
+				8564AA792E6C5A98004C849C /* ChannelMappers.swift */,
+				8564AA7A2E6C5A98004C849C /* EmbedMappers.swift */,
+				8564AA7B2E6C5A98004C849C /* FileMappers.swift */,
+				8564AA7C2E6C5A98004C849C /* MessageMappers.swift */,
+				8564AA7D2E6C5A98004C849C /* ModelMappers.swift */,
+				8564AA7E2E6C5A98004C849C /* OtherMappers.swift */,
+				8564AA7F2E6C5A98004C849C /* PermissionMappers.swift */,
+				8564AA802E6C5A98004C849C /* ServerMappers.swift */,
+				8564AA812E6C5A98004C849C /* UserMappers.swift */,
+			);
+			path = Mappers;
+			sourceTree = "<group>";
+		};
+		8564AA8C2E6C5A98004C849C /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				8564AA832E6C5A98004C849C /* ApiModels.swift */,
+				8564AA842E6C5A98004C849C /* ChannelModels.swift */,
+				8564AA852E6C5A98004C849C /* EmbedModels.swift */,
+				8564AA862E6C5A98004C849C /* FileModels.swift */,
+				8564AA872E6C5A98004C849C /* MessageModels.swift */,
+				8564AA882E6C5A98004C849C /* OtherModels.swift */,
+				8564AA892E6C5A98004C849C /* PermissionModels.swift */,
+				8564AA8A2E6C5A98004C849C /* ServerModels.swift */,
+				8564AA8B2E6C5A98004C849C /* UserModels.swift */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		D49B704629C4D3FE009494A5 = {
@@ -2014,6 +2087,25 @@
 				17F9D7632C9208B500D0BB6F /* MessageReactionsSheet.swift in Sources */,
 				178BB1102B02D89A001143A4 /* HCaptchaView.swift in Sources */,
 				059381CA2D29165200A49BD5 /* ServerChannelsView.swift in Sources */,
+				8564AA8D2E6C5A98004C849C /* ModelMappers.swift in Sources */,
+				8564AA8E2E6C5A98004C849C /* ChannelMappers.swift in Sources */,
+				8564AA8F2E6C5A98004C849C /* UserMappers.swift in Sources */,
+				8564AA902E6C5A98004C849C /* ApiModels.swift in Sources */,
+				8564AA912E6C5A98004C849C /* ApiMappers.swift in Sources */,
+				8564AA922E6C5A98004C849C /* OtherMappers.swift in Sources */,
+				8564AA932E6C5A98004C849C /* PermissionModels.swift in Sources */,
+				8564AA942E6C5A98004C849C /* FileModels.swift in Sources */,
+				8564AA952E6C5A98004C849C /* UserModels.swift in Sources */,
+				8564AA962E6C5A98004C849C /* ChannelModels.swift in Sources */,
+				8564AA972E6C5A98004C849C /* MessageMappers.swift in Sources */,
+				8564AA982E6C5A98004C849C /* EmbedModels.swift in Sources */,
+				8564AA992E6C5A98004C849C /* MessageModels.swift in Sources */,
+				8564AA9A2E6C5A98004C849C /* OtherModels.swift in Sources */,
+				8564AA9B2E6C5A98004C849C /* PermissionMappers.swift in Sources */,
+				8564AA9C2E6C5A98004C849C /* EmbedMappers.swift in Sources */,
+				8564AA9D2E6C5A98004C849C /* FileMappers.swift in Sources */,
+				8564AA9E2E6C5A98004C849C /* ServerModels.swift in Sources */,
+				8564AA9F2E6C5A98004C849C /* ServerMappers.swift in Sources */,
 				17F555272AFC229900958F2F /* ServerSettings.swift in Sources */,
 				05838DAB2CDA5AB500396D74 /* PeptideOtp.swift in Sources */,
 				DAAA4C0929F2974300F41E52 /* Http.swift in Sources */,

@@ -13,6 +13,11 @@ import Foundation
 public struct YoutubeSpecial: Codable, Hashable {
     public var id: String // Unique identifier for the YouTube content.
     public var timestamp: String? // Optional timestamp for the video.
+    
+    public init(id: String, timestamp: String? = nil) {
+        self.id = id
+        self.timestamp = timestamp
+    }
 }
 
 /// Represents a Twitch special embed.
@@ -25,17 +30,31 @@ public struct TwitchSpecial: Codable, Hashable {
     
     public var content_type: ContentType // Type of Twitch content.
     public var id: String // Unique identifier for the Twitch content.
+    
+    public init(content_type: ContentType, id: String) {
+        self.content_type = content_type
+        self.id = id
+    }
 }
 
 /// Represents a Spotify special embed.
 public struct SpotifySpecial: Codable, Hashable {
     public var content_type: String // Type of Spotify content.
     public var id: String // Unique identifier for the Spotify content.
+    
+    public init(content_type: String, id: String) {
+        self.content_type = content_type
+        self.id = id
+    }
 }
 
 /// Represents a Soundcloud special embed.
 public struct SoundcloudSpecial: Codable, Hashable {
     // Currently no properties defined for SoundcloudSpecial.
+    
+    public init() {
+        // Empty initializer for empty struct
+    }
 }
 
 /// Represents a Bandcamp special embed.
@@ -47,6 +66,11 @@ public struct BandcampSpecial: Codable, Hashable {
     
     public var content_type: ContentType // Type of Bandcamp content.
     public var id: String // Unique identifier for the Bandcamp content.
+    
+    public init(content_type: ContentType, id: String) {
+        self.content_type = content_type
+        self.id = id
+    }
 }
 
 /// Represents a Lightspeed special embed.
@@ -57,11 +81,20 @@ public struct LightspeedSpecial: Codable, Hashable {
     
     public var content_type: ContentType // Type of Lightspeed content.
     public var id: String // Unique identifier for the Lightspeed content.
+    
+    public init(content_type: ContentType, id: String) {
+        self.content_type = content_type
+        self.id = id
+    }
 }
 
 /// Represents a Streamable special embed.
 public struct StreamableSpecial: Codable, Hashable {
     public var id: String // Unique identifier for the Streamable content.
+    
+    public init(id: String) {
+        self.id = id
+    }
 }
 
 /// Enum to represent different types of special website embeds.
@@ -157,6 +190,13 @@ public struct JanuaryImage: Codable, Hashable {
     public var width: Int // Width of the image.
     public var height: Int // Height of the image.
     public var size: Size // Size of the image.
+    
+    public init(url: String, width: Int, height: Int, size: Size) {
+        self.url = url
+        self.width = width
+        self.height = height
+        self.size = size
+    }
 }
 
 /// Represents a video from January.
@@ -164,6 +204,12 @@ public struct JanuaryVideo: Codable, Hashable {
     public var url: String // URL of the video.
     public var width: Int // Width of the video.
     public var height: Int // Height of the video.
+    
+    public init(url: String, width: Int, height: Int) {
+        self.url = url
+        self.width = width
+        self.height = height
+    }
 }
 
 /// Represents an embedded website content.
@@ -177,6 +223,18 @@ public struct WebsiteEmbed: Codable, Hashable {
     public var site_name: String? // Name of the site.
     public var icon_url: String? // URL of the site's icon.
     public var colour: String? // Color associated with the site.
+    
+    public init(url: String? = nil, special: WebsiteSpecial? = nil, title: String? = nil, description: String? = nil, image: JanuaryImage? = nil, video: JanuaryVideo? = nil, site_name: String? = nil, icon_url: String? = nil, colour: String? = nil) {
+        self.url = url
+        self.special = special
+        self.title = title
+        self.description = description
+        self.image = image
+        self.video = video
+        self.site_name = site_name
+        self.icon_url = icon_url
+        self.colour = colour
+    }
 }
 
 /// Represents an embedded text content.
@@ -187,6 +245,15 @@ public struct TextEmbed: Codable, Hashable {
     public var description: String? // Description of the text content.
     public var media: File? // Associated media file.
     public var colour: String? // Color associated with the text content.
+    
+    public init(icon_url: String? = nil, url: String? = nil, title: String? = nil, description: String? = nil, media: File? = nil, colour: String? = nil) {
+        self.icon_url = icon_url
+        self.url = url
+        self.title = title
+        self.description = description
+        self.media = media
+        self.colour = colour
+    }
 }
 
 // MARK: - Embed Enum

@@ -13,6 +13,11 @@ import Foundation
 public struct Interactions: Codable, Equatable {
     public var reactions: [String]? // List of reactions to the message.
     public var restrict_reactions: Bool? // Indicates if reactions are restricted.
+    
+    public init(reactions: [String]? = nil, restrict_reactions: Bool? = nil) {
+        self.reactions = reactions
+        self.restrict_reactions = restrict_reactions
+    }
 }
 
 // MARK: - Masquerade Structure
@@ -22,6 +27,12 @@ public struct Masquerade: Codable, Equatable {
     public var name: String? // The display name for the masquerade (optional).
     public var avatar: String? // The avatar for the masquerade (optional).
     public var colour: String? // The color associated with the masquerade (optional).
+    
+    public init(name: String? = nil, avatar: String? = nil, colour: String? = nil) {
+        self.name = name
+        self.avatar = avatar
+        self.colour = colour
+    }
 }
 
 // MARK: - System Message Content Structures
@@ -29,60 +40,108 @@ public struct Masquerade: Codable, Equatable {
 /// Represents the content of a text system message.
 public struct TextSystemMessageContent: Codable, Equatable {
     public var content: String // The content of the system message.
+    
+    public init(content: String) {
+        self.content = content
+    }
 }
 
 /// Represents the content of a user-added system message.
 public struct UserAddedSystemContent: Codable, Equatable {
     public var id: String // The ID of the user who was added.
     public var by: String // The ID of the user who added them.
+    
+    public init(id: String, by: String) {
+        self.id = id
+        self.by = by
+    }
 }
 
 /// Represents the content of a user-removed system message.
 public struct UserRemovedSystemContent: Codable, Equatable {
     public var id: String // The ID of the user who was removed.
     public var by: String // The ID of the user who removed them.
+    
+    public init(id: String, by: String) {
+        self.id = id
+        self.by = by
+    }
 }
 
 /// Represents the content of a user-joined system message.
 public struct UserJoinedSystemContent: Codable, Equatable {
     public var id: String // The ID of the user who joined.
+    
+    public init(id: String) {
+        self.id = id
+    }
 }
 
 /// Represents the content of a user-left system message.
 public struct UserLeftSystemContent: Codable, Equatable {
     public var id: String // The ID of the user who left.
+    
+    public init(id: String) {
+        self.id = id
+    }
 }
 
 /// Represents the content of a user-kicked system message.
 public struct UserKickedSystemContent: Codable, Equatable {
     public var id: String // The ID of the user who was kicked.
+    
+    public init(id: String) {
+        self.id = id
+    }
 }
 
 /// Represents the content of a user-banned system message.
 public struct UserBannedSystemContent: Codable, Equatable {
     public var id: String // The ID of the banned user.
+    
+    public init(id: String) {
+        self.id = id
+    }
 }
 
 /// Represents the content of a channel-renamed system message.
 public struct ChannelRenamedSystemContent: Codable, Equatable {
     public var name: String // The new name of the channel.
     public var by: String // The ID of the user who renamed the channel.
+    
+    public init(name: String, by: String) {
+        self.name = name
+        self.by = by
+    }
 }
 
 /// Represents the content of a channel-description-changed system message.
 public struct ChannelDescriptionChangedSystemContent: Codable, Equatable {
     public var by: String // The ID of the user who changed the description.
+    
+    public init(by: String) {
+        self.by = by
+    }
 }
 
 /// Represents the content of a channel-icon-changed system message.
 public struct ChannelIconChangedSystemContent: Codable, Equatable {
     public var by: String // The ID of the user who changed the icon.
+    
+    public init(by: String) {
+        self.by = by
+    }
 }
 
 /// Represents the content of a channel-ownership-changed system message.
 public struct ChannelOwnershipChangedSystemContent: Codable, Equatable {
     public var from: String // The ID of the previous owner.
     public var to: String // The ID of the new owner.
+    
+    public init(from: String, to: String) {
+        self.from = from
+        self.to = to
+    }
 }
 
 
@@ -90,6 +149,12 @@ public struct MessagePinnedSystemContent: Codable, Equatable {
     public var id: String // The ID of the user who was kicked.
     public var by: String // The ID of the user who changed the icon.
     public var by_username: String // The ID of the user who changed the icon.
+    
+    public init(id: String, by: String, by_username: String) {
+        self.id = id
+        self.by = by
+        self.by_username = by_username
+    }
 }
 
 
@@ -210,6 +275,11 @@ extension SystemMessageContent: Codable {
 public struct MessageWebhook: Codable, Equatable {
     public var name: String? // The name of the webhook (optional).
     public var avatar: String? // The avatar associated with the webhook (optional).
+    
+    public init(name: String? = nil, avatar: String? = nil) {
+        self.name = name
+        self.avatar = avatar
+    }
 }
 
 // MARK: - Message Structure

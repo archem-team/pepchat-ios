@@ -25,6 +25,10 @@ public struct EmojiParentServer: Codable, Equatable {
 /// Represents a detached parent for an emoji.
 public struct EmojiParentDetached: Codable, Equatable {
     // Currently, this structure does not have any properties defined.
+    
+    public init() {
+        // Empty initializer for empty struct
+    }
 }
 
 // MARK: - EmojiParent Enum
