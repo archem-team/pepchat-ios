@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		004FF9AB5C4843CC9D6A6B914038854B /* PlatformConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */; };
 		0500FC572CD0F98B00203470 /* PeptideTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0500FC562CD0F98B00203470 /* PeptideTextField.swift */; };
 		0501E1452D676469009071DA /* ServerChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0501E1442D676469009071DA /* ServerChannel.swift */; };
 		0505E7D02D022EE900B12713 /* ChannelInfoMoreSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0505E7CF2D022EE900B12713 /* ChannelInfoMoreSheet.swift */; };
@@ -142,9 +143,7 @@
 		05F3043C2DCF48A00058E80E /* RepliesContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F3043B2DCF489F0058E80E /* RepliesContainerView.swift */; };
 		05F3043E2DCF48A90058E80E /* HTTPError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F3043D2DCF48A80058E80E /* HTTPError.swift */; };
 		05F304402DCF48DE0058E80E /* FullScreenImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F3043F2DCF48DD0058E80E /* FullScreenImageViewController.swift */; };
-		004FF9AB5C4843CC9D6A6B914038854B /* PlatformConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */; };
 		05FA823E2CDC05A000928ECC /* IntroScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FA823D2CDC05A000928ECC /* IntroScreen.swift */; };
-		5C950CA0787B4F15B7A6C6E9922080C7 /* PlatformConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */; };
 		05FA82422CDC13DE00928ECC /* IntroPlatformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FA82412CDC13DE00928ECC /* IntroPlatformView.swift */; };
 		05FAF1B42CE33A110067B7E3 /* PeptideAuthHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FAF1B32CE33A110067B7E3 /* PeptideAuthHeaderView.swift */; };
 		05FAF1B62CE3529F0067B7E3 /* ForgotPassword_Reset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FAF1B52CE3529F0067B7E3 /* ForgotPassword_Reset.swift */; };
@@ -263,7 +262,11 @@
 		17F9D7632C9208B500D0BB6F /* MessageReactionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F9D7622C9208B500D0BB6F /* MessageReactionsSheet.swift */; };
 		285F7581BAD6234593D2394F /* RoleDeleteSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958F5095BC835EFD976D8A1F /* RoleDeleteSheet.swift */; };
 		36D461CF77D84B97B94929A9 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 03268FCCFC7D4D1F8B6E9F6F /* Sentry */; };
+		5C950CA0787B4F15B7A6C6E9922080C7 /* PlatformConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */; };
+		6BCA311E24F881F7AD3821ED /* Pods_Revolt.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FE56550EFBFBAF006803242A /* Pods_Revolt.framework */; };
 		7031993BD3D264C895FFB466 /* CreateServerRoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F75CCC5D94FA80B2DCBD7821 /* CreateServerRoleView.swift */; };
+		8564AA702E6C4393004C849C /* RealmManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA6F2E6C4393004C849C /* RealmManager.swift */; };
+		8564AA772E6C4CF7004C849C /* DetachRealm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA762E6C4CF7004C849C /* DetachRealm.swift */; };
 		911131412D8807F500667031 /* DeleteMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911131402D8807F500667031 /* DeleteMessageView.swift */; };
 		911A24B72D5B83C200ADD85D /* BlockUserPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */; };
 		912539CB2D79E569003BAA57 /* Assets 2.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 912539CA2D79E569003BAA57 /* Assets 2.xcassets */; };
@@ -510,8 +513,6 @@
 		05F3043D2DCF48A80058E80E /* HTTPError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPError.swift; sourceTree = "<group>"; };
 		05F3043F2DCF48DD0058E80E /* FullScreenImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreenImageViewController.swift; sourceTree = "<group>"; };
 		05FA823D2CDC05A000928ECC /* IntroScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroScreen.swift; sourceTree = "<group>"; };
-		96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformConfig.swift; sourceTree = "<group>"; };
-		E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformConfigService.swift; sourceTree = "<group>"; };
 		05FA82412CDC13DE00928ECC /* IntroPlatformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroPlatformView.swift; sourceTree = "<group>"; };
 		05FAF1B32CE33A110067B7E3 /* PeptideAuthHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeptideAuthHeaderView.swift; sourceTree = "<group>"; };
 		05FAF1B52CE3529F0067B7E3 /* ForgotPassword_Reset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForgotPassword_Reset.swift; sourceTree = "<group>"; };
@@ -616,7 +617,11 @@
 		17F502552B9BFB2800A3022D /* CreateGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateGroup.swift; sourceTree = "<group>"; };
 		17F555262AFC229900958F2F /* ServerSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSettings.swift; sourceTree = "<group>"; };
 		17F9D7622C9208B500D0BB6F /* MessageReactionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageReactionsSheet.swift; sourceTree = "<group>"; };
+		1B7781EEF5DE3A7595F88813 /* Pods-Revolt.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Revolt.debug.xcconfig"; path = "Target Support Files/Pods-Revolt/Pods-Revolt.debug.xcconfig"; sourceTree = "<group>"; };
+		4C7131D5AEB5410C09A5A436 /* Pods-Revolt.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Revolt.release.xcconfig"; path = "Target Support Files/Pods-Revolt/Pods-Revolt.release.xcconfig"; sourceTree = "<group>"; };
 		56C3A459C46C9725691178F3 /* RoleColorPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleColorPickerSheet.swift; sourceTree = "<group>"; };
+		8564AA6F2E6C4393004C849C /* RealmManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealmManager.swift; sourceTree = "<group>"; };
+		8564AA762E6C4CF7004C849C /* DetachRealm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachRealm.swift; sourceTree = "<group>"; };
 		911131402D8807F500667031 /* DeleteMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteMessageView.swift; sourceTree = "<group>"; };
 		911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockUserPopup.swift; sourceTree = "<group>"; };
 		912539CA2D79E569003BAA57 /* Assets 2.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets 2.xcassets"; sourceTree = "<group>"; };
@@ -646,6 +651,7 @@
 		91E44EE42D4DF70300269A01 /* BlockedUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedUsersView.swift; sourceTree = "<group>"; };
 		91FD56E82D5237F600BA58D5 /* RemoveAuthenticatorAppSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoveAuthenticatorAppSheet.swift; sourceTree = "<group>"; };
 		958F5095BC835EFD976D8A1F /* RoleDeleteSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleDeleteSheet.swift; sourceTree = "<group>"; };
+		96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformConfig.swift; sourceTree = "<group>"; };
 		D49B704F29C4D3FE009494A5 /* Revolt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Revolt.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D49B705229C4D3FE009494A5 /* RevoltApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevoltApp.swift; sourceTree = "<group>"; };
 		D49B705629C4D3FE009494A5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -657,6 +663,7 @@
 		DAAA4C0829F2974300F41E52 /* Http.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Http.swift; sourceTree = "<group>"; };
 		DAAA4C0A29F2CF1200F41E52 /* Websocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Websocket.swift; sourceTree = "<group>"; };
 		DAAA4C0C29F2D16B00F41E52 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformConfigService.swift; sourceTree = "<group>"; };
 		F545878C2E1504BB00797AC1 /* AttachmentPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentPreviewView.swift; sourceTree = "<group>"; };
 		F57D4C052E27D735004B7EF6 /* ChannelLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelLoadingView.swift; sourceTree = "<group>"; };
 		F57D4C092E2E49BA004B7EF6 /* EmojiParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiParser.swift; sourceTree = "<group>"; };
@@ -667,6 +674,7 @@
 		F5E8570C2E10FD9800E8655F /* DownloadProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadProgressView.swift; sourceTree = "<group>"; };
 		F5F8E4022E127E6B00D0D201 /* VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerView.swift; sourceTree = "<group>"; };
 		F75CCC5D94FA80B2DCBD7821 /* CreateServerRoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateServerRoleView.swift; sourceTree = "<group>"; };
+		FE56550EFBFBAF006803242A /* Pods_Revolt.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Revolt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -713,6 +721,7 @@
 				054DF20C2D7C67B3009BB674 /* SwiftCSV in Frameworks */,
 				36D461CF77D84B97B94929A9 /* Sentry in Frameworks */,
 				1751239B2CAC687C00D30C23 /* KeychainAccess in Frameworks */,
+				6BCA311E24F881F7AD3821ED /* Pods_Revolt.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1071,22 +1080,6 @@
 				05FA823D2CDC05A000928ECC /* IntroScreen.swift */,
 			);
 			path = Intro;
-			sourceTree = "<group>";
-		};
-		EC1C2E5828BF41B3BF97A880AA48A762 /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */,
-			);
-			path = Models;
-			sourceTree = "<group>";
-		};
-		F84639A872BB42B2AA42991176F7A383 /* Services */ = {
-			isa = PBXGroup;
-			children = (
-				E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */,
-			);
-			path = Services;
 			sourceTree = "<group>";
 		};
 		05FA82402CDC139F00928ECC /* Components */ = {
@@ -1469,11 +1462,30 @@
 			path = MessageRenderer;
 			sourceTree = "<group>";
 		};
+		624F6E1FFA39F1240495EE75 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				FE56550EFBFBAF006803242A /* Pods_Revolt.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		8106D7B85652C02ABE2EC904 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
+				1B7781EEF5DE3A7595F88813 /* Pods-Revolt.debug.xcconfig */,
+				4C7131D5AEB5410C09A5A436 /* Pods-Revolt.release.xcconfig */,
 			);
 			path = Pods;
+			sourceTree = "<group>";
+		};
+		8564AA6E2E6C4383004C849C /* Storage */ = {
+			isa = PBXGroup;
+			children = (
+				8564AA6F2E6C4393004C849C /* RealmManager.swift */,
+				8564AA762E6C4CF7004C849C /* DetachRealm.swift */,
+			);
+			path = Storage;
 			sourceTree = "<group>";
 		};
 		D49B704629C4D3FE009494A5 = {
@@ -1487,6 +1499,7 @@
 				D49B705029C4D3FE009494A5 /* Products */,
 				17C45D4B2C6167D300CD8ED4 /* OptimizationProfiles */,
 				8106D7B85652C02ABE2EC904 /* Pods */,
+				624F6E1FFA39F1240495EE75 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -1503,6 +1516,7 @@
 		D49B705129C4D3FE009494A5 /* Revolt */ = {
 			isa = PBXGroup;
 			children = (
+				8564AA6E2E6C4383004C849C /* Storage */,
 				DAAA4C0C29F2D16B00F41E52 /* Info.plist */,
 				D49B705229C4D3FE009494A5 /* RevoltApp.swift */,
 				17E019D42AF1937400AB4663 /* Theme.swift */,
@@ -1525,6 +1539,14 @@
 			path = "Preview Content";
 			sourceTree = "<group>";
 		};
+		EC1C2E5828BF41B3BF97A880AA48A762 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		F57D4C042E27D729004B7EF6 /* Loading */ = {
 			isa = PBXGroup;
 			children = (
@@ -1543,6 +1565,14 @@
 				F5F8E4022E127E6B00D0D201 /* VideoPlayerView.swift */,
 			);
 			path = AudioPlayer;
+			sourceTree = "<group>";
+		};
+		F84639A872BB42B2AA42991176F7A383 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -1599,12 +1629,14 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = D49B707329C4D3FE009494A5 /* Build configuration list for PBXNativeTarget "Revolt" */;
 			buildPhases = (
+				CCE6C93F6002B236AE0512DA /* [CP] Check Pods Manifest.lock */,
 				D49B704B29C4D3FE009494A5 /* Sources */,
 				D49B704C29C4D3FE009494A5 /* Frameworks */,
 				D49B704D29C4D3FE009494A5 /* Resources */,
 				1773C02B2C07DC32007B8867 /* Embed Frameworks */,
 				170038142C37875F00F8B134 /* Embed Foundation Extensions */,
 				179366C82BFAD17D00FC420D /* Run Script */,
+				716160A99BCD8FF6C9CDE1AE /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -1775,6 +1807,49 @@
 			shellPath = /bin/sh;
 			shellScript = "  export SENTRY_ORG=archem\n  export SENTRY_PROJECT=pepchat-ios\n  export SENTRY_URL=https://archem.sentry.io/\n  export SENTRY_AUTH_TOKEN=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\n  /opt/homebrew/bin/sentry-cli debug-files upload --include-sources \"$DWARF_DSYM_FOLDER_PATH\" --force-foreground\n";
 		};
+		716160A99BCD8FF6C9CDE1AE /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Revolt/Pods-Revolt-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Revolt/Pods-Revolt-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Revolt/Pods-Revolt-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		CCE6C93F6002B236AE0512DA /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Revolt-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -1914,6 +1989,7 @@
 				05523E062CE746A5003F4607 /* MFaNoneStep.swift in Sources */,
 				054EDF782CEE773D00EC99C1 /* DMEmptyView.swift in Sources */,
 				175E01DE2ADAB3F6004F6431 /* LazyImage.swift in Sources */,
+				8564AA772E6C4CF7004C849C /* DetachRealm.swift in Sources */,
 				F5E857052E10EEFE00E8655F /* AudioPlayerManager.swift in Sources */,
 				1759C39C2B291E2F006E6BBE /* SystemMessageView.swift in Sources */,
 				172F2D052C22ED8500948C00 /* CheckboxStyle.swift in Sources */,
@@ -2003,6 +2079,7 @@
 				050F35042D5DF93000609FEE /* ServerCategorySheet.swift in Sources */,
 				059B24B52DE5BAEF007ACFFB /* MessageableChannelViewController+ScrollView.swift in Sources */,
 				05FAF1B82CE36E070067B7E3 /* Mfa.swift in Sources */,
+				8564AA702E6C4393004C849C /* RealmManager.swift in Sources */,
 				1782F5E62B08F60B00759D40 /* Discovery.swift in Sources */,
 				17BB78B52CA4C45C000CAD87 /* ChannelPermissionsSettings.swift in Sources */,
 				17772C182C30AF83000D1EDA /* AppDelegate.swift in Sources */,
@@ -2411,6 +2488,7 @@
 		};
 		D49B707429C4D3FE009494A5 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1B7781EEF5DE3A7595F88813 /* Pods-Revolt.debug.xcconfig */;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = default;
@@ -2468,6 +2546,7 @@
 		};
 		D49B707529C4D3FE009494A5 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 4C7131D5AEB5410C09A5A436 /* Pods-Revolt.release.xcconfig */;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = "$(inherited)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = default;

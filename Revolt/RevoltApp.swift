@@ -37,6 +37,7 @@ struct RevoltApp: App {
                  options.debug = false  // Disable debug mode to reduce network requests
                  options.enableNetworkTracking = false  // Disable network tracking to prevent timeout conflicts
              }
+             RealmManager.configure()
         }
     }
     
