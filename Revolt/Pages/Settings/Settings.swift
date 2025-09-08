@@ -41,7 +41,7 @@ struct Settings: View {
                 })
                 
                 PeptideDivider()
-                    .padding(.leading, .padding48)
+                    .padding(.leading, 0)
                 
                 if let currentUser = viewState.currentUser {
                 
@@ -58,7 +58,7 @@ struct Settings: View {
                 
                 
                 PeptideDivider()
-                    .padding(.leading, .padding48)
+                    .padding(.leading, 0)
                 
                 Button(action:{
                     viewState.path.append(NavigationDestination.sessions_settings)
@@ -100,40 +100,6 @@ struct Settings: View {
              }
              
              }.listRowBackground(viewState.theme.background2)*/
-            
-            
-            
-            // Miscellaneous Section
-            VStack(spacing: .spacing4){
-                
-                Button(action:{
-                    viewState.path.append(NavigationDestination.about_settings)
-                }, label: {
-                    PeptideActionButton(icon: .peptideInfo,
-                                        title: "About",
-                                        hasArrow: true)
-                })
-                
-                PeptideDivider()
-                    .padding(.leading, .padding48)
-                
-                #if DEBUG
-                Button(action:{
-                    viewState.path.append(NavigationDestination.developer_settings)
-                }, label: {
-                    PeptideActionButton(icon: .peptideInfo,
-                                        title: "Developer",
-                                        hasArrow: true)
-                })
-                
-                PeptideDivider()
-                    .padding(.leading, .padding48)
-                #endif
-                
-            }
-            .backgroundGray11(verticalPadding: .padding4)
-            .padding(.horizontal, .padding16)
-            .padding(.vertical, .padding24)
             
             // Logout Section
             
