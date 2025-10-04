@@ -20,13 +20,15 @@ class EmojiParentServerRealm: Object {
 }
 
 class EmojiParentDetachedRealm: Object {
+    @Persisted var placeholder: Bool = true
+    
     override static func primaryKey() -> String? {
         return nil
     }
 }
 
 class EmojiParentRealm: Object {
-    @Persisted var type: String = "" // "server", "detached"
+    @Persisted var type: String = ""
     @Persisted var serverParent: EmojiParentServerRealm?
     @Persisted var detachedParent: EmojiParentDetachedRealm?
     
@@ -95,7 +97,7 @@ class GroupInviteRealm: Object {
 
 class InviteRealm: Object {
     @Persisted var id: String = ""
-    @Persisted var type: String = "" // "server", "group"
+    @Persisted var type: String = ""
     @Persisted var serverInvite: ServerInviteRealm?
     @Persisted var groupInvite: GroupInviteRealm?
     

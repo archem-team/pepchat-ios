@@ -66,10 +66,10 @@ class ServerRealm: Object {
     @Persisted var name: String = ""
     @Persisted var channels = List<String>()
     @Persisted var default_permissions: PermissionsRealm?
-    @Persisted var serverDescription: String? // renamed to avoid keyword conflict
+    @Persisted var serverDescription: String?
     @Persisted var categories = List<CategoryRealm>()
     @Persisted var system_messages: SystemMessagesRealm?
-    @Persisted var roles = RealmSwift.Map<String, RoleRealm>()
+    @Persisted var roles = RealmSwift.Map<String, RoleRealm?>()
     @Persisted var icon: FileRealm?
     @Persisted var banner: FileRealm?
     @Persisted var nsfw: Bool?
@@ -94,6 +94,7 @@ class MemberIdRealm: Object {
 // MARK: - Member Realm Object
 
 class MemberRealm: Object {
+    @Persisted var id: String = ""
     @Persisted var memberIdRealm: MemberIdRealm?
     @Persisted var nickname: String?
     @Persisted var avatar: FileRealm?
@@ -101,12 +102,7 @@ class MemberRealm: Object {
     @Persisted var joined_at: String = ""
     @Persisted var timeout: String?
     
-    // Computed property for unique ID
-    var id: String {
-        return "\(memberIdRealm?.server ?? "")_\(memberIdRealm?.user ?? "")"
-    }
-    
     override static func primaryKey() -> String? {
-        return nil // We'll use a composite key approach
+        return "id"
     }
 }

@@ -137,7 +137,7 @@ extension TextChannelRealm {
             rolePermissions = [:]
             for key in self.role_permissions.keys {
                 if let value = self.role_permissions[key] {
-                    rolePermissions![key] = value.toOriginal()
+                    rolePermissions![key] = value?.toOriginal()
                 }
             }
         }
@@ -190,7 +190,7 @@ extension VoiceChannelRealm {
             rolePermissions = [:]
             for key in self.role_permissions.keys {
                 if let value = self.role_permissions[key] {
-                    rolePermissions![key] = value.toOriginal()
+                    rolePermissions![key] = value?.toOriginal()
                 }
             }
         }

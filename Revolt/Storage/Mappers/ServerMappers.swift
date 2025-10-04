@@ -145,7 +145,7 @@ extension ServerRealm {
             roles = [:]
             for key in self.roles.keys {
                 if let value = self.roles[key] {
-                    roles![key] = value.toOriginal()
+                    roles![key] = value?.toOriginal()
                 }
             }
         }
@@ -190,6 +190,8 @@ extension MemberIdRealm {
 extension Member {
     func toRealm() -> MemberRealm {
         let realm = MemberRealm()
+        // Ensure stable primary key based on composite id
+        realm.id = "\(self.id.server)_\(self.id.user)"
         realm.memberIdRealm = self.id.toRealm()
         realm.nickname = self.nickname
         realm.avatar = self.avatar?.toRealm()

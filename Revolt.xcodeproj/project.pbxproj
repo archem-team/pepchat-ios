@@ -286,6 +286,15 @@
 		8564AA9D2E6C5A98004C849C /* FileMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA7B2E6C5A98004C849C /* FileMappers.swift */; };
 		8564AA9E2E6C5A98004C849C /* ServerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA8A2E6C5A98004C849C /* ServerModels.swift */; };
 		8564AA9F2E6C5A98004C849C /* ServerMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA802E6C5A98004C849C /* ServerMappers.swift */; };
+		85A81F292E9017520017BBCF /* DatabaseObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F282E9017520017BBCF /* DatabaseObserver.swift */; };
+		85A81F2B2E901D920017BBCF /* RealmManager+NetworkData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F2A2E901D920017BBCF /* RealmManager+NetworkData.swift */; };
+		85A81F2D2E901DBF0017BBCF /* NetworkRealmBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F2C2E901DBF0017BBCF /* NetworkRealmBridge.swift */; };
+		85A81F352E901DE60017BBCF /* MessageRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F302E901DE60017BBCF /* MessageRepository.swift */; };
+		85A81F362E901DE60017BBCF /* NetworkRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F312E901DE60017BBCF /* NetworkRepository.swift */; };
+		85A81F372E901DE60017BBCF /* ChannelRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F2E2E901DE60017BBCF /* ChannelRepository.swift */; };
+		85A81F382E901DE60017BBCF /* ServerRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F322E901DE60017BBCF /* ServerRepository.swift */; };
+		85A81F392E901DE60017BBCF /* UserRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F332E901DE60017BBCF /* UserRepository.swift */; };
+		85A81F3A2E901DE60017BBCF /* MemberRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F2F2E901DE60017BBCF /* MemberRepository.swift */; };
 		911131412D8807F500667031 /* DeleteMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911131402D8807F500667031 /* DeleteMessageView.swift */; };
 		911A24B72D5B83C200ADD85D /* BlockUserPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */; };
 		912539CB2D79E569003BAA57 /* Assets 2.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 912539CA2D79E569003BAA57 /* Assets 2.xcassets */; };
@@ -660,6 +669,15 @@
 		8564AA892E6C5A98004C849C /* PermissionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionModels.swift; sourceTree = "<group>"; };
 		8564AA8A2E6C5A98004C849C /* ServerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerModels.swift; sourceTree = "<group>"; };
 		8564AA8B2E6C5A98004C849C /* UserModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserModels.swift; sourceTree = "<group>"; };
+		85A81F282E9017520017BBCF /* DatabaseObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseObserver.swift; sourceTree = "<group>"; };
+		85A81F2A2E901D920017BBCF /* RealmManager+NetworkData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RealmManager+NetworkData.swift"; sourceTree = "<group>"; };
+		85A81F2C2E901DBF0017BBCF /* NetworkRealmBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkRealmBridge.swift; sourceTree = "<group>"; };
+		85A81F2E2E901DE60017BBCF /* ChannelRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelRepository.swift; sourceTree = "<group>"; };
+		85A81F2F2E901DE60017BBCF /* MemberRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberRepository.swift; sourceTree = "<group>"; };
+		85A81F302E901DE60017BBCF /* MessageRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageRepository.swift; sourceTree = "<group>"; };
+		85A81F312E901DE60017BBCF /* NetworkRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkRepository.swift; sourceTree = "<group>"; };
+		85A81F322E901DE60017BBCF /* ServerRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerRepository.swift; sourceTree = "<group>"; };
+		85A81F332E901DE60017BBCF /* UserRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserRepository.swift; sourceTree = "<group>"; };
 		911131402D8807F500667031 /* DeleteMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteMessageView.swift; sourceTree = "<group>"; };
 		911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockUserPopup.swift; sourceTree = "<group>"; };
 		912539CA2D79E569003BAA57 /* Assets 2.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets 2.xcassets"; sourceTree = "<group>"; };
@@ -1521,6 +1539,10 @@
 			isa = PBXGroup;
 			children = (
 				8564AA6F2E6C4393004C849C /* RealmManager.swift */,
+				85A81F2A2E901D920017BBCF /* RealmManager+NetworkData.swift */,
+				85A81F2C2E901DBF0017BBCF /* NetworkRealmBridge.swift */,
+				85A81F282E9017520017BBCF /* DatabaseObserver.swift */,
+				85A81F342E901DE60017BBCF /* Repository */,
 				8564AA762E6C4CF7004C849C /* DetachRealm.swift */,
 				8564AA822E6C5A98004C849C /* Mappers */,
 				8564AA8C2E6C5A98004C849C /* Models */,
@@ -1559,6 +1581,19 @@
 				8564AA8B2E6C5A98004C849C /* UserModels.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		85A81F342E901DE60017BBCF /* Repository */ = {
+			isa = PBXGroup;
+			children = (
+				85A81F2E2E901DE60017BBCF /* ChannelRepository.swift */,
+				85A81F2F2E901DE60017BBCF /* MemberRepository.swift */,
+				85A81F302E901DE60017BBCF /* MessageRepository.swift */,
+				85A81F312E901DE60017BBCF /* NetworkRepository.swift */,
+				85A81F322E901DE60017BBCF /* ServerRepository.swift */,
+				85A81F332E901DE60017BBCF /* UserRepository.swift */,
+			);
+			path = Repository;
 			sourceTree = "<group>";
 		};
 		D49B704629C4D3FE009494A5 = {
@@ -2055,6 +2090,12 @@
 				91BD33EE2D64898E00A0EDC3 /* FriendOptionsSheet.swift in Sources */,
 				91E43ADB2D65C5CB00486ABC /* NewEmojiSheet.swift in Sources */,
 				17BC476B2B9CB51200A593DA /* ShareInviteSheet.swift in Sources */,
+				85A81F352E901DE60017BBCF /* MessageRepository.swift in Sources */,
+				85A81F362E901DE60017BBCF /* NetworkRepository.swift in Sources */,
+				85A81F372E901DE60017BBCF /* ChannelRepository.swift in Sources */,
+				85A81F382E901DE60017BBCF /* ServerRepository.swift in Sources */,
+				85A81F392E901DE60017BBCF /* UserRepository.swift in Sources */,
+				85A81F3A2E901DE60017BBCF /* MemberRepository.swift in Sources */,
 				056EFBDA2D0459C300E45E3C /* AttachmentsSheet.swift in Sources */,
 				17A7FE372C49DE6F0083B22F /* Member.swift in Sources */,
 				1739DB962B08E53B00D23DAD /* MessageBadge.swift in Sources */,
@@ -2095,6 +2136,7 @@
 				8564AA922E6C5A98004C849C /* OtherMappers.swift in Sources */,
 				8564AA932E6C5A98004C849C /* PermissionModels.swift in Sources */,
 				8564AA942E6C5A98004C849C /* FileModels.swift in Sources */,
+				85A81F2B2E901D920017BBCF /* RealmManager+NetworkData.swift in Sources */,
 				8564AA952E6C5A98004C849C /* UserModels.swift in Sources */,
 				8564AA962E6C5A98004C849C /* ChannelModels.swift in Sources */,
 				8564AA972E6C5A98004C849C /* MessageMappers.swift in Sources */,
@@ -2206,6 +2248,7 @@
 				917C4E2D2D6B471900E122D0 /* ConfirmationSheet.swift in Sources */,
 				912631472D5CA0DD00F7C200 /* StatusPreviewSheet.swift in Sources */,
 				175E01E02ADAB554004F6431 /* Avatar.swift in Sources */,
+				85A81F292E9017520017BBCF /* DatabaseObserver.swift in Sources */,
 				17B7128D2B03E9D700CFF61C /* FriendsList.swift in Sources */,
 				17E019CD2AF136B100AB4663 /* PresenceIndicator.swift in Sources */,
 				057EE30F2CBEFB93005C96E2 /* AlertPopup.swift in Sources */,
@@ -2223,6 +2266,7 @@
 				91B47DBA2D58E16700FD40CC /* MutualConnectionsSheet.swift in Sources */,
 				17E019DA2AF199A600AB4663 /* MessageReply.swift in Sources */,
 				05F304402DCF48DE0058E80E /* FullScreenImageViewController.swift in Sources */,
+				85A81F2D2E901DBF0017BBCF /* NetworkRealmBridge.swift in Sources */,
 				176485712CA3858100AF8141 /* RoleSettings.swift in Sources */,
 				05EEF2112CFCBC9A002E5255 /* Optional.swift in Sources */,
 				05F304362DCF488F0058E80E /* TypingIndicatorView.swift in Sources */,
@@ -2366,7 +2410,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = R8387T64JW;
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = TXWJE8394U;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
@@ -2416,7 +2460,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = R8387T64JW;
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = TXWJE8394U;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
@@ -2593,7 +2637,7 @@
 				CURRENT_PROJECT_VERSION = 0.0.26;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
-				DEVELOPMENT_TEAM = R8387T64JW;
+				DEVELOPMENT_TEAM = TXWJE8394U;
 				EMBED_ASSET_PACKS_IN_PRODUCT_BUNDLE = YES;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_ON_DEMAND_RESOURCES = NO;
@@ -2602,8 +2646,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Revolt/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = ZekoChat;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app needs access to camera to take photos for sharing in messages.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "We need access to your photo library to save images.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to photo library to select photos for sharing in messages.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -2652,7 +2698,7 @@
 				CURRENT_PROJECT_VERSION = 0.0.26;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
-				DEVELOPMENT_TEAM = R8387T64JW;
+				DEVELOPMENT_TEAM = TXWJE8394U;
 				EMBED_ASSET_PACKS_IN_PRODUCT_BUNDLE = YES;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_ON_DEMAND_RESOURCES = NO;
@@ -2660,8 +2706,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Revolt/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = ZekoChat;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app needs access to camera to take photos for sharing in messages.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "We need access to your photo library to save images.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to photo library to select photos for sharing in messages.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -2861,7 +2909,7 @@
 			repositoryURL = "https://github.com/tevelee/SwiftUI-Flow.git";
 			requirement = {
 				kind = exactVersion;
-				version = 2.5.0;
+				version = 3.1.0;
 			};
 		};
 		1781011C2C8CBC2900AC2756 /* XCRemoteSwiftPackageReference "SubviewAttachingTextView" */ = {

@@ -45,6 +45,8 @@ class SpotifySpecialRealm: Object {
 // MARK: - Soundcloud Special Realm Object
 
 class SoundcloudSpecialRealm: Object {
+    @Persisted var placeholder: Bool = true
+    
     override static func primaryKey() -> String? {
         return nil
     }
@@ -53,7 +55,7 @@ class SoundcloudSpecialRealm: Object {
 // MARK: - Bandcamp Special Realm Object
 
 class BandcampSpecialRealm: Object {
-    @Persisted var content_type: String = "" // "Album", "Track"
+    @Persisted var content_type: String = ""
     @Persisted var id: String = ""
     
     override static func primaryKey() -> String? {
@@ -64,7 +66,7 @@ class BandcampSpecialRealm: Object {
 // MARK: - Lightspeed Special Realm Object
 
 class LightspeedSpecialRealm: Object {
-    @Persisted var content_type: String = "" // "Channel"
+    @Persisted var content_type: String = ""
     @Persisted var id: String = ""
     
     override static func primaryKey() -> String? {
@@ -85,9 +87,8 @@ class StreamableSpecialRealm: Object {
 // MARK: - WebsiteSpecial Realm Object
 
 class WebsiteSpecialRealm: Object {
-    @Persisted var type: String = "" // "none", "gif", "youtube", "lightspeed", "twitch", "spotify", "soundcloud", "bandcamp", "streamable"
+    @Persisted var type: String = ""
     
-    // Optional variant data
     @Persisted var youtubeSpecial: YoutubeSpecialRealm?
     @Persisted var twitchSpecial: TwitchSpecialRealm?
     @Persisted var spotifySpecial: SpotifySpecialRealm?
@@ -107,7 +108,7 @@ class JanuaryImageRealm: Object {
     @Persisted var url: String = ""
     @Persisted var width: Int = 0
     @Persisted var height: Int = 0
-    @Persisted var size: String = "" // "Large", "Preview"
+    @Persisted var size: String = ""
     
     override static func primaryKey() -> String? {
         return nil
@@ -132,7 +133,7 @@ class WebsiteEmbedRealm: Object {
     @Persisted var url: String?
     @Persisted var special: WebsiteSpecialRealm?
     @Persisted var title: String?
-    @Persisted var embedDescription: String? // renamed to avoid keyword conflict
+    @Persisted var embedDescription: String?
     @Persisted var image: JanuaryImageRealm?
     @Persisted var video: JanuaryVideoRealm?
     @Persisted var site_name: String?
@@ -150,7 +151,7 @@ class TextEmbedRealm: Object {
     @Persisted var icon_url: String?
     @Persisted var url: String?
     @Persisted var title: String?
-    @Persisted var embedDescription: String? // renamed to avoid keyword conflict
+    @Persisted var embedDescription: String?
     @Persisted var media: FileRealm?
     @Persisted var colour: String?
     
@@ -162,9 +163,8 @@ class TextEmbedRealm: Object {
 // MARK: - Embed Realm Object (Union Type)
 
 class EmbedRealm: Object {
-    @Persisted var type: String = "" // "website", "image", "video", "text", "none"
+    @Persisted var type: String = ""
     
-    // Embed variant data
     @Persisted var websiteEmbed: WebsiteEmbedRealm?
     @Persisted var imageEmbed: JanuaryImageRealm?
     @Persisted var videoEmbed: JanuaryVideoRealm?

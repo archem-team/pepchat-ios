@@ -1,8 +1,19 @@
 PODS:
   - Down (0.11.0)
+  - Realm (10.54.5):
+    - Realm/Headers (= 10.54.5)
+  - Realm/Headers (10.54.5)
+  - RealmSwift (10.54.5):
+    - Realm (= 10.54.5)
 
 DEPENDENCIES:
   - Down (from `https://github.com/iwasrobbed/Down.git`, tag `v0.11.0`)
+  - RealmSwift (~> 10.0)
+
+SPEC REPOS:
+  trunk:
+    - Realm
+    - RealmSwift
 
 EXTERNAL SOURCES:
   Down:
@@ -16,7 +27,9 @@ CHECKOUT OPTIONS:
 
 SPEC CHECKSUMS:
   Down: b6ba1bc985c9d2f4e15e3b293d2207766fa12612
+  Realm: ac6ab7d43b76db2bdb48bbd097019bb621d860b8
+  RealmSwift: 7c258367cc498594aa989b7d9620989a276ad7f4
 
-PODFILE CHECKSUM: 673aa47638b09cf82f78cb7a5501420bc0871110
+PODFILE CHECKSUM: b7f949a6f85c92e2ca01c85df536886fb00c1005
 
 COCOAPODS: 1.16.2

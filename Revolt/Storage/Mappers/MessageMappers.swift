@@ -395,8 +395,8 @@ extension MessageRealm {
         if self.reactions.count > 0 {
             reactions = [:]
             for key in self.reactions.keys {
-                if let value = self.reactions[key] {
-                    reactions![key] = Array(value.users)
+                if let reactionUsersOpt = self.reactions[key], let reactionUsers = reactionUsersOpt {
+                    reactions![key] = Array(reactionUsers.users)
                 }
             }
         }

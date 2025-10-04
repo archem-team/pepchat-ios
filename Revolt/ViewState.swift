@@ -293,6 +293,11 @@ public class ViewState: ObservableObject {
     var http: HTTPClient
     var launchTransaction: (any Sentry.Span)?
     
+    // MARK: - Database Integration
+    /// DatabaseObserver for Realm integration
+    /// Observes Realm database changes and updates ViewState
+    var databaseObserver: DatabaseObserver?
+    
     @Published var baseURL: String? = nil {
         didSet {
             if let baseURL {
@@ -1270,6 +1275,16 @@ public class ViewState: ObservableObject {
             await MainActor.run { [weak self] in
                 self?.cleanupStaleUnreads()
             }
+        }
+        
+        // MARK: - Database Observer Setup
+        // Initialize DatabaseObserver after ViewState is fully set up
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            // Give ViewState a moment to fully initialize
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+            self.databaseObserver = DatabaseObserver(viewState: self)
+            print("📊 DatabaseObserver initialized and connected to ViewState")
         }
     }
     
@@ -2310,6 +2325,22 @@ public class ViewState: ObservableObject {
             // print("📥 VIEWSTATE: Processing new message - id: \(m.id), channel: \(m.channel)")
             // print("📥 VIEWSTATE: Current messages count BEFORE: \(messages.count)")
             
+            
+            // ✅ REALM INTEGRATION: Save message to Realm database
+            Task.detached(priority: .utility) {
+                await MessageRepository.shared.saveMessage(m)
+                
+                // Save related user if present
+                if let user = m.user {
+                    await UserRepository.shared.saveUser(user)
+                }
+                
+                // Save related member if present
+                if let member = m.member {
+                    await MemberRepository.shared.saveMember(member)
+                }
+            }
+
             if let user = m.user {
                 // CRITICAL FIX: Always add/update message authors to prevent black messages
                 users[user.id] = user
@@ -2604,11 +2635,26 @@ public class ViewState: ObservableObject {
             }
         case .user_update(let e):
             updateUser(with: e)
+            
+            // ✅ REALM INTEGRATION: Save updated user to Realm
+            Task.detached(priority: .utility) {
+                // Get updated user from ViewState and save to Realm
+				if let updatedUser = await self.users[e.id] {
+                    await UserRepository.shared.saveUser(updatedUser)
+                }
+            }
+            
         case .server_create(let e):
             self.servers[e.id] = e.server
             for channel in e.channels {
                 self.channels[channel.id] = channel
                 self.channelMessages[channel.id] = []
+            }
+            
+            // ✅ REALM INTEGRATION: Save new server and its channels to Realm
+            Task.detached(priority: .utility) {
+                await ServerRepository.shared.saveServer(e.server)
+                await ChannelRepository.shared.saveChannels(e.channels)
             }
             
         case .server_delete(let e):
@@ -2623,6 +2669,10 @@ public class ViewState: ObservableObject {
                 self.servers.removeValue(forKey: e.id)
             }
             
+            // ✅ REALM INTEGRATION: Delete server from Realm
+            Task.detached(priority: .utility) {
+                await ServerRepository.shared.deleteServer(id: e.id)
+            }
             
         case .server_update(let e):
             
@@ -2678,9 +2728,22 @@ public class ViewState: ObservableObject {
                 self.servers[e.id] = t
             }
             
+            // ✅ REALM INTEGRATION: Save updated server to Realm
+            if let updatedServer = self.servers[e.id] {
+                Task.detached(priority: .utility) {
+                    await ServerRepository.shared.saveServer(updatedServer)
+                }
+            }
+            
         case .channel_create(let channel):
             // Store the channel in our event channels for lazy loading
             allEventChannels[channel.id] = channel
+            
+            // ✅ REALM INTEGRATION: Save new channel to Realm
+            Task.detached(priority: .utility) {
+                await ChannelRepository.shared.saveChannel(channel)
+            }
+
             
             // Handle different channel types
             switch channel {
@@ -2879,8 +2942,24 @@ public class ViewState: ObservableObject {
                 }
             }
             
+            // ✅ REALM INTEGRATION: Save updated channel to Realm
+            if let updatedChannel = self.channels[e.id] {
+                Task.detached(priority: .utility) {
+                    await ChannelRepository.shared.saveChannel(updatedChannel)
+                }
+            } else if let updatedChannel = self.allEventChannels[e.id] {
+                Task.detached(priority: .utility) {
+                    await ChannelRepository.shared.saveChannel(updatedChannel)
+                }
+            }
+
         case .channel_delete(let e):
             self.deleteChannel(channelId: e.id)
+            
+            // ✅ REALM INTEGRATION: Delete channel from Realm
+            Task.detached(priority: .utility) {
+                await ChannelRepository.shared.deleteChannel(id: e.id)
+            }
             
         case .channel_group_leave(let e):
             if e.user == currentUser?.id {
@@ -5679,6 +5758,19 @@ extension ViewState {
     private func processReadyData(_ data: ReadyEventData) async {
         let processReadySpan = launchTransaction?.startChild(operation: "processReady")
         
+        
+        // ✅ REALM INTEGRATION: Save all ready event data to Realm database
+        // This is the heart of our reactive architecture: Network → Realm → Observer → ViewState → UI
+        Task.detached(priority: .background) {
+            await NetworkRepository.shared.saveReadyEvent(
+                users: data.users,
+                servers: data.servers,
+                channels: data.channels,
+                members: data.members,
+                emojis: data.emojis
+            )
+        }
+
         // Process channels
         processChannelsFromData(data.channels)
         

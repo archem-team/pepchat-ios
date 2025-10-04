@@ -74,6 +74,14 @@ class MessageableChannelViewModel: ObservableObject {
 
         viewState.channelMessages[channel.id] = ids.reversed() + viewState.channelMessages[channel.id] ?? []
 
+        Task.detached(priority: .utility) {
+            await NetworkRepository.shared.saveFetchHistoryResponse(
+                messages: result.messages,
+                users: result.users,
+                members: result.members
+            )
+        }
+
         return result
     }
 

@@ -149,9 +149,8 @@ class MessagePinnedSystemContentRealm: Object {
 // MARK: - SystemMessageContent Realm Object (Union Type)
 
 class SystemMessageContentRealm: Object {
-    @Persisted var type: String = "" // "text", "user_added", "user_removed", "user_joined", "user_left", "user_kicked", "user_banned", "channel_renamed", "channel_description_changed", "channel_icon_changed", "channel_ownership_changed", "message_pinned", "message_unpinned"
+    @Persisted var type: String = ""
     
-    // System message variant data
     @Persisted var textSystemMessage: TextSystemMessageContentRealm?
     @Persisted var userAddedSystem: UserAddedSystemContentRealm?
     @Persisted var userRemovedSystem: UserRemovedSystemContentRealm?
@@ -196,7 +195,7 @@ class MessageRealm: Object {
     @Persisted var edited: String?
     @Persisted var masquerade: MasqueradeRealm?
     @Persisted var interactions: InteractionsRealm?
-    @Persisted var reactions = RealmSwift.Map<String, ReactionUsersRealm>()
+    @Persisted var reactions = RealmSwift.Map<String, ReactionUsersRealm?>()
     @Persisted var user: UserRealm?
     @Persisted var member: MemberRealm?
     @Persisted var embeds = List<EmbedRealm>()

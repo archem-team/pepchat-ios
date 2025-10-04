@@ -23,7 +23,8 @@ class SizedMetadataRealm: Object {
 // MARK: - SimpleMetadata Realm Object
 
 class SimpleMetadataRealm: Object {
-    // Empty structure, can be expanded in the future
+    @Persisted var placeholder: Bool = true
+    
     override static func primaryKey() -> String? {
         return nil
     }
@@ -32,7 +33,7 @@ class SimpleMetadataRealm: Object {
 // MARK: - FileMetadata Realm Object
 
 class FileMetadataRealm: Object {
-    @Persisted var type: String = "" // "image", "video", "file", "text", "audio"
+    @Persisted var type: String = ""
     @Persisted var sizedMetadata: SizedMetadataRealm?
     @Persisted var simpleMetadata: SimpleMetadataRealm?
     

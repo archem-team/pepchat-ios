@@ -52,7 +52,7 @@ class GroupDMChannelRealm: Object {
     @Persisted var owner: String = ""
     @Persisted var icon: FileRealm?
     @Persisted var permissions: PermissionsRealm?
-    @Persisted var channelDescription: String? // renamed to avoid keyword conflict
+    @Persisted var channelDescription: String?
     @Persisted var nsfw: Bool?
     @Persisted var last_message_id: String?
     
@@ -67,10 +67,10 @@ class TextChannelRealm: Object {
     @Persisted var id: String = ""
     @Persisted var server: String = ""
     @Persisted var name: String = ""
-    @Persisted var channelDescription: String? // renamed to avoid keyword conflict
+    @Persisted var channelDescription: String?
     @Persisted var icon: FileRealm?
     @Persisted var default_permissions: OverwriteRealm?
-    @Persisted var role_permissions = RealmSwift.Map<String, OverwriteRealm>()
+    @Persisted var role_permissions = RealmSwift.Map<String, OverwriteRealm?>()
     @Persisted var nsfw: Bool?
     @Persisted var last_message_id: String?
     @Persisted var voice: VoiceInformationRealm?
@@ -86,10 +86,10 @@ class VoiceChannelRealm: Object {
     @Persisted var id: String = ""
     @Persisted var server: String = ""
     @Persisted var name: String = ""
-    @Persisted var channelDescription: String? // renamed to avoid keyword conflict
+    @Persisted var channelDescription: String?
     @Persisted var icon: FileRealm?
     @Persisted var default_permissions: OverwriteRealm?
-    @Persisted var role_permissions = RealmSwift.Map<String, OverwriteRealm>()
+    @Persisted var role_permissions = RealmSwift.Map<String, OverwriteRealm?>()
     @Persisted var nsfw: Bool?
     
     override static func primaryKey() -> String? {
@@ -101,9 +101,8 @@ class VoiceChannelRealm: Object {
 
 class ChannelRealm: Object {
     @Persisted var id: String = ""
-    @Persisted var channel_type: String = "" // "saved_messages", "dm_channel", "group_dm_channel", "text_channel", "voice_channel"
+    @Persisted var channel_type: String = ""
     
-    // Channel variant data
     @Persisted var savedMessages: SavedMessagesRealm?
     @Persisted var dmChannel: DMChannelRealm?
     @Persisted var groupDMChannel: GroupDMChannelRealm?
