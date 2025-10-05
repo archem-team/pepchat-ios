@@ -49,43 +49,22 @@ class MessageRepository {
     
     /// Fetch a message from Realm by ID
     func fetchMessage(id: String) async -> Types.Message? {
-        await withCheckedContinuation { continuation in
-            Task {
-                guard let messageRealm = await realmManager.fetchItemByPrimaryKey(MessageRealm.self, primaryKey: id) else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                if let message = messageRealm.toOriginal() as? Types.Message {
-                    continuation.resume(returning: message)
-                } else {
-                    continuation.resume(returning: nil)
-                }
-            }
+        guard let messageRealm = await realmManager.fetchItemByPrimaryKey(MessageRealm.self, primaryKey: id) else {
+            return nil
         }
+        return messageRealm.toOriginal() as? Types.Message
     }
     
     /// Fetch messages for a specific channel
     func fetchMessages(forChannel channelId: String) async -> [Types.Message] {
-        await withCheckedContinuation { continuation in
-            Task {
-                await realmManager.getListOfObjects(type: MessageRealm.self) { messagesRealm in
-                    let filtered = messagesRealm.filter { $0.channel == channelId }
-                    let messages = filtered.compactMap { $0.toOriginal() as? Types.Message }
-                    continuation.resume(returning: messages)
-                }
-            }
-        }
+        let realms = await realmManager.getListOfObjects(type: MessageRealm.self)
+        let filtered = realms.filter { $0.channel == channelId }
+        return filtered.compactMap { $0.toOriginal() as? Types.Message }
     }
     
     /// Fetch all messages from Realm
     func fetchAllMessages() async -> [Types.Message] {
-        await withCheckedContinuation { continuation in
-            Task {
-                await realmManager.getListOfObjects(type: MessageRealm.self) { messagesRealm in
-                    let messages = messagesRealm.compactMap { $0.toOriginal() as? Types.Message }
-                    continuation.resume(returning: messages)
-                }
-            }
-        }
+        let realms = await realmManager.getListOfObjects(type: MessageRealm.self)
+        return realms.compactMap { $0.toOriginal() as? Types.Message }
     }
 }

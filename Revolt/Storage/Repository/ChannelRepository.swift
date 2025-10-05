@@ -49,51 +49,29 @@ class ChannelRepository {
     
     /// Fetch a channel from Realm by ID
     func fetchChannel(id: String) async -> Types.Channel? {
-        await withCheckedContinuation { continuation in
-            Task {
-                guard let channelRealm = await realmManager.fetchItemByPrimaryKey(ChannelRealm.self, primaryKey: id) else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                if let channel = channelRealm.toOriginal() as? Types.Channel {
-                    continuation.resume(returning: channel)
-                } else {
-                    continuation.resume(returning: nil)
-                }
-            }
+        guard let channelRealm = await realmManager.fetchItemByPrimaryKey(ChannelRealm.self, primaryKey: id) else {
+            return nil
         }
+        return channelRealm.toOriginal() as? Types.Channel
     }
     
     /// Fetch channels for a specific server
     func fetchChannels(forServer serverId: String) async -> [Types.Channel] {
-        await withCheckedContinuation { continuation in
-            Task {
-                await realmManager.getListOfObjects(type: ChannelRealm.self) { channelsRealm in
-                    // Filter channels that belong to the specified server
-                    let filtered = channelsRealm.filter { channelRealm in
-                        if let textChannel = channelRealm.textChannel {
-                            return textChannel.server == serverId
-                        } else if let voiceChannel = channelRealm.voiceChannel {
-                            return voiceChannel.server == serverId
-                        }
-                        return false
-                    }
-                    let channels = filtered.compactMap { $0.toOriginal() as? Types.Channel }
-                    continuation.resume(returning: channels)
-                }
+        let realms = await realmManager.getListOfObjects(type: ChannelRealm.self)
+        let filtered = realms.filter { channelRealm in
+            if let textChannel = channelRealm.textChannel {
+                return textChannel.server == serverId
+            } else if let voiceChannel = channelRealm.voiceChannel {
+                return voiceChannel.server == serverId
             }
+            return false
         }
+        return filtered.compactMap { $0.toOriginal() as? Types.Channel }
     }
     
     /// Fetch all channels from Realm
     func fetchAllChannels() async -> [Types.Channel] {
-        await withCheckedContinuation { continuation in
-            Task {
-                await realmManager.getListOfObjects(type: ChannelRealm.self) { channelsRealm in
-                    let channels = channelsRealm.compactMap { $0.toOriginal() as? Types.Channel }
-                    continuation.resume(returning: channels)
-                }
-            }
-        }
+        let realms = await realmManager.getListOfObjects(type: ChannelRealm.self)
+        return realms.compactMap { $0.toOriginal() as? Types.Channel }
     }
 }

@@ -49,30 +49,15 @@ class ServerRepository {
     
     /// Fetch a server from Realm by ID
     func fetchServer(id: String) async -> Types.Server? {
-        await withCheckedContinuation { continuation in
-            Task {
-                guard let serverRealm = await realmManager.fetchItemByPrimaryKey(ServerRealm.self, primaryKey: id) else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                if let server = serverRealm.toOriginal() as? Types.Server {
-                    continuation.resume(returning: server)
-                } else {
-                    continuation.resume(returning: nil)
-                }
-            }
+        guard let serverRealm = await realmManager.fetchItemByPrimaryKey(ServerRealm.self, primaryKey: id) else {
+            return nil
         }
+        return serverRealm.toOriginal() as? Types.Server
     }
     
     /// Fetch all servers from Realm
     func fetchAllServers() async -> [Types.Server] {
-        await withCheckedContinuation { continuation in
-            Task {
-                await realmManager.getListOfObjects(type: ServerRealm.self) { serversRealm in
-                    let servers = serversRealm.compactMap { $0.toOriginal() as? Types.Server }
-                    continuation.resume(returning: servers)
-                }
-            }
-        }
+        let realms = await realmManager.getListOfObjects(type: ServerRealm.self)
+        return realms.compactMap { $0.toOriginal() as? Types.Server }
     }
 }

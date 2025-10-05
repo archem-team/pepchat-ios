@@ -49,30 +49,15 @@ class UserRepository {
     
     /// Fetch a user from Realm by ID
     func fetchUser(id: String) async -> Types.User? {
-        await withCheckedContinuation { continuation in
-            Task {
-                guard let userRealm = await realmManager.fetchItemByPrimaryKey(UserRealm.self, primaryKey: id) else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                if let user = userRealm.toOriginal() as? Types.User {
-                    continuation.resume(returning: user)
-                } else {
-                    continuation.resume(returning: nil)
-                }
-            }
+        guard let userRealm = await realmManager.fetchItemByPrimaryKey(UserRealm.self, primaryKey: id) else {
+            return nil
         }
+        return userRealm.toOriginal() as? Types.User
     }
     
     /// Fetch all users from Realm
     func fetchAllUsers() async -> [Types.User] {
-        await withCheckedContinuation { continuation in
-            Task {
-                await realmManager.getListOfObjects(type: UserRealm.self) { usersRealm in
-                    let users = usersRealm.compactMap { $0.toOriginal() as? Types.User }
-                    continuation.resume(returning: users)
-                }
-            }
-        }
+        let realms = await realmManager.getListOfObjects(type: UserRealm.self)
+        return realms.compactMap { $0.toOriginal() as? Types.User }
     }
 }

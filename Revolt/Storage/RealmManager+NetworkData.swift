@@ -30,11 +30,11 @@ extension RealmManager {
         let emojisRealm = emojis.map { $0.toRealm() }
         
         // Save all in batches
-        writeBatch(usersRealm)
-        writeBatch(serversRealm)
-        writeBatch(channelsRealm)
-        writeBatch(membersRealm)
-        writeBatch(emojisRealm)
+		await writeBatch(usersRealm)
+		await writeBatch(serversRealm)
+		await writeBatch(channelsRealm)
+		await writeBatch(membersRealm)
+		await writeBatch(emojisRealm)
         
         logger.info("✅ Ready event saved successfully")
     }
@@ -42,7 +42,7 @@ extension RealmManager {
     // MARK: - User Operations
     
     /// Save a single user (from API or WebSocket)
-    func saveUser(_ user: Types.User) {
+	func saveUser(_ user: Types.User) async {
         write(user.toRealm())
         logger.debug("✅ User saved: \(user.id)")
     }

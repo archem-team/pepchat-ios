@@ -96,11 +96,12 @@ actor RealmManager {
         fetch(type)?.filter(filter)
     }
     
-    /// Fetches first object with given primary key
-    func fetchItemByPrimaryKey<T: Object>(_ type: T.Type, primaryKey: Any) -> T? {
+    /// Fetches first object with given primary key (returns frozen thread-safe object)
+    func fetchItemByPrimaryKey<T: Object>(_ type: T.Type, primaryKey: Any) async -> T? {
         do {
-            let realm = try Realm()
-            return realm.object(ofType: type, forPrimaryKey: primaryKey)
+			let realm = try await Realm()
+            let object = realm.object(ofType: type, forPrimaryKey: primaryKey)
+            return object?.freeze()
         } catch {
             logger.error("Failed to fetch item by primary key: \(error.localizedDescription)")
             return nil
@@ -188,18 +189,21 @@ actor RealmManager {
         }
     }
     
-    /// Retrieves a list of objects asynchronously
-    func getListOfObjects<T: Object>(type: T.Type, completion: @escaping ([T]) -> Void) {
-        Task.detached {
-            do {
-                let realm = try await Realm()
-                let results = realm.objects(type)
-                let safeCopy = Array(results.map { $0.detached() })
-                await MainActor.run { completion(safeCopy) }
-            } catch {
-                await MainActor.run { completion([]) }
-            }
+    /// Retrieves a list of objects (frozen, thread-safe) synchronously
+    nonisolated func getListOfObjects<T: Object>(type: T.Type) -> [T] {
+        do {
+            let realm = try Realm()
+            let results = realm.objects(type).freeze()
+            return Array(results)
+        } catch {
+            return []
         }
+    }
+
+    /// Retrieves a list of objects asynchronously and delivers on MainActor
+    func getListOfObjects<T: Object>(type: T.Type, completion: @escaping ([T]) -> Void) async {
+        let frozen = getListOfObjects(type: type)
+        await MainActor.run { completion(frozen) }
     }
     
     /// Retrieves the first object asynchronously

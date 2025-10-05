@@ -43,18 +43,53 @@ class MessageableChannelViewModel: ObservableObject {
     func loadMoreMessages(before: String? = nil) async -> FetchHistory? {
         if isPreview { return nil }
 
-        // Get server ID and create message ID array if needed
+        // 1️⃣ FIRST: Try to load from database (instant, works offline)
+        let dbMessages = await MessageRepository.shared.fetchMessages(forChannel: channel.id)
+        
+        if !dbMessages.isEmpty && before == nil {
+            // We have cached messages and this is initial load - serve from DB
+            print("💾 LOAD_MORE: Serving \(dbMessages.count) messages from database")
+            
+            // Convert to ViewState format
+            for message in dbMessages {
+                viewState.messages[message.id] = message
+            }
+            
+            let sortedIds = dbMessages.map { $0.id }.sorted { id1, id2 in
+                let date1 = createdAt(id: id1)
+                let date2 = createdAt(id: id2)
+                return date1 < date2
+            }
+            
+            viewState.channelMessages[channel.id] = sortedIds
+            
+            // Return empty FetchHistory to indicate we served from cache
+            // Network refresh will happen in background via DatabaseObserver
+            print("💾 LOAD_MORE: Database served successfully, network will refresh in background")
+        }
+        
+        // 2️⃣ THEN: Fetch from network (updates DB, which updates ViewState via DatabaseObserver)
         let serverId = channel.server
         let messageIds: [String] = before != nil ? [before!] : []
 
         let result = (try? await viewState.http.fetchHistory(
             channel: channel.id,
-            limit: 100, // Reduced from 300 to prevent memory issues
+            limit: 100,
             before: before,
             server: serverId,
             messages: messageIds
-        ).get()) ?? FetchHistory(messages: [], users: [])  // haha ratelimited
+        ).get()) ?? FetchHistory(messages: [], users: [])
 
+        // Save to database (DatabaseObserver will update ViewState automatically)
+        Task.detached(priority: .utility) {
+            await NetworkRepository.shared.saveFetchHistoryResponse(
+                messages: result.messages,
+                users: result.users,
+                members: result.members
+            )
+        }
+        
+        // Also update ViewState immediately for responsiveness
         for user in result.users {
             viewState.users[user.id] = user
         }
@@ -66,21 +101,12 @@ class MessageableChannelViewModel: ObservableObject {
         }
 
         var ids: [String] = []
-
         for message in result.messages {
             viewState.messages[message.id] = message
             ids.append(message.id)
         }
 
-        viewState.channelMessages[channel.id] = ids.reversed() + viewState.channelMessages[channel.id] ?? []
-
-        Task.detached(priority: .utility) {
-            await NetworkRepository.shared.saveFetchHistoryResponse(
-                messages: result.messages,
-                users: result.users,
-                members: result.members
-            )
-        }
+        viewState.channelMessages[channel.id] = ids.reversed() + (viewState.channelMessages[channel.id] ?? [])
 
         return result
     }

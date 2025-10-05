@@ -287,8 +287,6 @@
 		8564AA9E2E6C5A98004C849C /* ServerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA8A2E6C5A98004C849C /* ServerModels.swift */; };
 		8564AA9F2E6C5A98004C849C /* ServerMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA802E6C5A98004C849C /* ServerMappers.swift */; };
 		85A81F292E9017520017BBCF /* DatabaseObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F282E9017520017BBCF /* DatabaseObserver.swift */; };
-		85A81F2B2E901D920017BBCF /* RealmManager+NetworkData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F2A2E901D920017BBCF /* RealmManager+NetworkData.swift */; };
-		85A81F2D2E901DBF0017BBCF /* NetworkRealmBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F2C2E901DBF0017BBCF /* NetworkRealmBridge.swift */; };
 		85A81F352E901DE60017BBCF /* MessageRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F302E901DE60017BBCF /* MessageRepository.swift */; };
 		85A81F362E901DE60017BBCF /* NetworkRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F312E901DE60017BBCF /* NetworkRepository.swift */; };
 		85A81F372E901DE60017BBCF /* ChannelRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F2E2E901DE60017BBCF /* ChannelRepository.swift */; };
@@ -670,8 +668,6 @@
 		8564AA8A2E6C5A98004C849C /* ServerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerModels.swift; sourceTree = "<group>"; };
 		8564AA8B2E6C5A98004C849C /* UserModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserModels.swift; sourceTree = "<group>"; };
 		85A81F282E9017520017BBCF /* DatabaseObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseObserver.swift; sourceTree = "<group>"; };
-		85A81F2A2E901D920017BBCF /* RealmManager+NetworkData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RealmManager+NetworkData.swift"; sourceTree = "<group>"; };
-		85A81F2C2E901DBF0017BBCF /* NetworkRealmBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkRealmBridge.swift; sourceTree = "<group>"; };
 		85A81F2E2E901DE60017BBCF /* ChannelRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelRepository.swift; sourceTree = "<group>"; };
 		85A81F2F2E901DE60017BBCF /* MemberRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberRepository.swift; sourceTree = "<group>"; };
 		85A81F302E901DE60017BBCF /* MessageRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageRepository.swift; sourceTree = "<group>"; };
@@ -1539,8 +1535,6 @@
 			isa = PBXGroup;
 			children = (
 				8564AA6F2E6C4393004C849C /* RealmManager.swift */,
-				85A81F2A2E901D920017BBCF /* RealmManager+NetworkData.swift */,
-				85A81F2C2E901DBF0017BBCF /* NetworkRealmBridge.swift */,
 				85A81F282E9017520017BBCF /* DatabaseObserver.swift */,
 				85A81F342E901DE60017BBCF /* Repository */,
 				8564AA762E6C4CF7004C849C /* DetachRealm.swift */,
@@ -2136,7 +2130,6 @@
 				8564AA922E6C5A98004C849C /* OtherMappers.swift in Sources */,
 				8564AA932E6C5A98004C849C /* PermissionModels.swift in Sources */,
 				8564AA942E6C5A98004C849C /* FileModels.swift in Sources */,
-				85A81F2B2E901D920017BBCF /* RealmManager+NetworkData.swift in Sources */,
 				8564AA952E6C5A98004C849C /* UserModels.swift in Sources */,
 				8564AA962E6C5A98004C849C /* ChannelModels.swift in Sources */,
 				8564AA972E6C5A98004C849C /* MessageMappers.swift in Sources */,
@@ -2266,7 +2259,6 @@
 				91B47DBA2D58E16700FD40CC /* MutualConnectionsSheet.swift in Sources */,
 				17E019DA2AF199A600AB4663 /* MessageReply.swift in Sources */,
 				05F304402DCF48DE0058E80E /* FullScreenImageViewController.swift in Sources */,
-				85A81F2D2E901DBF0017BBCF /* NetworkRealmBridge.swift in Sources */,
 				176485712CA3858100AF8141 /* RoleSettings.swift in Sources */,
 				05EEF2112CFCBC9A002E5255 /* Optional.swift in Sources */,
 				05F304362DCF488F0058E80E /* TypingIndicatorView.swift in Sources */,
