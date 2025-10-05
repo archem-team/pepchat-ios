@@ -103,7 +103,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     var toggleSidebar: (() -> Void)?
     
     // Track whether we're returning from search to prevent unnecessary cleanup
-    private var isReturningFromSearch: Bool = false
+	var isReturningFromSearch: Bool = false
     
     // Target message ID to scroll to
     var targetMessageId: String? {
@@ -269,7 +269,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     private let insetAdjustmentCooldown: TimeInterval = 1.0 // 1 second cooldown
     
     // MEMORY MANAGEMENT: Automatic cleanup timer
-    private var memoryCleanupTimer: Timer?
+    var memoryCleanupTimer: Timer? // Changed to internal for extension access
     private let memoryCleanupInterval: TimeInterval = 30.0 // Clean up every 30 seconds
     
     // Add this property to track if we're currently loading older messages
@@ -883,7 +883,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 Task {
                     try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                     await MainActor.run {
-                    self.adjustTableInsetsForMessageCount()
+                        self.adjustTableInsetsForMessageCount()
                     }
                     await self.checkAndFetchMissingReplies()
                 }
@@ -896,7 +896,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 // Start loading immediately without any delays
                 Task {
                     print("🚀 IMMEDIATE_LOAD: Starting API call NOW for channel \(channelId)")
-                    await loadInitialMessagesImmediate()
+                    //await loadInitialMessagesImmediate()
                     
                     // Hide skeleton and show messages
                     DispatchQueue.main.async {
@@ -1014,279 +1014,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         print("🚀 IMMEDIATE_CLEANUP: Total viewWillDisappear cleanup completed in \(String(format: "%.2f", cleanupDuration))ms")
     }
     
-    /// Performs INSTANT memory cleanup - no delays, no async operations
-
-    private func performInstantMemoryCleanup() {
-        let channelId = viewModel.channel.id
-        print("⚡ INSTANT_CLEANUP: Starting IMMEDIATE memory cleanup for channel \(channelId)")
-        
-        let startTime = CFAbsoluteTimeGetCurrent()
-        
-        // 1. IMMEDIATE: Clear all local data synchronously
-        self.localMessages.removeAll(keepingCapacity: false)
-        viewModel.messages.removeAll(keepingCapacity: false)
-        
-        // 2. IMMEDIATE: Clear ViewState data synchronously (no Task, no async)
-        viewModel.viewState.channelMessages.removeValue(forKey: channelId)
-        viewModel.viewState.preloadedChannels.remove(channelId)
-        viewModel.viewState.atTopOfChannel.remove(channelId)
-        viewModel.viewState.currentlyTyping.removeValue(forKey: channelId)
-        
-        // 3. IMMEDIATE: Remove all message objects for this channel
-        let messagesToRemove = viewModel.viewState.messages.keys.filter { messageId in
-            if let message = viewModel.viewState.messages[messageId] {
-                return message.channel == channelId
-            }
-            return false
-        }
-        
-        for messageId in messagesToRemove {
-            viewModel.viewState.messages.removeValue(forKey: messageId)
-        }
-        
-        print("⚡ INSTANT_CLEANUP: Removed \(messagesToRemove.count) message objects immediately")
-        
-        // 4. IMMEDIATE: Clear table view and data source
-        self.dataSource = nil
-        
-        // 5. IMMEDIATE: Reset all state variables
-        isInTargetMessagePosition = false
-        targetMessageProcessed = false
-        isLoadingMore = false
-        messageLoadingState = .notLoading
-        
-        // 6. IMMEDIATE: Force memory cleanup without autoreleasepool delays
-        ImageCache.default.clearMemoryCache()
-        
-        // 7. IMMEDIATE: Call ViewState instant cleanup (no async operations)
-        viewModel.viewState.cleanupChannelFromMemory(channelId: channelId, preserveForNavigation: false)
-        
-        // 8. IMMEDIATE: Force garbage collection
-        _ = viewModel.viewState.messages.count + viewModel.viewState.users.count
-        
-        let endTime = CFAbsoluteTimeGetCurrent()
-        let duration = (endTime - startTime) * 1000 // Convert to milliseconds
-        
-        print("⚡ INSTANT_CLEANUP: Completed in \(String(format: "%.2f", duration))ms - IMMEDIATE cleanup done!")
-    }
-    
-    /// Performs light memory cleanup for cross-channel navigation
-    private func performLightMemoryCleanup() {
-        print("🧹 LIGHT_CLEANUP: Starting light memory cleanup")
-        
-        let channelId = viewModel.channel.id
-        
-        // Clear only local view controller data
-        self.localMessages.removeAll()
-        viewModel.messages.removeAll()
-        
-        // Clear preloaded status to allow reloading
-        viewModel.viewState.preloadedChannels.remove(channelId)
-        
-        // For light cleanup, preserve ViewState messages but clear channel message list
-        // This allows the messages to be reloaded when returning to the channel
-        viewModel.viewState.channelMessages.removeValue(forKey: channelId)
-        
-        // Clear table view data source
-        if let dataSource = self.dataSource as? LocalMessagesDataSource {
-            dataSource.updateMessages([])
-        }
-        
-        // Reset view controller state
-        isInTargetMessagePosition = false
-        targetMessageProcessed = false
-        
-        print("🧹 LIGHT_CLEANUP: Completed - preserved ViewState messages for navigation")
-    }
-    
-    /// Performs aggressive memory cleanup when fully leaving channel
-    private func performAggressiveMemoryCleanup() {
-        print("🧹 AGGRESSIVE_CLEANUP: Starting aggressive memory cleanup")
-        
-        let channelId = viewModel.channel.id
-        let isDM = viewModel.channel.isDM
-        let isGroupDM = viewModel.channel.isGroupDmChannel
-        
-        // 1. Clear all local data immediately
-        self.localMessages.removeAll()
-        viewModel.messages.removeAll()
-        
-        // 2. Use ViewState's comprehensive cleanup method
-        Task { @MainActor in
-            self.viewModel.viewState.cleanupChannelFromMemory(channelId: channelId, preserveForNavigation: false)
-        }
-        
-        // 3. Special cleanup for DMs (additional local cleanup)
-        if isDM || isGroupDM {
-            cleanupDMSpecificData(channelId: channelId)
-        }
-        
-        // 4. Clear table view data
-        if let dataSource = self.dataSource as? LocalMessagesDataSource {
-            dataSource.updateMessages([])
-        }
-        
-        // 5. Force memory cleanup
-        autoreleasepool {
-            // Clear image cache for this channel
-            ImageCache.default.clearMemoryCache()
-            
-            // Force garbage collection
-            _ = viewModel.viewState.messages.count
-        }
-        
-        print("🧹 AGGRESSIVE_CLEANUP: Completed - removed all channel data from memory")
-    }
-    
-    /// Cleanup DM-specific data and unused user objects
-    private func cleanupDMSpecificData(channelId: String) {
-        guard let channel = viewModel.viewState.channels[channelId] else { return }
-        
-        print("🧹 DM_CLEANUP: Cleaning up DM-specific data for channel \(channelId)")
-        
-        // Get recipient IDs for this DM
-        let recipientIds = channel.recipients
-        
-        // Determine which users can be safely removed
-        var usersToKeep = Set<String>()
-        
-        // Always keep current user
-        if let currentUserId = viewModel.viewState.currentUser?.id {
-            usersToKeep.insert(currentUserId)
-        }
-        
-        // Keep users needed for other active channels
-        for (otherChannelId, messageIds) in viewModel.viewState.channelMessages {
-            if otherChannelId == channelId { continue }
-            
-            // Keep users from other DMs
-            if let otherChannel = viewModel.viewState.channels[otherChannelId] {
-                usersToKeep.formUnion(otherChannel.recipients)
-            }
-            
-            // Keep message authors from other channels
-            for messageId in messageIds {
-                if let message = viewModel.viewState.messages[messageId] {
-                    usersToKeep.insert(message.author)
-                    if let mentions = message.mentions {
-                        usersToKeep.formUnion(mentions)
-                    }
-                }
-            }
-        }
-        
-        // Keep users needed for servers
-        for server in viewModel.viewState.servers.values {
-            usersToKeep.insert(server.owner)
-            // Keep members of servers
-            if let serverMembers = viewModel.viewState.members[server.id] {
-                usersToKeep.formUnion(serverMembers.keys)
-            }
-        }
-        
-        // Remove users that are no longer needed
-        let usersToRemove = recipientIds.filter { userId in
-            !usersToKeep.contains(userId) && userId != viewModel.viewState.currentUser?.id
-        }
-        
-        if !usersToRemove.isEmpty {
-            print("🧹 DM_CLEANUP: Removing \(usersToRemove.count) unused users from memory")
-            for userId in usersToRemove {
-                viewModel.viewState.users.removeValue(forKey: userId)
-                
-                // Also remove from members if they exist
-                for serverId in viewModel.viewState.members.keys {
-                    viewModel.viewState.members[serverId]?.removeValue(forKey: userId)
-                }
-            }
-        } else {
-            print("🧹 DM_CLEANUP: All users are still needed, keeping them")
-        }
-        
-        // Clear any DM-specific caches
-        // Note: Keep the channel object itself for future conversations
-        print("🧹 DM_CLEANUP: Completed DM cleanup")
-    }
-    
-    // CRITICAL: Add automatic memory management to prevent crashes
-    private func enforceMessageLimits() {
-        // DISABLED: Memory cleanup was causing UI freezes
-        // Don't perform any message limit enforcement while in the channel
-        return
-    }
-    
-    // Check if we need memory cleanup
-    private func checkMemoryUsageAndCleanup() {
-        // DISABLED: Memory cleanup was causing UI freezes
-        // Don't perform any memory cleanup checks while in the channel
-        return
-    }
-    
-    // Start automatic memory cleanup timer
-    private func startMemoryCleanupTimer() {
-        // DISABLED: Memory cleanup was causing UI freezes
-        // Don't start any automatic cleanup timers while in the channel
-        return
-    }
-    
-    // Stop memory cleanup timer
-    private func stopMemoryCleanupTimer() {
-        memoryCleanupTimer?.invalidate()
-        memoryCleanupTimer = nil
-        // Keep the timer invalidation but remove the print
-    }
-    
-    // Handle system memory warnings
-    @objc private func handleMemoryWarning() {
-        // DISABLED: Memory cleanup was causing UI freezes while in the channel
-        // Don't perform any aggressive cleanup while user is actively viewing messages
-        // Messages will be cleared when leaving the channel
-        // print("⚠️ MEMORY WARNING: Received memory warning but deferring cleanup until channel exit")
-        return
-    }
-    
-    // Handle channel search closing notification
-    @objc private func handleChannelSearchClosing(_ notification: Notification) {
-        guard let userInfo = notification.object as? [String: Any],
-              let channelId = userInfo["channelId"] as? String,
-              let isReturning = userInfo["isReturning"] as? Bool else {
-            return
-        }
-        
-        // Check if this notification is for our channel
-        if channelId == viewModel.channel.id && isReturning {
-            print("🔍 SEARCH_CLOSING: User is returning from search to channel \(channelId)")
-            isReturningFromSearch = true
-            
-            // Don't clear the flag here - let viewDidAppear handle it
-        }
-    }
-    
-    // Helper method to log memory usage
-    private func logMemoryUsage(prefix: String) {
-        var info = mach_task_basic_info()
-        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
-        
-        let result = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
-                task_info(mach_task_self_,
-                         task_flavor_t(MACH_TASK_BASIC_INFO),
-                         $0,
-                         &count)
-            }
-        }
-        
-        if result == KERN_SUCCESS {
-            let usedMB = Double(info.resident_size) / 1024.0 / 1024.0
-            // print("📊 MEMORY USAGE [\(prefix)]: \(String(format: "%.2f", usedMB)) MB")
-            // print("   - Messages in viewState: \(viewModel.viewState.messages.count)")
-            // print("   - Users in viewState: \(viewModel.viewState.users.count)")
-            // print("   - Channel messages count: \(viewModel.viewState.channelMessages[viewModel.channel.id]?.count ?? 0)")
-            // print("   - Local messages count: \(localMessages.count)")
-            // print("   - Servers: \(viewModel.viewState.servers.count)")
-            // print("   - Members dictionaries: \(viewModel.viewState.members.count)")
-        }
-    }
+    // MARK: - Memory Management
+    // Memory management methods moved to MessageableChannelViewController+MemoryManagement.swift
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
@@ -3311,349 +3040,133 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
     }
     
-	private func loadInitialMessages() async {
-		let channelId = viewModel.channel.id
-		
-		// CRITICAL FIX: Reset empty response time when loading initial messages
-		lastEmptyResponseTime = nil
-		print("🔄 LOAD_INITIAL: Reset lastEmptyResponseTime for initial load")
-		
-		// CRITICAL FIX: Don't reload if user is in target message position
-		if isInTargetMessagePosition && targetMessageId == nil {
-			print("🎯 LOAD_INITIAL: User is in target message position, skipping reload to preserve position")
-			return
-		}
-		
-		// Check if already loading to prevent duplicate calls
-		MessageableChannelViewController.loadingMutex.lock()
-		if MessageableChannelViewController.loadingChannels.contains(channelId) {
-			print("⚠️ Channel \(channelId) is already being loaded, skipping duplicate request")
-			MessageableChannelViewController.loadingMutex.unlock()
-			return
-		} else {
-			print("🚀 LOAD_INITIAL: Starting API call for channel \(channelId)")
-			MessageableChannelViewController.loadingChannels.insert(channelId)
-			messageLoadingState = .loading
-			print("🎯 Set messageLoadingState to .loading for initial load")
-			MessageableChannelViewController.loadingMutex.unlock()
-		}
-		
-		// CRITICAL FIX: Hide empty state immediately when loading starts (especially for cross-channel)
-		DispatchQueue.main.async {
-			self.hideEmptyStateView()
-			print("🚫 LOAD_INITIAL: Hidden empty state at start of loading")
-		}
-		
-		// Ensure cleanup when done
-		defer {
-			MessageableChannelViewController.loadingMutex.lock()
-			MessageableChannelViewController.loadingChannels.remove(channelId)
-			MessageableChannelViewController.loadingMutex.unlock()
-			
-			// CRITICAL FIX: Reset loading state when done
-			messageLoadingState = .notLoading
-			print("🎯 Reset messageLoadingState to .notLoading - loadInitialMessages complete")
-			
-			DispatchQueue.main.async {
-				self.tableView.alpha = 1.0
-			}
-		}
-		
-		// OPTIMIZED: Don't clear existing messages immediately - keep them visible while loading
-		// Only clear if we're switching to a completely different channel
-		
-		// Check if we have existing messages for this channel
-		let hasExistingMessages = viewModel.viewState.channelMessages[channelId]?.isEmpty == false
-		
-		if hasExistingMessages {
-			// print("📊 Found existing messages for channel: \(channelId), keeping them visible while loading new ones")
-			
-			// Keep existing messages visible, just show loading indicator
-			DispatchQueue.main.async { [weak self] in
-				guard let self = self else { return }
-				
-				// Display a loading indicator without clearing messages
-				let spinner = UIActivityIndicatorView(style: .medium)
-				spinner.startAnimating()
-				spinner.frame = CGRect(x: 0, y: 0, width: self.tableView.bounds.width, height: 44)
-				self.tableView.tableFooterView = spinner
-			}
-		} else {
-			// print("🧹 No existing messages for channel: \(channelId), starting fresh")
-			
-			// Only clear if there are no existing messages
-			viewModel.viewState.channelMessages[channelId] = []
-			self.localMessages = []
-			
-			// Force DataSource refresh immediately to show loading state
-			DispatchQueue.main.async { [weak self] in
-				guard let self = self else { return }
-				self.dataSource = LocalMessagesDataSource(viewModel: self.viewModel,
-														  viewController: self,
-														  localMessages: self.localMessages)
-				self.tableView.dataSource = self.dataSource
-				self.tableView.reloadData()
-				
-				// Display loading indicator
-				let spinner = UIActivityIndicatorView(style: .medium)
-				spinner.startAnimating()
-				spinner.frame = CGRect(x: 0, y: 0, width: self.tableView.bounds.width, height: 44)
-				self.tableView.tableFooterView = spinner
-			}
-		}
-		
-		// Log loading states
-		// print("📱 Current ViewState: channelMessages entries = \(viewModel.viewState.channelMessages.count)")
-		// print("📱 Current LocalMessages: count = \(self.localMessages.count)")
-		
-        // Load messages from the server
-        // print("📱 Starting initial message load for channel: \(viewModel.channel.id)")
+    private func loadInitialMessages() async {
+        let channelId = viewModel.channel.id
         
-        // 💾 DB-FIRST: Load from database first for ALL cases
-        let dbMessages = await MessageRepository.shared.fetchMessages(forChannel: viewModel.channel.id)
-        if !dbMessages.isEmpty {
-            print("💾 LOAD_INITIAL: Found \(dbMessages.count) messages in database, loading immediately")
-            let sortedIds = dbMessages.map { $0.id }.sorted { id1, id2 in
-                let date1 = createdAt(id: id1)
-                let date2 = createdAt(id: id2)
-                return date1 < date2
-            }
-            await MainActor.run {
-                for m in dbMessages { viewModel.viewState.messages[m.id] = m }
-                viewModel.viewState.channelMessages[channelId] = sortedIds
-                print("💾 LOAD_INITIAL: Populated ViewState with \(dbMessages.count) messages from database")
-            }
-        } else {
-            print("💾 LOAD_INITIAL: No messages in database for channel \(channelId)")
+        // CRITICAL FIX: Reset empty response time when loading initial messages
+        lastEmptyResponseTime = nil
+        print("🔄 LOAD_INITIAL: Reset lastEmptyResponseTime for initial load")
+        
+        // CRITICAL FIX: Don't reload if user is in target message position
+        if isInTargetMessagePosition && targetMessageId == nil {
+            print("🎯 LOAD_INITIAL: User is in target message position, skipping reload to preserve position")
+            return
         }
         
+        // Check if already loading to prevent duplicate calls
+        MessageableChannelViewController.loadingMutex.lock()
+        if MessageableChannelViewController.loadingChannels.contains(channelId) {
+            print("⚠️ Channel \(channelId) is already being loaded, skipping duplicate request")
+            MessageableChannelViewController.loadingMutex.unlock()
+            return
+        } else {
+            print("🚀 LOAD_INITIAL: Starting API call for channel \(channelId)")
+            MessageableChannelViewController.loadingChannels.insert(channelId)
+            messageLoadingState = .loading
+            print("🎯 Set messageLoadingState to .loading for initial load")
+            MessageableChannelViewController.loadingMutex.unlock()
+        }
+        
+        // CRITICAL FIX: Hide empty state immediately when loading starts (especially for cross-channel)
+        DispatchQueue.main.async {
+            self.hideEmptyStateView()
+            print("🚫 LOAD_INITIAL: Hidden empty state at start of loading")
+        }
+        
+        // Ensure cleanup when done
+        defer {
+            MessageableChannelViewController.loadingMutex.lock()
+            MessageableChannelViewController.loadingChannels.remove(channelId)
+            MessageableChannelViewController.loadingMutex.unlock()
+            
+            // CRITICAL FIX: Reset loading state when done
+            messageLoadingState = .notLoading
+            print("🎯 Reset messageLoadingState to .notLoading - loadInitialMessages complete")
+            
+            DispatchQueue.main.async {
+                self.tableView.alpha = 1.0
+            }
+        }
+        
+        // OPTIMIZED: Don't clear existing messages immediately - keep them visible while loading
+        // Only clear if we're switching to a completely different channel
+        
+        // Check if we have existing messages for this channel
+        let hasExistingMessages = viewModel.viewState.channelMessages[channelId]?.isEmpty == false
+        
+        if hasExistingMessages {
+            // print("📊 Found existing messages for channel: \(channelId), keeping them visible while loading new ones")
+            
+            // Keep existing messages visible, just show loading indicator
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                
+                // Display a loading indicator without clearing messages
+                let spinner = UIActivityIndicatorView(style: .medium)
+                spinner.startAnimating()
+                spinner.frame = CGRect(x: 0, y: 0, width: self.tableView.bounds.width, height: 44)
+                self.tableView.tableFooterView = spinner
+            }
+        } else {
+            // print("🧹 No existing messages for channel: \(channelId), starting fresh")
+            
+            // Only clear if there are no existing messages
+            viewModel.viewState.channelMessages[channelId] = []
+            self.localMessages = []
+            
+            // Force DataSource refresh immediately to show loading state
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.dataSource = LocalMessagesDataSource(viewModel: self.viewModel,
+                                                          viewController: self,
+                                                          localMessages: self.localMessages)
+                self.tableView.dataSource = self.dataSource
+                self.tableView.reloadData()
+                
+                // Display loading indicator
+                let spinner = UIActivityIndicatorView(style: .medium)
+                spinner.startAnimating()
+                spinner.frame = CGRect(x: 0, y: 0, width: self.tableView.bounds.width, height: 44)
+                self.tableView.tableFooterView = spinner
+            }
+        }
+        
+        // Log loading states
+        // print("📱 Current ViewState: channelMessages entries = \(viewModel.viewState.channelMessages.count)")
+        // print("📱 Current LocalMessages: count = \(self.localMessages.count)")
+        
+        // 🎯 REACTIVE ARCHITECTURE: Use ViewModel for data loading
+        // ViewModel handles Database read + Network sync in background
+        print("💾 REACTIVE: Delegating to ViewModel for data loading")
+        
+        await viewModel.loadChannelMessages()
+        
+        print("✅ REACTIVE: ViewModel loaded data - UI will update via DatabaseObserver")
+        
         if let targetId = self.targetMessageId {
-			// We have a specific target message to load
-			print("📜 Loading channel with target message ID: \(targetId)")
-			
-			// CRITICAL FIX: Use nearby API directly for target messages
-			// This ensures we get the target message and surrounding context immediately
-			print("🎯 Target message specified, using nearby API directly")
-			
-			// CRITICAL FIX: Set strong protection flag BEFORE API call to prevent any other loading
-			messageLoadingState = .loading
-			isInTargetMessagePosition = true
-			lastTargetMessageHighlightTime = Date()
-			print("🎯 NEARBY_PROTECTION: Set all protection flags BEFORE nearby API call")
-			
-			// DB-FIRST: Try to serve nearby target from database before network
-			var servedFromDatabase = false
-			if let _ = await MessageRepository.shared.fetchMessage(id: targetId) {
-				let dbMessages = await MessageRepository.shared.fetchMessages(forChannel: viewModel.channel.id)
-				if !dbMessages.isEmpty {
-					let sortedIds = dbMessages.map { $0.id }.sorted { id1, id2 in
-						let date1 = createdAt(id: id1)
-						let date2 = createdAt(id: id2)
-						return date1 < date2
-					}
-					await MainActor.run {
-						for m in dbMessages { viewModel.viewState.messages[m.id] = m }
-						viewModel.viewState.channelMessages[channelId] = sortedIds
-						self.refreshMessages()
-					}
-					print("💾 NEARBY: Served target and context from database, skipping network")
-					servedFromDatabase = true
-				}
-			}
-			    if !servedFromDatabase {
-			        do {
-			            // Use the API to fetch messages near the specified message
-			            print("🌐 API CALL: fetchHistory (nearby) - Channel: \(viewModel.channel.id), Target: \(targetId), Limit: 100")
-			            let result = try await viewModel.viewState.http.fetchHistory(
-			                channel: viewModel.channel.id,
-			                limit: 100,  // Get context around the target message
-			                nearby: targetId
-			            ).get()
-			        print("✅ API RESPONSE: fetchHistory (nearby) - Received \(result.messages.count) messages, \(result.users.count) users")
-			
-			                // print("✅ Nearby API Response received with \(result.messages.count) messages")
-			
-			                // Fetch reply message content for messages that have replies BEFORE MainActor.run
-			                print("🔗 CALLING fetchReplyMessagesContent (nearby API - first call) with \(result.messages.count) messages")
-			                await self.fetchReplyMessagesContent(for: result.messages)
-			
-			                // Process and merge the nearby messages with existing channel history
-			                await MainActor.run {
-			                    if !result.messages.isEmpty {
-			                        // print("📊 Processing \(result.messages.count) nearby messages to merge with existing history")
-			
-			                        // Process users from the response
-			                        for user in result.users {
-			                            viewModel.viewState.users[user.id] = user
-			                        }
-			
-			                        // Process members if present
-			                        if let members = result.members {
-			                            for member in members {
-			                                viewModel.viewState.members[member.id.server, default: [:]][member.id.user] = member
-			                            }
-			                        }
-			
-			                        // Process messages - add them to the messages dictionary
-			                        for message in result.messages {
-			                            viewModel.viewState.messages[message.id] = message
-			                        }
-			
-			                        // Get existing channel messages
-			                        let existingMessages = viewModel.viewState.channelMessages[channelId] ?? []
-			
-			                        // Create a set of existing message IDs for quick lookup
-			                        let existingMessageIds = Set(existingMessages)
-			
-			                        // Filter out messages that are already in the channel history
-			                        let newMessages = result.messages.filter { !existingMessageIds.contains($0.id) }
-			
-			                        if !newMessages.isEmpty {
-			                            // Sort new messages by timestamp
-			                            let sortedNewMessages = newMessages.sorted { msg1, msg2 in
-			                                let date1 = createdAt(id: msg1.id)
-			                                let date2 = createdAt(id: msg2.id)
-			                                return date1 < date2
-			                            }
-			
-			                            // Merge new messages with existing messages and sort the combined list
-			                            var allMessages: [Types.Message] = []
-			
-			                            // Add existing messages
-			                            for messageId in existingMessages {
-			                                if let message = viewModel.viewState.messages[messageId] {
-			                                    allMessages.append(message)
-			                                }
-			                            }
-			
-			                            // Add new messages
-			                            allMessages.append(contentsOf: sortedNewMessages)
-			
-			                            // Sort the combined list by timestamp
-			                            let sortedAllMessages = allMessages.sorted { msg1, msg2 in
-			                                let date1 = createdAt(id: msg1.id)
-			                                let date2 = createdAt(id: msg2.id)
-			                                return date1 < date2
-			                            }
-			
-			                            // Create the final list of message IDs
-			                            let mergedIds = sortedAllMessages.map { $0.id }
-			
-			                            // Update all message arrays with the merged list
-			                            self.localMessages = mergedIds
-			                            self.viewModel.viewState.channelMessages[channelId] = mergedIds
-			                            self.viewModel.messages = mergedIds
-			
-			                            // print("🔄 Merged \(newMessages.count) new messages with \(existingMessages.count) existing messages")
-			                            // print("🔄 Total messages after merge: \(mergedIds.count)")
-			                        } else {
-			                            // print("ℹ️ All nearby messages were already in channel history")
-			                        }
-			
-			                        // Update UI with the merged message list
-			                        DispatchQueue.main.async {
-			                            // Remove loading spinner
-			                            self.tableView.tableFooterView = nil
-			
-			                            // Re-create the data source with updated messages
-			                            self.dataSource = LocalMessagesDataSource(viewModel: self.viewModel,
-			                                                                     viewController: self,
-			                                                                     localMessages: self.localMessages)
-			                            self.tableView.dataSource = self.dataSource
-			                            self.tableView.reloadData()
-			
-			                            // Update table view bouncing behavior
-			                            self.updateTableViewBouncing()
-			
-			                            // CRITICAL FIX: Keep loading state until target message is scrolled to
-			                            // This prevents any other loading from interfering
-			                            print("🎯 NEARBY_SUCCESS: Keeping messageLoadingState = .loading until scroll completes")
-			
-			                            // Instead, trigger scrollToTargetMessage properly
-			                            if let targetId = self.targetMessageId {
-			                                print("🎯 loadInitialMessages: Found target message \(targetId), triggering scroll")
-			
-			                                // Check if target message is actually loaded
-			                                let targetInLocalMessages = self.localMessages.contains(targetId)
-			                                let targetInViewState = self.viewModel.viewState.messages[targetId] != nil
-			
-			                                print("🎯 loadInitialMessages: Target message \(targetId) loaded check:")
-			                                print("   - In localMessages: \(targetInLocalMessages)")
-			                                print("   - In viewState: \(targetInViewState)")
-			
-			                                if targetInLocalMessages && targetInViewState {
-			                                    print("✅ Target message is loaded, scrolling to it")
-			                                    self.scrollToTargetMessage()
-			
-			                                    // CRITICAL FIX: Only reset loading state AFTER successful scroll
-			                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-			                                        self.messageLoadingState = .notLoading
-			                                        print("🎯 NEARBY_COMPLETE: Reset messageLoadingState after scroll completion")
-			                                    }
-			                                } else {
-			                                    print("❌ Target message NOT loaded, keeping targetMessageId for later")
-			                                    // Reset loading state since we couldn't scroll
-			                                    self.messageLoadingState = .notLoading
-			                                }
-			                            } else {
-			                                // No target message, reset loading state
-			                                self.messageLoadingState = .notLoading
-			                            }
-			
-			                            // Ensure table is visible
-			                            self.tableView.alpha = 1.0
-			
-			                            // Update empty state visibility
-			                            self.updateEmptyStateVisibility()
-			                        }
-			                    } else {
-			                        // print("⚠️ No messages found nearby target")
-			                        DispatchQueue.main.async {
-			                            self.tableView.tableFooterView = nil
-			
-			                            // CRITICAL FIX: Reset loading state if nearby call returned no messages
-			                            self.messageLoadingState = .notLoading
-			                            self.isInTargetMessagePosition = false
-			                            self.lastTargetMessageHighlightTime = nil
-			                            print("🎯 NEARBY_EMPTY: Reset protection flags after empty nearby response")
-			
-			                            // Still try to scroll to target in case it was loaded by regular loading
-			                            self.scrollToTargetMessage()
-			                        }
-			                    }
-			                }
-			            } catch {
-			                // If nearby loading fails, fall back to regular loading
-			                print("⚠️ Failed to load messages nearby target: \(error)")
-			
-			                DispatchQueue.main.async {
-			                    self.tableView.tableFooterView = nil
-			
-			                    // CRITICAL FIX: Reset loading state if nearby call failed
-			                    self.messageLoadingState = .notLoading
-			                    self.isInTargetMessagePosition = false
-			                    self.lastTargetMessageHighlightTime = nil
-			                    print("🎯 NEARBY_ERROR: Reset protection flags after nearby call error")
-			
-			                    // Clear target message from ViewState if it failed to load
-			                    self.viewModel.viewState.currentTargetMessageId = nil
-			                    self.targetMessageId = nil
-			
-			                    // Show table view and hide empty state
-			                    self.tableView.alpha = 1.0
-			                    self.hideEmptyStateView()
-			                }
-			
-			                // Fall back to regular loading
-			                print("🔄 FALLBACK: Falling back to regular loading after target message failure")
-			                await loadRegularMessages()
-			            }
-			        } else {
-			            // No target message ID, load regular messages
-			            await loadRegularMessages()
-			        }
-		}
-	}
+            // 🎯 REACTIVE: Use ViewModel to load target message
+            print("🎯 REACTIVE: Delegating target message \(targetId) to ViewModel")
+            
+            // Set protection flags
+            messageLoadingState = .loading
+            isInTargetMessagePosition = true
+            lastTargetMessageHighlightTime = Date()
+            print("🎯 REACTIVE: Protection flags set")
+            
+            // Let ViewModel handle loading
+            let foundInDB = await viewModel.loadTargetMessage(targetId)
+            
+            if foundInDB {
+                print("💾 REACTIVE: Target message loaded from Database")
+                await MainActor.run {
+                    self.refreshMessages()
+                    self.scrollToTargetMessage()
+                }
+            } else {
+                print("🔄 REACTIVE: ViewModel triggered network sync for target message")
+            }
+        }
+    }
     
     // Helper method to load regular messages without a target
     private func loadRegularMessages() async {
@@ -4002,107 +3515,50 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     /// Fetch a specific message from the server if it's not in cache
     /// This is used when replying to old messages that aren't currently loaded
     func fetchMessageForReply(messageId: String, channelId: String) async -> Types.Message? {
-        print("🔍 FETCH_REPLY: Attempting to fetch message \(messageId) for reply")
+        print("🔍 FETCH_REPLY: Delegating to ViewModel for message \(messageId)")
         
-        // 1️⃣ First check ViewState cache (fastest)
-        if let cachedMessage = viewModel.viewState.messages[messageId] {
-            print("✅ FETCH_REPLY: Message found in ViewState cache")
-            return cachedMessage
-        }
+        // Delegate to ViewModel
+        let message = await viewModel.loadSingleMessage(messageId)
         
-        // 2️⃣ Check Realm database (second fastest, offline support)
-        if let dbMessage = await MessageRepository.shared.fetchMessage(id: messageId) {
-            print("💾 FETCH_REPLY: Message found in Realm database")
-            // Update ViewState cache from database
-            await MainActor.run {
-                viewModel.viewState.messages[messageId] = dbMessage
-            }
-            return dbMessage
-        }
-        
-        // 3️⃣ Finally, fetch from network
-        do {
-            print("🌐 FETCH_REPLY: Fetching message from server - Channel: \(channelId), Message: \(messageId)")
-            let message = try await viewModel.viewState.http.fetchMessage(
-                channel: channelId,
-                message: messageId
-            ).get()
-            
-            print("✅ FETCH_REPLY: Successfully fetched message from server")
-            print("✅ FETCH_REPLY: Message content: \(message.content ?? "no content")")
-            
-            // Save to database (DatabaseObserver will update ViewState)
-            Task.detached(priority: .utility) {
-                await MessageRepository.shared.saveMessage(message)
-            }
-            
-            // Also fetch the author if not available
-            if viewModel.viewState.users[message.author] == nil {
-                Task {
-                    await self.fetchUserForMessage(userId: message.author)
-                }
-            }
-            
+        if let message = message {
+            print("✅ FETCH_REPLY: ViewModel returned message")
             return message
+        } else {
+            print("🔄 FETCH_REPLY: Message not found in Database/ViewState - network sync triggered")
             
-        } catch {
-            print("❌ FETCH_REPLY: Failed to fetch message: \(error)")
+            // Wait a bit for network sync to complete and check again
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
             
-            // Check if this is a 404 error (message deleted)
-            if let revoltError = error as? RevoltError,
-               case .HTTPError(_, let statusCode) = revoltError,
-               statusCode == 404 {
-                print("🗑️ FETCH_REPLY: Message \(messageId) was deleted (404)")
+            // Check if message was loaded by network sync
+            if let syncedMessage = viewModel.viewState.messages[messageId] {
+                print("✅ FETCH_REPLY: Message loaded after network sync")
+                return syncedMessage
+            } else {
+                print("❌ FETCH_REPLY: Message still not available after sync - possibly deleted or 404")
+                
+                // Message couldn't be loaded - might be deleted (404) or access denied
+                // Return nil and let the UI handle it gracefully
+                return nil
             }
-            
-            return nil
         }
     }
     
     /// Fetch user data if not in cache
     func fetchUserForMessage(userId: String) async {
-        // 1️⃣ First check ViewState cache (fastest)
-        guard viewModel.viewState.users[userId] == nil else { 
-            print("✅ FETCH_USER: User \(userId) found in ViewState cache")
-            return 
+        print("👤 FETCH_USER: Delegating to ViewModel for user \(userId)")
+        
+        // Delegate to ViewModel
+        let user = await viewModel.loadUser(userId)
+        
+        if let user = user {
+            print("✅ FETCH_USER: ViewModel returned user \(user.username)")
+        } else {
+            print("🔄 FETCH_USER: ViewModel triggered network sync")
         }
         
-        // 2️⃣ Check Realm database (second fastest, offline support)
-        if let dbUser = await UserRepository.shared.fetchUser(id: userId) {
-            print("💾 FETCH_USER: User \(userId) found in Realm database")
-            await MainActor.run {
-                viewModel.viewState.users[userId] = dbUser
-                print("✅ FETCH_USER: User \(dbUser.username) loaded from database")
-            }
-            return
-        }
-        
-        // 3️⃣ Finally, fetch from network
-        do {
-            print("🌐 FETCH_USER: Fetching user \(userId) from server")
-            let user = try await viewModel.viewState.http.fetchUser(user: userId).get()
-            
-            print("✅ FETCH_USER: Successfully fetched user \(user.username) from server")
-            
-            // Save to database (DatabaseObserver will update ViewState)
-            Task.detached(priority: .utility) {
-                await UserRepository.shared.saveUser(user)
-            }
-            
-        } catch {
-            print("❌ FETCH_USER: Failed to fetch user \(userId): \(error)")
-            
-            // Create a placeholder user to prevent crashes
-            await MainActor.run {
-                let placeholder = Types.User(
-                    id: userId,
-                    username: "Unknown User",
-                    discriminator: "0000",
-                    relationship: .None
-                )
-                viewModel.viewState.users[userId] = placeholder
-                print("🔄 FETCH_USER: Created placeholder for user \(userId)")
-            }
+        // Old HTTP fetch code removed - network sync happens in background
+        if false {
+            print("❌ FETCH_USER: Failed to fetch user (code removed)")
         }
     }
     
@@ -7188,159 +6644,147 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
     }
     
-    private func loadInitialMessagesImmediate() async {
-        let channelId = viewModel.channel.id
-        print("⚡ IMMEDIATE_LOAD: Starting load for channel \(channelId)")
-        
-        // Ensure table is visible at the end
-        defer {
-            DispatchQueue.main.async {
-                self.tableView.alpha = 1.0
-                self.tableView.tableFooterView = nil
-            }
-        }
-        
-        // 1️⃣ FIRST: Try to load from database (INSTANT, works offline)
-        let dbStartTime = Date()
-        print("💾 DB_LOAD: Checking Realm database for cached messages")
-        
-        let dbMessages = await MessageRepository.shared.fetchMessages(forChannel: channelId)
-        
-        if !dbMessages.isEmpty {
-            let dbDuration = Date().timeIntervalSince(dbStartTime)
-            print("💾 DB_LOAD: Found \(dbMessages.count) messages in database (took \(String(format: "%.3f", dbDuration))s)")
-            
-            // Load messages from database to UI immediately
-            let sortedIds = dbMessages.map { $0.id }.sorted { id1, id2 in
-                let date1 = createdAt(id: id1)
-                let date2 = createdAt(id: id2)
-                return date1 < date2
-            }
-            
-            await MainActor.run {
-                self.hideSkeletonView()
-                viewModel.viewState.channelMessages[channelId] = sortedIds
-                self.refreshMessages()
-                print("💾 DB_LOAD: UI updated with \(sortedIds.count) messages from database")
-            }
-        } else {
-            print("💾 DB_LOAD: No cached messages in database")
-        }
-        
-        // 2️⃣ THEN: Fetch fresh data from network (in background, updates via DatabaseObserver)
-        let apiStartTime = Date()
-        print("🌐 API_LOAD: Fetching fresh data from server")
-        
-        do {
-            // Get server ID if this is a server channel
-            let serverId = viewModel.channel.server
-            
-            // SMART LIMIT: Use 10 for specific channel in specific server, 50 for others
-            let messageLimit = (channelId == "01J7QTT66242A7Q26A2FH5TD48" && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : 50
-            
-            // Fetch from API only if DB did not provide any messages
-            print("🌐 API CALL: fetchHistory - Channel: \(channelId), Limit: \(messageLimit)")
-            let result = try await viewModel.viewState.http.fetchHistory(
-                channel: channelId,
-                limit: messageLimit,
-                sort: "Latest",
-                server: serverId,
-                include_users: true
-            ).get()
-            
-            let apiEndTime = Date()
-            let apiDuration = apiEndTime.timeIntervalSince(apiStartTime)
-            print("🌐 API_RESPONSE: Received \(result.messages.count) messages in \(String(format: "%.2f", apiDuration))s")
-            
-            // Save to database (DatabaseObserver will update ViewState automatically)
-            print("💾 Saving \(result.messages.count) messages, \(result.users.count) users to database")
-            Task.detached(priority: .utility) {
-                await NetworkRepository.shared.saveFetchHistoryResponse(
-                    messages: result.messages,
-                    users: result.users,
-                    members: result.members
-                )
-                print("✅ Data saved to Realm database")
-            }
-            
-            // IMMEDIATE PROCESSING for UI responsiveness
-            let processingStartTime = Date()
-            
-            // Process users immediately (for instant display)
-            for user in result.users {
-                viewModel.viewState.users[user.id] = user
-            }
-            
-            // Process members immediately
-            if let members = result.members {
-                for member in members {
-                    viewModel.viewState.members[member.id.server, default: [:]][member.id.user] = member
-                }
-            }
-            
-            // Process messages immediately
-            for message in result.messages {
-                viewModel.viewState.messages[message.id] = message
-            }
-            
-            // Fetch reply message content for messages that have replies
-            print("🔗 CALLING fetchReplyMessagesContentAndRefreshUI (immediate load) with \(result.messages.count) messages")
-            await fetchReplyMessagesContentAndRefreshUI(for: result.messages)
-            
-            // Sort messages immediately
-            let sortedIds = result.messages.map { $0.id }.sorted { id1, id2 in
-                let date1 = createdAt(id: id1)
-                let date2 = createdAt(id: id2)
-                return date1 < date2
-            }
-            
-            let processingEndTime = Date()
-            let processingDuration = processingEndTime.timeIntervalSince(processingStartTime)
-            print("⚡ PROCESSING_IMMEDIATE: Processed \(sortedIds.count) messages in \(String(format: "%.2f", processingDuration))s")
-            
-            // IMMEDIATE UI UPDATE
-            let uiStartTime = Date()
-            
-            await MainActor.run {
-                // Hide skeleton first
-                self.hideSkeletonView()
-                
-                // Update all data immediately
-                self.localMessages = sortedIds
-                self.viewModel.viewState.channelMessages[channelId] = sortedIds
-                self.viewModel.messages = sortedIds
-                
-                // Update data source immediately
-                if let localDataSource = self.dataSource as? LocalMessagesDataSource {
-                    localDataSource.updateMessages(sortedIds)
-                }
-                
-                // Reload table immediately
-                self.tableView.reloadData()
-                
-                // Position at bottom immediately
-                if !sortedIds.isEmpty {
-                    self.positionTableAtBottomBeforeShowing()
-                }
-                
-                let uiEndTime = Date()
-                let uiDuration = uiEndTime.timeIntervalSince(uiStartTime)
-                let totalDuration = uiEndTime.timeIntervalSince(apiStartTime)
-                
-                print("⚡ UI_UPDATE_IMMEDIATE: Updated UI in \(String(format: "%.2f", uiDuration))s")
-                print("⚡ TOTAL_IMMEDIATE_DURATION: \(String(format: "%.2f", totalDuration))s")
-                print("⚡ BREAKDOWN: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s, UI=\(String(format: "%.2f", uiDuration))s")
-            }
-            
-        } catch {
-            print("❌ IMMEDIATE_LOAD_ERROR: \(error)")
-            
-            DispatchQueue.main.async {
-                self.hideSkeletonView()
-                self.updateEmptyStateVisibility()
-            }
-        }
-    }
+//    private func loadInitialMessagesImmediate() async {
+//        let channelId = viewModel.channel.id
+//        print("💾 REACTIVE_IMMEDIATE: Delegating to ViewModel for channel \(channelId)")
+//        
+//        // Ensure table is visible at the end
+//        defer {
+//            DispatchQueue.main.async {
+//                self.tableView.alpha = 1.0
+//                self.tableView.tableFooterView = nil
+//            }
+//        }
+//        
+//        let startTime = Date()
+//        
+//        // Delegate to ViewModel
+//        await viewModel.loadChannelMessages()
+//        
+//        let duration = Date().timeIntervalSince(startTime)
+//        print("✅ REACTIVE_IMMEDIATE: ViewModel completed in \(String(format: "%.3f", duration))s")
+//        
+//        // Refresh UI
+//        await MainActor.run {
+//            self.hideSkeletonView()
+//            self.refreshMessages()
+//        }
+//        
+//        // Old network fetch code removed - all network happens via NetworkSyncService
+//        if false {
+//        let apiStartTime = Date()
+//        print("🌐 API_LOAD: Fetching fresh data from server")
+//        
+//        do {
+//            // Get server ID if this is a server channel
+//            let serverId = viewModel.channel.server
+//            
+//            // SMART LIMIT: Use 10 for specific channel in specific server, 50 for others
+//            let messageLimit = (channelId == "01J7QTT66242A7Q26A2FH5TD48" && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : 50
+//            
+//            // Fetch from API only if DB did not provide any messages
+//            print("🌐 API CALL: fetchHistory - Channel: \(channelId), Limit: \(messageLimit)")
+//            let result = try await viewModel.viewState.http.fetchHistory(
+//                channel: channelId,
+//                limit: messageLimit,
+//                sort: "Latest",
+//                server: serverId,
+//                include_users: true
+//            ).get()
+//            
+//            let apiEndTime = Date()
+//            let apiDuration = apiEndTime.timeIntervalSince(apiStartTime)
+//            print("🌐 API_RESPONSE: Received \(result.messages.count) messages in \(String(format: "%.2f", apiDuration))s")
+//            
+//            // Save to database (DatabaseObserver will update ViewState automatically)
+//            print("💾 Saving \(result.messages.count) messages, \(result.users.count) users to database")
+//            Task.detached(priority: .utility) {
+//                await NetworkRepository.shared.saveFetchHistoryResponse(
+//                    messages: result.messages,
+//                    users: result.users,
+//                    members: result.members
+//                )
+//                print("✅ Data saved to Realm database")
+//            }
+//            
+//            // IMMEDIATE PROCESSING for UI responsiveness
+//            let processingStartTime = Date()
+//            
+//            // Process users immediately (for instant display)
+//            for user in result.users {
+//                viewModel.viewState.users[user.id] = user
+//            }
+//            
+//            // Process members immediately
+//            if let members = result.members {
+//                for member in members {
+//                    viewModel.viewState.members[member.id.server, default: [:]][member.id.user] = member
+//                }
+//            }
+//            
+//            // Process messages immediately
+//            for message in result.messages {
+//                viewModel.viewState.messages[message.id] = message
+//            }
+//            
+//            // Fetch reply message content for messages that have replies
+//            print("🔗 CALLING fetchReplyMessagesContentAndRefreshUI (immediate load) with \(result.messages.count) messages")
+//            await fetchReplyMessagesContentAndRefreshUI(for: result.messages)
+//            
+//            // Sort messages immediately
+//            let sortedIds = result.messages.map { $0.id }.sorted { id1, id2 in
+//                let date1 = createdAt(id: id1)
+//                let date2 = createdAt(id: id2)
+//                return date1 < date2
+//            }
+//            
+//            let processingEndTime = Date()
+//            let processingDuration = processingEndTime.timeIntervalSince(processingStartTime)
+//            print("⚡ PROCESSING_IMMEDIATE: Processed \(sortedIds.count) messages in \(String(format: "%.2f", processingDuration))s")
+//            
+//            // IMMEDIATE UI UPDATE
+//            let uiStartTime = Date()
+//            
+//            await MainActor.run {
+//                // Hide skeleton first
+//                self.hideSkeletonView()
+//                
+//                // Update all data immediately
+//                self.localMessages = sortedIds
+//                self.viewModel.viewState.channelMessages[channelId] = sortedIds
+//                self.viewModel.messages = sortedIds
+//                
+//                // Update data source immediately
+//                if let localDataSource = self.dataSource as? LocalMessagesDataSource {
+//                    localDataSource.updateMessages(sortedIds)
+//                }
+//                
+//                // Reload table immediately
+//                self.tableView.reloadData()
+//                
+//                // Position at bottom immediately
+//                if !sortedIds.isEmpty {
+//                    self.positionTableAtBottomBeforeShowing()
+//                }
+//                
+//                let uiEndTime = Date()
+//                let uiDuration = uiEndTime.timeIntervalSince(uiStartTime)
+//                let totalDuration = uiEndTime.timeIntervalSince(apiStartTime)
+//                
+//                print("⚡ UI_UPDATE_IMMEDIATE: Updated UI in \(String(format: "%.2f", uiDuration))s")
+//                print("⚡ TOTAL_IMMEDIATE_DURATION: \(String(format: "%.2f", totalDuration))s")
+//                print("⚡ BREAKDOWN: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s, UI=\(String(format: "%.2f", uiDuration))s")
+//            }
+//            
+//        } catch {
+//            print("❌ IMMEDIATE_LOAD_ERROR: \(error)")
+//            
+//            DispatchQueue.main.async {
+//                self.hideSkeletonView()
+//                self.updateEmptyStateVisibility()
+//            }
+//        }
+//    }
 }
 
 // RepliesContainerViewDelegate conformance moved to RepliesManager
@@ -8041,152 +7485,8 @@ extension MessageableChannelViewController {
         logMemoryUsage(prefix: "FINAL CLEANUP COMPLETE")
     }
     
-    // Force immediate memory cleanup - called after view disappears
-    private func forceImmediateMemoryCleanup() {
-        print("⚡ FORCE_IMMEDIATE_CLEANUP: Starting INSTANT memory cleanup")
-        let startTime = CFAbsoluteTimeGetCurrent()
-        
-        // IMMEDIATE: Force image cache cleanup
-        let cache = ImageCache.default
-        cache.clearMemoryCache()
-        
-        // IMMEDIATE: Aggressive user cleanup - NO Task, NO async
-        let channelId = self.viewModel.channel.id
-        let isDM = self.viewModel.channel.isDM
-        let isGroupDM = self.viewModel.channel.isGroupDmChannel
-        
-        print("👥 INSTANT_USER_CLEANUP: Starting for channel \(channelId) - DM: \(isDM), GroupDM: \(isGroupDM)")
-        let initialUserCount = self.viewModel.viewState.users.count
-        
-        // Collect all user IDs that should be kept
-        var usersToKeep = Set<String>()
-        
-        // Add current user if exists
-        if let currentUserId = self.viewModel.viewState.currentUser?.id {
-            usersToKeep.insert(currentUserId)
-        }
-        
-        // Only keep users from OTHER channels (not the one we just left)
-        for (otherChannelId, messageIds) in self.viewModel.viewState.channelMessages {
-            // Skip the channel we just left
-            if otherChannelId == channelId { continue }
-            
-            // Add users from messages in other channels
-            for messageId in messageIds {
-                if let message = self.viewModel.viewState.messages[messageId] {
-                    usersToKeep.insert(message.author)
-                    if let mentions = message.mentions {
-                        usersToKeep.formUnion(mentions)
-                    }
-                }
-            }
-        }
-        
-        // IMMEDIATE: Keep users from OTHER active DMs
-        for channel in self.viewModel.viewState.channels.values {
-            // Skip the channel we just left
-            if channel.id == channelId { continue }
-            
-            // Keep users from other active DMs
-            if channel.isDM || channel.isGroupDmChannel {
-                let recipientIds = channel.recipients
-                usersToKeep.formUnion(recipientIds)
-                print("👥 INSTANT_USER_CLEANUP: Keeping \(recipientIds.count) users from other DM \(channel.id)")
-            }
-        }
-        
-        // IMMEDIATE: Keep users that might be needed for server lists
-        for server in self.viewModel.viewState.servers.values {
-            usersToKeep.insert(server.owner)
-        }
-        
-        print("👥 INSTANT_USER_CLEANUP: Users to keep: \(usersToKeep.count)")
-        
-        // IMMEDIATE: For DMs, be more aggressive about user cleanup
-        if isDM || isGroupDM {
-            print("👥 INSTANT_USER_CLEANUP: Performing DM-specific user cleanup")
-            
-            // Get users from the DM we just left
-            let dmRecipients = self.viewModel.channel.recipients
-            let usersToRemove = dmRecipients.filter { userId in
-                !usersToKeep.contains(userId)
-            }
-            
-            if !usersToRemove.isEmpty {
-                print("👥 INSTANT_USER_CLEANUP: Removing \(usersToRemove.count) DM users that are no longer needed")
-                for userId in usersToRemove {
-                    self.viewModel.viewState.users.removeValue(forKey: userId)
-                }
-            } else {
-                print("👥 INSTANT_USER_CLEANUP: All DM users are still needed elsewhere")
-            }
-        }
-        
-        let finalUserCount = self.viewModel.viewState.users.count
-        let endTime = CFAbsoluteTimeGetCurrent()
-        let duration = (endTime - startTime) * 1000
-        
-        print("⚡ FORCE_IMMEDIATE_CLEANUP: Completed in \(String(format: "%.2f", duration))ms - Users: \(initialUserCount) -> \(finalUserCount)")
-    }
-    
-    /// Performs INSTANT final cleanup with no delays
-    private func performFinalInstantCleanup() {
-        let channelId = viewModel.channel.id
-        print("⚡ FINAL_INSTANT_CLEANUP: Starting IMMEDIATE final cleanup for channel \(channelId)")
-        
-        let startTime = CFAbsoluteTimeGetCurrent()
-        
-        // 1. IMMEDIATE: Clear table view synchronously
-        self.tableView.dataSource = nil
-        self.tableView.delegate = nil
-        
-        // 2. IMMEDIATE: Force ViewState cleanup synchronously (no Task, no async)
-        viewModel.viewState.cleanupChannelFromMemory(channelId: channelId, preserveForNavigation: false)
-        viewModel.viewState.forceMemoryCleanup()
-        
-        // 3. IMMEDIATE: Aggressive image cache cleanup
-        ImageCache.default.clearMemoryCache()
-        
-        // 4. IMMEDIATE: Reset all controller state
-        targetMessageId = nil
-        targetMessageProcessed = false
-        isInTargetMessagePosition = false
-        isLoadingMore = false
-        messageLoadingState = .notLoading
-        
-        // 5. IMMEDIATE: Final verification and force cleanup
-        let remainingMessages = viewModel.viewState.messages.values.filter { $0.channel == channelId }.count
-        let remainingChannelMessages = viewModel.viewState.channelMessages[channelId]?.count ?? 0
-        
-        if remainingMessages > 0 || remainingChannelMessages > 0 {
-            print("⚠️ FINAL_INSTANT_CLEANUP: Found \(remainingMessages) remaining messages, force removing")
-            
-            // IMMEDIATE: Force remove any remaining data
-            viewModel.viewState.channelMessages.removeValue(forKey: channelId)
-            
-            let finalMessagesToRemove = viewModel.viewState.messages.keys.filter { messageId in
-                if let message = viewModel.viewState.messages[messageId] {
-                    return message.channel == channelId
-                }
-                return false
-            }
-            
-            for messageId in finalMessagesToRemove {
-                viewModel.viewState.messages.removeValue(forKey: messageId)
-            }
-            
-            print("⚡ FINAL_INSTANT_CLEANUP: Force removed \(finalMessagesToRemove.count) remaining messages")
-        }
-        
-        // 6. IMMEDIATE: Force garbage collection
-        _ = viewModel.viewState.messages.count + viewModel.viewState.users.count + viewModel.viewState.channelMessages.count
-        
-        let endTime = CFAbsoluteTimeGetCurrent()
-        let duration = (endTime - startTime) * 1000 // Convert to milliseconds
-        
-        print("⚡ FINAL_INSTANT_CLEANUP: Completed in \(String(format: "%.2f", duration))ms - ALL memory freed immediately!")
-        logMemoryUsage(prefix: "AFTER INSTANT FINAL CLEANUP")
-    }
+    // NOTE: forceImmediateMemoryCleanup() moved to MessageableChannelViewController+MemoryManagement.swift
+    // NOTE: performFinalInstantCleanup() moved to MessageableChannelViewController+MemoryManagement.swift
 }
 
 // MARK: - Scroll Position Preservation

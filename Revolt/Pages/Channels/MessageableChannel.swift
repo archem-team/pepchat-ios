@@ -43,14 +43,16 @@ class MessageableChannelViewModel: ObservableObject {
     func loadMoreMessages(before: String? = nil) async -> FetchHistory? {
         if isPreview { return nil }
 
-        // 1️⃣ FIRST: Try to load from database (instant, works offline)
+        // 🎯 REACTIVE ARCHITECTURE: Read from Database ONLY
+        print("💾 REACTIVE_LOAD_MORE: Loading messages from Database")
+        
+        // 1️⃣ Read from Database
         let dbMessages = await MessageRepository.shared.fetchMessages(forChannel: channel.id)
         
-        if !dbMessages.isEmpty && before == nil {
-            // We have cached messages and this is initial load - serve from DB
-            print("💾 LOAD_MORE: Serving \(dbMessages.count) messages from database")
+        if !dbMessages.isEmpty {
+            print("💾 REACTIVE_LOAD_MORE: Found \(dbMessages.count) messages in Database")
             
-            // Convert to ViewState format
+            // Update ViewState from Database
             for message in dbMessages {
                 viewState.messages[message.id] = message
             }
@@ -62,53 +64,33 @@ class MessageableChannelViewModel: ObservableObject {
             }
             
             viewState.channelMessages[channel.id] = sortedIds
-            
-            // Return empty FetchHistory to indicate we served from cache
-            // Network refresh will happen in background via DatabaseObserver
-            print("💾 LOAD_MORE: Database served successfully, network will refresh in background")
+            print("💾 REACTIVE_LOAD_MORE: ViewState updated from Database")
+        } else {
+            print("💾 REACTIVE_LOAD_MORE: No messages in Database")
         }
         
-        // 2️⃣ THEN: Fetch from network (updates DB, which updates ViewState via DatabaseObserver)
-        let serverId = channel.server
-        let messageIds: [String] = before != nil ? [before!] : []
-
-        let result = (try? await viewState.http.fetchHistory(
-            channel: channel.id,
-            limit: 100,
-            before: before,
-            server: serverId,
-            messages: messageIds
-        ).get()) ?? FetchHistory(messages: [], users: [])
-
-        // Save to database (DatabaseObserver will update ViewState automatically)
-        Task.detached(priority: .utility) {
-            await NetworkRepository.shared.saveFetchHistoryResponse(
-                messages: result.messages,
-                users: result.users,
-                members: result.members
+        // 2️⃣ Trigger background network sync
+        if let messageId = before {
+            // Load more older messages
+            await NetworkSyncService.shared.syncMoreMessages(
+                channelId: channel.id,
+                before: messageId,
+                viewState: viewState
             )
+            print("🔄 REACTIVE_LOAD_MORE: Background sync triggered for older messages")
+        } else {
+            // Initial load
+            await NetworkSyncService.shared.syncChannelMessages(
+                channelId: channel.id,
+                viewState: viewState
+            )
+            print("🔄 REACTIVE_LOAD_MORE: Background sync triggered for initial load")
         }
         
-        // Also update ViewState immediately for responsiveness
-        for user in result.users {
-            viewState.users[user.id] = user
-        }
-
-        if let members = result.members {
-            for member in members {
-                viewState.members[member.id.server]![member.id.user] = member
-            }
-        }
-
-        var ids: [String] = []
-        for message in result.messages {
-            viewState.messages[message.id] = message
-            ids.append(message.id)
-        }
-
-        viewState.channelMessages[channel.id] = ids.reversed() + (viewState.channelMessages[channel.id] ?? [])
-
-        return result
+        // Return empty result - DatabaseObserver will update UI when sync completes
+        return FetchHistory(messages: [], users: [])
+        
+        // Old HTTP fetch code removed - all network happens via NetworkSyncService
     }
 
     func loadMoreMessagesIfNeeded(current: Message?) async -> FetchHistory? {

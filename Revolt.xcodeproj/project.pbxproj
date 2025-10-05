@@ -293,6 +293,10 @@
 		85A81F382E901DE60017BBCF /* ServerRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F322E901DE60017BBCF /* ServerRepository.swift */; };
 		85A81F392E901DE60017BBCF /* UserRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F332E901DE60017BBCF /* UserRepository.swift */; };
 		85A81F3A2E901DE60017BBCF /* MemberRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F2F2E901DE60017BBCF /* MemberRepository.swift */; };
+		85FD190A2E930C7900DDF989 /* NetworkSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD19092E930C7900DDF989 /* NetworkSyncService.swift */; };
+		85FD190C2E931A2300DDF989 /* MessageableChannelViewModel+DataLoading.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD190B2E931A2300DDF989 /* MessageableChannelViewModel+DataLoading.swift */; };
+		85FD190F2E931C5500DDF989 /* MessageableChannelViewController+MemoryManagement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD190D2E931C5500DDF989 /* MessageableChannelViewController+MemoryManagement.swift */; };
+		85FD19102E931C5500DDF989 /* MessageableChannelViewController+TableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD190E2E931C5500DDF989 /* MessageableChannelViewController+TableView.swift */; };
 		911131412D8807F500667031 /* DeleteMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911131402D8807F500667031 /* DeleteMessageView.swift */; };
 		911A24B72D5B83C200ADD85D /* BlockUserPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */; };
 		912539CB2D79E569003BAA57 /* Assets 2.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 912539CA2D79E569003BAA57 /* Assets 2.xcassets */; };
@@ -674,6 +678,10 @@
 		85A81F312E901DE60017BBCF /* NetworkRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkRepository.swift; sourceTree = "<group>"; };
 		85A81F322E901DE60017BBCF /* ServerRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerRepository.swift; sourceTree = "<group>"; };
 		85A81F332E901DE60017BBCF /* UserRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserRepository.swift; sourceTree = "<group>"; };
+		85FD19092E930C7900DDF989 /* NetworkSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkSyncService.swift; sourceTree = "<group>"; };
+		85FD190B2E931A2300DDF989 /* MessageableChannelViewModel+DataLoading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewModel+DataLoading.swift"; sourceTree = "<group>"; };
+		85FD190D2E931C5500DDF989 /* MessageableChannelViewController+MemoryManagement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+MemoryManagement.swift"; sourceTree = "<group>"; };
+		85FD190E2E931C5500DDF989 /* MessageableChannelViewController+TableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+TableView.swift"; sourceTree = "<group>"; };
 		911131402D8807F500667031 /* DeleteMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteMessageView.swift; sourceTree = "<group>"; };
 		911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockUserPopup.swift; sourceTree = "<group>"; };
 		912539CA2D79E569003BAA57 /* Assets 2.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets 2.xcassets"; sourceTree = "<group>"; };
@@ -1105,6 +1113,8 @@
 			isa = PBXGroup;
 			children = (
 				059B24BA2DE5BB01007ACFFB /* MessageableChannelViewController+Permissions.swift */,
+				85FD190D2E931C5500DDF989 /* MessageableChannelViewController+MemoryManagement.swift */,
+				85FD190E2E931C5500DDF989 /* MessageableChannelViewController+TableView.swift */,
 				059B24B82DE5BAF9007ACFFB /* MessageableChannelViewController+Keyboard.swift */,
 				059B24B62DE5BAF1007ACFFB /* MessageableChannelViewController+TextView.swift */,
 				059B24B42DE5BAE7007ACFFB /* MessageableChannelViewController+ScrollView.swift */,
@@ -1230,6 +1240,7 @@
 				059B24BC2DE5BB0B007ACFFB /* Managers */,
 				05E4A6892DD9FF88002D6BD9 /* Mention */,
 				0570B52B2DC4D4690029105C /* MessageableChannelViewModel.swift */,
+				85FD190B2E931A2300DDF989 /* MessageableChannelViewModel+DataLoading.swift */,
 				0570B5292DC4D4420029105C /* MessageableChannelViewControllerRepresentable.swift */,
 				0570B5272DC4D0B40029105C /* MessageableChannelViewController.swift */,
 				9161D3702D732B1C00E690E8 /* NSFWConfirmationSheet.swift */,
@@ -1534,6 +1545,7 @@
 		8564AA6E2E6C4383004C849C /* Storage */ = {
 			isa = PBXGroup;
 			children = (
+				85FD19092E930C7900DDF989 /* NetworkSyncService.swift */,
 				8564AA6F2E6C4393004C849C /* RealmManager.swift */,
 				85A81F282E9017520017BBCF /* DatabaseObserver.swift */,
 				85A81F342E901DE60017BBCF /* Repository */,
@@ -2050,6 +2062,7 @@
 				05F285502CF735BB0071746A /* DiscoverItemView.swift in Sources */,
 				05B697102D29728A001DE8CB /* ChannelCategoryCreateView.swift in Sources */,
 				055C33CD2CD279DE00A6DCAE /* ComponentState.swift in Sources */,
+				85FD190C2E931A2300DDF989 /* MessageableChannelViewModel+DataLoading.swift in Sources */,
 				17A7FE392C49EBD20083B22F /* Image.swift in Sources */,
 				054DDA902CF7C2EB0079D0DF /* Int.swift in Sources */,
 				055F68FF2CDF57CC007F475A /* IntroHeader.swift in Sources */,
@@ -2105,6 +2118,8 @@
 				059B24BE2DE5BB18007ACFFB /* MessageLoader.swift in Sources */,
 				05119CC52D74975A005CBF4F /* PeptideWarningTemplateView.swift in Sources */,
 				05D04FD92CD663A400EA65D5 /* NameYourSelf.swift in Sources */,
+				85FD190F2E931C5500DDF989 /* MessageableChannelViewController+MemoryManagement.swift in Sources */,
+				85FD19102E931C5500DDF989 /* MessageableChannelViewController+TableView.swift in Sources */,
 				178BB1192B02FBD1001143A4 /* Payloads.swift in Sources */,
 				05FAF1B62CE3529F0067B7E3 /* ForgotPassword_Reset.swift in Sources */,
 				1777DD8E2ADC4336003D6C72 /* RemoteImageTextAttachment.swift in Sources */,
@@ -2220,6 +2235,7 @@
 				1764856E2CA383BD00AF8141 /* ServerRolesSettings.swift in Sources */,
 				05F3042B2DCF485C0058E80E /* MarkdownProcessor.swift in Sources */,
 				059B24BB2DE5BB02007ACFFB /* MessageableChannelViewController+Permissions.swift in Sources */,
+				85FD190A2E930C7900DDF989 /* NetworkSyncService.swift in Sources */,
 				17429D992B4C931D0036105A /* ChannelOverviewSettings.swift in Sources */,
 				05BB3E182D58C8A200C3BA3B /* MessageEmojisReact.swift in Sources */,
 				17966B652AE0842A00BAEC58 /* ChannelIcon.swift in Sources */,
