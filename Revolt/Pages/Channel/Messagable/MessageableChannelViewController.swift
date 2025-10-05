@@ -297,8 +297,31 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         fatalError("init(coder:) has not been implemented")
     }
     
+    // MARK: - Performance Optimization Flags
+    private var hasLoadedInitialData = false
+    private var hasSetupHeavyComponents = false
+    
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        // 🚀 PERFORMANCE: Basic UI setup only (essential components)
+        setupBasicUI()
+        
+        // 🚀 PERFORMANCE: Defer heavy operations to background
+        DispatchQueue.main.async {
+            self.setupHeavyComponentsInBackground()
+        }
+        
+        // 🚀 PERFORMANCE: Load data immediately in viewDidLoad
+        loadInitialDataIfNeeded()
+        
+        print("⚡ PERFORMANCE: viewDidLoad completed - basic UI + data loading")
+    }
+    
+    // MARK: - Performance Optimized Setup Methods
+    
+    /// Sets up only essential UI components for immediate display
+    private func setupBasicUI() {
         // Match bgDefaultPurple13 color
         view.backgroundColor = .bgDefaultPurple13
         
@@ -320,50 +343,48 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             view.insetsLayoutMarginsFromSafeArea = false
         }
         
+        // Essential UI components only
         setupCustomHeader()
         setupTableView()
         setupMessageInput()
-        setupNewMessageButton() // Add new message button
-        setupSwipeGesture() // Add swipe gesture for back navigation
-        setupBindings()
-        setupKeyboardObservers()
-        setupAdditionalMessageObservers() // Add additional message observer
         
-        // Initialize managers (typing indicator setup is handled automatically)
-        _ = typingIndicatorManager
-        
-        // Configure UI based on permissions
-        permissionsManager.configureUIBasedOnPermissions()
+        // Basic observers only
+        setupBasicObservers()
         
         // Initialize message count tracking
         lastKnownMessageCount = localMessages.count
-        // print("🚀 INIT: Set initial lastKnownMessageCount to \(lastKnownMessageCount)")
         
         // CRITICAL FIX: Reset empty response time for new channel
         lastEmptyResponseTime = nil
         print("🔄 INIT: Reset lastEmptyResponseTime for new channel")
-        
-        // CRITICAL FIX: Check if we have a target message from ViewState before loading
-        // Don't load regular messages if we have a target message to avoid duplicate API calls
-        if let targetFromViewState = viewModel.viewState.currentTargetMessageId {
-            print("🎯 VIEW_DID_LOAD: Target message found in ViewState: \(targetFromViewState), skipping regular load")
-            targetMessageId = targetFromViewState
-            targetMessageProcessed = false
-        } else {
-            // Force an initial load of messages only if no target message
-            print("📜 VIEW_DID_LOAD: No target message, loading regular messages")
-            Task {
-                await loadInitialMessages()
-            }
-        }
         
         // Check if the channel is NSFW
         if viewModel.channel.nsfw && !self.over18HasSeen {
             self.over18HasSeen = true
             showNSFWOverlay()
         }
+    }
+    
+    /// Sets up heavy components in background to avoid blocking UI
+    private func setupHeavyComponentsInBackground() {
+        guard !hasSetupHeavyComponents else { return }
+        hasSetupHeavyComponents = true
         
-        // Add observer for system log messages that might indicate network issues
+        print("⚡ PERFORMANCE: Starting background setup")
+        
+        // Heavy UI components
+        setupNewMessageButton()
+        setupSwipeGesture()
+        setupKeyboardObservers()
+        setupAdditionalMessageObservers()
+        
+        // Initialize managers
+        _ = typingIndicatorManager
+        
+        // Configure UI based on permissions
+        permissionsManager.configureUIBasedOnPermissions()
+        
+        // Additional observers
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleSystemLog),
@@ -371,11 +392,23 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             object: nil
         )
         
-        // Add observer for when user is closing search to return to channel
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleChannelSearchClosing),
             name: NSNotification.Name("ChannelSearchClosing"),
+            object: nil
+        )
+        
+        print("⚡ PERFORMANCE: Background setup completed")
+    }
+    
+    /// Sets up only basic observers needed for immediate functionality
+    private func setupBasicObservers() {
+        // Essential message observer only
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(messagesDidChange),
+            name: NSNotification.Name("MessagesDidChange"),
             object: nil
         )
     }
@@ -717,6 +750,36 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
+        // 🚀 PERFORMANCE: Data already loaded in viewDidLoad, just handle viewDidAppear logic
+        handleViewDidAppearLogic()
+        
+        print("⚡ PERFORMANCE: viewDidAppear completed - data already loaded")
+    }
+    
+    // MARK: - Performance Optimized Data Loading
+    
+    /// Loads initial data immediately in viewDidLoad
+    private func loadInitialDataIfNeeded() {
+        guard !hasLoadedInitialData else { return }
+        hasLoadedInitialData = true
+        
+        print("⚡ PERFORMANCE: Starting immediate data loading in viewDidLoad")
+        
+        // CRITICAL FIX: Check if we have a target message from ViewState before loading
+        if let targetFromViewState = viewModel.viewState.currentTargetMessageId {
+            print("🎯 PERFORMANCE: Target message found in ViewState: \(targetFromViewState), skipping regular load")
+            targetMessageId = targetFromViewState
+            targetMessageProcessed = false
+        } else {
+            // Load messages immediately
+            Task {
+                await loadInitialMessages()
+            }
+        }
+    }
+    
+    /// Handles existing viewDidAppear logic (search return, target messages, etc.)
+    private func handleViewDidAppearLogic() {
         // CRITICAL FIX: Check if we have a target message from ViewState that we need to restore
         if targetMessageId == nil, let targetFromViewState = viewModel.viewState.currentTargetMessageId {
             print("🎯 VIEW_DID_APPEAR: Restoring target message from ViewState: \(targetFromViewState)")
@@ -883,7 +946,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 Task {
                     try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                     await MainActor.run {
-                        self.adjustTableInsetsForMessageCount()
+                    self.adjustTableInsetsForMessageCount()
                     }
                     await self.checkAndFetchMissingReplies()
                 }
@@ -3111,23 +3174,23 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             // print("🧹 No existing messages for channel: \(channelId), starting fresh")
             
             // Only clear if there are no existing messages
-            viewModel.viewState.channelMessages[channelId] = []
-            self.localMessages = []
-            
+        viewModel.viewState.channelMessages[channelId] = []
+        self.localMessages = []
+        
             // Force DataSource refresh immediately to show loading state
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.dataSource = LocalMessagesDataSource(viewModel: self.viewModel,
-                                                          viewController: self,
-                                                          localMessages: self.localMessages)
-                self.tableView.dataSource = self.dataSource
-                self.tableView.reloadData()
-                
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.dataSource = LocalMessagesDataSource(viewModel: self.viewModel, 
+                                                     viewController: self,
+                                                     localMessages: self.localMessages)
+            self.tableView.dataSource = self.dataSource
+            self.tableView.reloadData()
+            
                 // Display loading indicator
-                let spinner = UIActivityIndicatorView(style: .medium)
-                spinner.startAnimating()
-                spinner.frame = CGRect(x: 0, y: 0, width: self.tableView.bounds.width, height: 44)
-                self.tableView.tableFooterView = spinner
+            let spinner = UIActivityIndicatorView(style: .medium)
+            spinner.startAnimating()
+            spinner.frame = CGRect(x: 0, y: 0, width: self.tableView.bounds.width, height: 44)
+            self.tableView.tableFooterView = spinner
             }
         }
         
@@ -3148,9 +3211,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             print("🎯 REACTIVE: Delegating target message \(targetId) to ViewModel")
             
             // Set protection flags
-            messageLoadingState = .loading
-            isInTargetMessagePosition = true
-            lastTargetMessageHighlightTime = Date()
+    messageLoadingState = .loading
+    isInTargetMessagePosition = true
+    lastTargetMessageHighlightTime = Date()
             print("🎯 REACTIVE: Protection flags set")
             
             // Let ViewModel handle loading
@@ -3160,9 +3223,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 print("💾 REACTIVE: Target message loaded from Database")
                 await MainActor.run {
                     self.refreshMessages()
-                    self.scrollToTargetMessage()
-                }
-            } else {
+                                    self.scrollToTargetMessage()
+                                    }
+                                } else {
                 print("🔄 REACTIVE: ViewModel triggered network sync for target message")
             }
         }
@@ -3538,7 +3601,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Message couldn't be loaded - might be deleted (404) or access denied
                 // Return nil and let the UI handle it gracefully
-                return nil
+            return nil
             }
         }
     }
@@ -4086,7 +4149,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     return true
                 }
             }
-
+            
             // Use the nearby API to fetch messages around the target message with timeout
             let result = try await withThrowingTaskGroup(of: FetchHistory.self) { group in
                 // Add the actual API call
@@ -4136,20 +4199,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         print("💾 DIRECT_FETCH: Target message served from DB")
                     } else {
                         // Fallback to network
-                        do {
-                            print("🌐 DIRECT_FETCH: Attempting to fetch target message directly")
-                            let targetMessage = try await viewModel.viewState.http.fetchMessage(
-                                channel: viewModel.channel.id,
-                                message: messageId
-                            ).get()
-                            
-                            print("✅ DIRECT_FETCH: Successfully fetched target message directly: \(targetMessage.id)")
-                            // Store it in viewState
-                            viewModel.viewState.messages[targetMessage.id] = targetMessage
-                        } catch {
-                            print("❌ DIRECT_FETCH: Could not fetch target message directly: \(error)")
-                            // Return false since we couldn't get the target message
-                            return false
+                    do {
+                        print("🌐 DIRECT_FETCH: Attempting to fetch target message directly")
+                        let targetMessage = try await viewModel.viewState.http.fetchMessage(
+                            channel: viewModel.channel.id,
+                            message: messageId
+                        ).get()
+                        
+                        print("✅ DIRECT_FETCH: Successfully fetched target message directly: \(targetMessage.id)")
+                        // Store it in viewState
+                        viewModel.viewState.messages[targetMessage.id] = targetMessage
+                    } catch {
+                        print("❌ DIRECT_FETCH: Could not fetch target message directly: \(error)")
+                        // Return false since we couldn't get the target message
+                        return false
                         }
                     }
                 }
@@ -5882,9 +5945,17 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // print("✨ [POSITION] Table view shown with fade-in")
     }
     
-    // MARK: - Skeleton Loading Methods
+    // MARK: - Skeleton Loading Methods (DISABLED FOR PERFORMANCE)
+    // TODO: Re-enable skeleton loading after performance optimization is complete
+    // TODO: Identify optimal skeleton loading strategy for better UX
     
     private func showSkeletonView() {
+        // DISABLED: Skeleton loading temporarily disabled for performance optimization
+        print("💀 SKELETON: DISABLED - Skeleton loading temporarily disabled for performance")
+        return
+        
+        // Original skeleton code commented out:
+        /*
         // Only show skeleton if not already shown
         guard skeletonView == nil else { return }
         
@@ -5905,9 +5976,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         tableView.alpha = 0.0
         
         print("💀 SKELETON: Showing skeleton loading view")
+        */
     }
     
     private func hideSkeletonView() {
+        // DISABLED: Skeleton loading temporarily disabled for performance optimization
+        print("💀 SKELETON: DISABLED - Skeleton hiding temporarily disabled for performance")
+        return
+        
+        // Original skeleton code commented out:
+        /*
         guard let skeleton = skeletonView else { return }
         
         UIView.animate(withDuration: 0.3, animations: {
@@ -5923,6 +6001,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
         
         print("💀 SKELETON: Hiding skeleton loading view")
+        */
     }
     
     // MARK: - Global Fix for Black Screen
