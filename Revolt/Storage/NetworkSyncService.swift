@@ -7,8 +7,8 @@
 //
 
 import Foundation
-import Types
 import OSLog
+import SwiftCSV
 
 /// Service responsible for syncing data from Network to Database
 /// UI components should NOT call this directly - they read from Database only
@@ -23,6 +23,108 @@ class NetworkSyncService {
     
     private init() {}
     
+    // MARK: - Discover Servers Sync
+    
+    /// Syncs discover servers from CSV to database
+    /// Returns immediately - sync happens in background
+    func syncDiscoverServers() {
+        guard !activeSyncs.contains("discover_servers") else {
+            logger.debug("⏭️ Discover servers sync already active")
+            return
+        }
+        
+        activeSyncs.insert("discover_servers")
+        logger.info("🔄 Starting background sync for discover servers")
+        
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self = self else { return }
+            
+            do {
+                // Check if data is stale first
+                let isStale = await DiscoverRepository.shared.isDataStale()
+                if !isStale {
+                    logger.debug("✅ Discover data is fresh, skipping sync")
+                    await MainActor.run {
+                        self.activeSyncs.remove("discover_servers")
+                    }
+                    return
+                }
+                
+                // Fetch from CSV
+                let serverChats = try await self.fetchDiscoverServersFromCSV()
+                
+                // Save to database
+                await DiscoverRepository.shared.saveServerChats(serverChats)
+                
+                // Convert to DiscoverItems and save
+                let discoverItems = serverChats.map { chat in
+                    DiscoverItem(
+                        id: chat.id,
+                        code: chat.inviteCode,
+                        title: chat.name,
+                        description: chat.description,
+                        isNew: chat.isNew,
+                        sortOrder: chat.sortOrder,
+                        disabled: chat.disabled,
+                        color: chat.color
+                    )
+                }
+                await DiscoverRepository.shared.saveDiscoverItems(discoverItems)
+                
+                logger.info("✅ Discover servers synced: \(serverChats.count) servers")
+                
+            } catch {
+                logger.error("❌ Failed to sync discover servers: \(error.localizedDescription)")
+            }
+            
+            await MainActor.run {
+                self.activeSyncs.remove("discover_servers")
+            }
+        }
+    }
+    
+    /// Fetches discover servers from CSV (moved from ServerChatDataFetcher)
+    private func fetchDiscoverServersFromCSV() async throws -> [ServerChat] {
+        let csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRY41D-NgTE6bC3kTN3dRpisI-DoeHG8Eg7n31xb1CdydWjOLaphqYckkTiaG9oIQSWP92h3NE-7cpF/pub?gid=0&single=true&output=csv"
+        
+        logger.debug("🌐 Fetching CSV from URL: \(csvUrl)")
+        
+        let (data, _) = try await URLSession.shared.data(from: URL(string: csvUrl)!)
+        let csvString = String(data: data, encoding: .utf8)!
+        
+        let csv = try CSV<Named>(string: csvString)
+        logger.debug("📊 Parsing CSV with \(csv.rows.count) rows")
+        
+        let serverChats = csv.rows.compactMap { row -> ServerChat? in
+            guard let id = row["id"],
+                  let name = row["name"],
+                  let description = row["description"],
+                  let inviteCode = row["inviteCode"],
+                  let disabled = row["disabled"].map({ $0.lowercased() == "true" }),
+                  let isNew = row["new"].map({ $0.lowercased() == "true" }),
+                  let sortOrder = row["sortorder"].flatMap(Int.init),
+                  let chronological = row["chronological"].flatMap(Int.init) else { return nil }
+            
+            return ServerChat(
+                id: id,
+                name: name,
+                description: description,
+                inviteCode: inviteCode,
+                disabled: disabled,
+                isNew: isNew,
+                sortOrder: sortOrder,
+                chronological: chronological,
+                dateAdded: row["dateAdded"],
+                price1: row[""],
+                price2: row[""],
+                color: row["showcolor"]
+            )
+        }
+        
+        logger.debug("📋 Parsed \(serverChats.count) valid servers from CSV")
+        return serverChats
+    }
+
     // MARK: - Channel Messages Sync
     
     /// Syncs messages for a channel from network to database

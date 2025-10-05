@@ -211,56 +211,32 @@ struct DiscoverScrollView: View {
         }
         
         self.isLoading = true
-        print("🌐 [DiscoverScrollView] Loading server list from CSV...")
-        ServerChatDataFetcher.shared.fetchData { result in
-                DispatchQueue.main.async {
-                    
+        print("💾 [DiscoverScrollView] Loading discover servers from Database")
+        
+        // 🚀 DATABASE-FIRST: Load from database first
+        Task {
+            let dbItems = await DiscoverRepository.shared.fetchDiscoverItems()
+            
+            if !dbItems.isEmpty {
+                print("💾 [DiscoverScrollView] Found \(dbItems.count) servers in Database")
+                await MainActor.run {
+                    self.discoverItems = dbItems.sorted(by: { $0.sortOrder < $1.sortOrder })
                     self.isLoading = false
-
-                    
-                    switch result {
-                    case .success(let fetchedServerChats):
-                    
-                    print("✅ [DiscoverScrollView] Successfully fetched \(fetchedServerChats.count) servers from CSV")
-                        
-                        self.discoverItems = fetchedServerChats
-                            //.filter { !$0.disabled }
-                            .map{
-                                DiscoverItem(id: $0.id,
-                                             code: $0.inviteCode,
-                                             title: $0.name,
-                                             description: $0.description,
-                                             isNew: $0.isNew,
-                                             sortOrder: $0.sortOrder,
-                                             disabled: $0.disabled,
-                                             color: $0.color)
-                            }
-                            .sorted(by: { $0.sortOrder < $1.sortOrder })
-                    
-                    // Log all discovered servers and their invite codes
-                    print("📋 [DiscoverScrollView] Displaying \(self.discoverItems.count) servers:")
-                    for (index, item) in self.discoverItems.enumerated() {
-                        print("  [\(index + 1)] \(item.title)")
-                        print("      📎 Invite code: \(item.code)")
-                        print("      📝 Description: \(item.description)")
-                        print("      🆕 New: \(item.isNew)")
-                        print("      🔒 Disabled: \(item.disabled)")
-                        print("      🎨 Color: \(item.color ?? "none")")
-                    }
-                    
-                    // Check membership for all items asynchronously
-                    Task {
-                        await self.checkMembershipForAllItems()
-                    }
-
-                        
-                    case .failure(let error):
-                    print("❌ [DiscoverScrollView] Failed to fetch servers: \(error.localizedDescription)")
-                        debugPrint("error: \(error.localizedDescription)")
-                    }
                 }
+                
+                // Check membership for all items
+                await self.checkMembershipForAllItems()
+                
+                print("✅ [DiscoverScrollView] Database load completed")
+            } else {
+                print("💾 [DiscoverScrollView] No servers in Database (first time load)")
             }
+            
+            // 🔄 BACKGROUND SYNC: Trigger network sync in background
+            print("🔄 [DiscoverScrollView] Triggering background network sync")
+            NetworkSyncService.shared.syncDiscoverServers()
         }
+    }
     
     // MARK: - Enhanced Membership Checking
     
@@ -385,22 +361,7 @@ struct DiscoverScrollView: View {
 }
 
 
-struct ServerChat: Codable {
-    let id: String
-    let name: String
-    let description: String
-    let inviteCode: String
-    let disabled: Bool
-    let isNew: Bool
-    let sortOrder: Int
-    let chronological: Int
-    let dateAdded: String?
-    let price1: String?
-    let price2: String?
-    let color: String?
-}
-
-
+// MARK: - ServerChatDataFetcher (Legacy - now handled by NetworkSyncService)
 class ServerChatDataFetcher {
     static let shared = ServerChatDataFetcher()
     

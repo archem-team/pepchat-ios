@@ -297,6 +297,9 @@
 		85FD190C2E931A2300DDF989 /* MessageableChannelViewModel+DataLoading.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD190B2E931A2300DDF989 /* MessageableChannelViewModel+DataLoading.swift */; };
 		85FD190F2E931C5500DDF989 /* MessageableChannelViewController+MemoryManagement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD190D2E931C5500DDF989 /* MessageableChannelViewController+MemoryManagement.swift */; };
 		85FD19102E931C5500DDF989 /* MessageableChannelViewController+TableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD190E2E931C5500DDF989 /* MessageableChannelViewController+TableView.swift */; };
+		85FD19162E93298100DDF989 /* DiscoverModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD19152E93298100DDF989 /* DiscoverModels.swift */; };
+		85FD19182E9329A200DDF989 /* DiscoverRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD19172E9329A200DDF989 /* DiscoverRepository.swift */; };
+		85FD191A2E932A6F00DDF989 /* DiscoverMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD19192E932A6F00DDF989 /* DiscoverMappers.swift */; };
 		911131412D8807F500667031 /* DeleteMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911131402D8807F500667031 /* DeleteMessageView.swift */; };
 		911A24B72D5B83C200ADD85D /* BlockUserPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */; };
 		912539CB2D79E569003BAA57 /* Assets 2.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 912539CA2D79E569003BAA57 /* Assets 2.xcassets */; };
@@ -682,6 +685,9 @@
 		85FD190B2E931A2300DDF989 /* MessageableChannelViewModel+DataLoading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewModel+DataLoading.swift"; sourceTree = "<group>"; };
 		85FD190D2E931C5500DDF989 /* MessageableChannelViewController+MemoryManagement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+MemoryManagement.swift"; sourceTree = "<group>"; };
 		85FD190E2E931C5500DDF989 /* MessageableChannelViewController+TableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+TableView.swift"; sourceTree = "<group>"; };
+		85FD19152E93298100DDF989 /* DiscoverModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverModels.swift; sourceTree = "<group>"; };
+		85FD19172E9329A200DDF989 /* DiscoverRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverRepository.swift; sourceTree = "<group>"; };
+		85FD19192E932A6F00DDF989 /* DiscoverMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverMappers.swift; sourceTree = "<group>"; };
 		911131402D8807F500667031 /* DeleteMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteMessageView.swift; sourceTree = "<group>"; };
 		911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockUserPopup.swift; sourceTree = "<group>"; };
 		912539CA2D79E569003BAA57 /* Assets 2.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets 2.xcassets"; sourceTree = "<group>"; };
@@ -1559,6 +1565,7 @@
 		8564AA822E6C5A98004C849C /* Mappers */ = {
 			isa = PBXGroup;
 			children = (
+				85FD19192E932A6F00DDF989 /* DiscoverMappers.swift */,
 				8564AA782E6C5A98004C849C /* ApiMappers.swift */,
 				8564AA792E6C5A98004C849C /* ChannelMappers.swift */,
 				8564AA7A2E6C5A98004C849C /* EmbedMappers.swift */,
@@ -1585,6 +1592,7 @@
 				8564AA892E6C5A98004C849C /* PermissionModels.swift */,
 				8564AA8A2E6C5A98004C849C /* ServerModels.swift */,
 				8564AA8B2E6C5A98004C849C /* UserModels.swift */,
+				85FD19152E93298100DDF989 /* DiscoverModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -1593,6 +1601,7 @@
 			isa = PBXGroup;
 			children = (
 				85A81F2E2E901DE60017BBCF /* ChannelRepository.swift */,
+				85FD19172E9329A200DDF989 /* DiscoverRepository.swift */,
 				85A81F2F2E901DE60017BBCF /* MemberRepository.swift */,
 				85A81F302E901DE60017BBCF /* MessageRepository.swift */,
 				85A81F312E901DE60017BBCF /* NetworkRepository.swift */,
@@ -2148,6 +2157,7 @@
 				8564AA952E6C5A98004C849C /* UserModels.swift in Sources */,
 				8564AA962E6C5A98004C849C /* ChannelModels.swift in Sources */,
 				8564AA972E6C5A98004C849C /* MessageMappers.swift in Sources */,
+				85FD19162E93298100DDF989 /* DiscoverModels.swift in Sources */,
 				8564AA982E6C5A98004C849C /* EmbedModels.swift in Sources */,
 				8564AA992E6C5A98004C849C /* MessageModels.swift in Sources */,
 				8564AA9A2E6C5A98004C849C /* OtherModels.swift in Sources */,
@@ -2155,6 +2165,7 @@
 				8564AA9C2E6C5A98004C849C /* EmbedMappers.swift in Sources */,
 				8564AA9D2E6C5A98004C849C /* FileMappers.swift in Sources */,
 				8564AA9E2E6C5A98004C849C /* ServerModels.swift in Sources */,
+				85FD191A2E932A6F00DDF989 /* DiscoverMappers.swift in Sources */,
 				8564AA9F2E6C5A98004C849C /* ServerMappers.swift in Sources */,
 				17F555272AFC229900958F2F /* ServerSettings.swift in Sources */,
 				05838DAB2CDA5AB500396D74 /* PeptideOtp.swift in Sources */,
@@ -2184,6 +2195,7 @@
 				17E019D12AF14EC000AB4663 /* ServerIcon.swift in Sources */,
 				05EF87552D121B160036AF82 /* PeptideSheet.swift in Sources */,
 				9184D7F12D75ABCE007C32B7 /* InviteView.swift in Sources */,
+				85FD19182E9329A200DDF989 /* DiscoverRepository.swift in Sources */,
 				176485752CA3947B00AF8141 /* PermissionToggle.swift in Sources */,
 				05B19B062DDB46E200A86334 /* UserSheetViewController.swift in Sources */,
 				91E43AE12D660FF900486ABC /* ChannelMemberPermissionView.swift in Sources */,
