@@ -122,6 +122,24 @@ actor RealmManager {
         }
     }
     
+    /// Deletes multiple objects from Realm
+    func deleteBatch<T: Object>(_ objects: [T]) {
+        // Create thread-safe references so we can resolve them in the write transaction's Realm
+        let references: [ThreadSafeReference<T>] = objects.compactMap { obj in
+            guard !obj.isInvalidated else { return nil }
+            return ThreadSafeReference(to: obj)
+        }
+        
+        performWrite { realm in
+            let resolved: [T] = references.compactMap { realm.resolve($0) }
+            if resolved.isEmpty {
+                self.logger.error("deleteBatch called with no resolvable objects")
+                return
+            }
+            realm.delete(resolved)
+        }
+    }
+    
     /// Deletes all objects of a given type
     func deleteAll<T: Object>(_ type: T.Type) {
         performWrite { realm in
@@ -374,7 +392,7 @@ actor RealmManager {
         let pattern = "<([^<>]+)>"
         
         var typeName = typeDescription
-        while let range = typeName.range(of: pattern, options: .regularExpression) {
+		while let range = typeName.range(of: pattern, options: .regularExpression) {
             typeName = String(typeName[range].dropFirst().dropLast())
         }
         

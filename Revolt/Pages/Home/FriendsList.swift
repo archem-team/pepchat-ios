@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Types
+import OSLog
 
 enum UserSort{
     case alphabetical;
@@ -35,10 +36,19 @@ private let toolbarConfig : ToolbarConfig = .init(isVisible: true,
 struct FriendsList: View {
     @EnvironmentObject var viewState: ViewState  // Access to global state and users' relationships.
     
-    
     @State var searchQuery: String = ""
     @State var userSort: UserSort = .alphabetical
     @State private var searchTextFieldState : PeptideTextFieldState = .default
+    
+    // Database-first state
+    @State private var friends: [Types.User] = []
+    @State private var incomingRequests: [Types.User] = []
+    @State private var outgoingRequests: [Types.User] = []
+    @State private var blockedUsers: [Types.User] = []
+    @State private var blockedByUsers: [Types.User] = []
+    @State private var isLoading: Bool = true
+    
+    private let logger = Logger(subsystem: "chat.revolt.app", category: "FriendsList")
     
     
     /// Retrieves the list of users categorized into friends, requests, and blocked lists.
@@ -69,10 +79,8 @@ struct FriendsList: View {
     var groupedFriends: [String: [User]] {
         let query = searchQuery.lowercased()
         
-        let friends = viewState.users.values
+        let filteredFriends = friends
             .filter { user in
-                guard user.relationship == .Friend else { return false }
-                
                 let username = user.username.lowercased()
                 let displayName = user.display_name?.lowercased()
                 
@@ -81,7 +89,7 @@ struct FriendsList: View {
                 (displayName?.contains(query) ?? false)
             }
         
-        return Dictionary(grouping: friends) { String($0.username.prefix(1)).uppercased() }
+        return Dictionary(grouping: filteredFriends) { String($0.username.prefix(1)).uppercased() }
             .sorted { $0.key < $1.key }
             .reduce(into: [:]) { result, group in
                 result[group.key] = group.value
@@ -92,10 +100,8 @@ struct FriendsList: View {
     var groupedUsersByStatus: [String: [User]] {
         let query = searchQuery.lowercased()
         
-        let filteredUsers = viewState.users.values
+        let filteredUsers = friends
             .filter { user in
-                guard user.relationship == .Friend else { return false }
-                
                 let username = user.username.lowercased()
                 let displayName = user.display_name?.lowercased()
                 
@@ -116,19 +122,50 @@ struct FriendsList: View {
     }
     
     var usersWithRequest: [User] {
-        let usersWithRequest = viewState.users.values
-            .filter { user in
-                user.relationship == .Incoming
-            }
-        
-        return usersWithRequest
+        return incomingRequests
     }
     
     var selectedSortUsers: [String: [User]]{
         return userSort == .alphabetical ? groupedFriends : groupedUsersByStatus;
     }
     
+    // MARK: - Data Loading
     
+    /// Loads friends data from database
+    private func loadFriendsData() {
+        logger.info("🔄 Loading friends data from database")
+        
+        Task {
+            do {
+                // Load all friends data from database
+                let allFriends = await FriendsRepository.shared.fetchAllFriends()
+                let incoming = await FriendsRepository.shared.fetchIncomingRequests()
+                let outgoing = await FriendsRepository.shared.fetchOutgoingRequests()
+                let blocked = await FriendsRepository.shared.fetchBlockedUsers()
+                let blockedBy = await FriendsRepository.shared.fetchBlockedByUsers()
+                
+                await MainActor.run {
+                    self.friends = allFriends
+                    self.incomingRequests = incoming
+                    self.outgoingRequests = outgoing
+                    self.blockedUsers = blocked
+                    self.blockedByUsers = blockedBy
+                    self.isLoading = false
+                }
+                
+                logger.info("✅ Loaded \(allFriends.count) friends from database")
+                
+                // Trigger background sync
+                NetworkSyncService.shared.syncFriends()
+                
+            } catch {
+                logger.error("❌ Failed to load friends data: \(error.localizedDescription)")
+                await MainActor.run {
+                    self.isLoading = false
+                }
+            }
+        }
+    }
     
     var body: some View {
         /*let friends = getFriends()
@@ -499,6 +536,9 @@ struct FriendsList: View {
                 
             }
             
+        }
+        .onAppear {
+            loadFriendsData()
         }
         
     }

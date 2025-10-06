@@ -69,4 +69,62 @@ class MemberRepository {
         let realms = await realmManager.getListOfObjects(type: MemberRealm.self)
         return realms.compactMap { $0.toOriginal() as? Types.Member }
     }
+    
+    /// Search members by query in a specific server
+    func searchMembers(forServer serverId: String, query: String, users: [String: Types.User]) async -> [Types.Member] {
+        let members = await fetchMembers(forServer: serverId)
+        
+        guard !query.isEmpty else {
+            return members
+        }
+        
+        let lowercaseQuery = query.lowercased()
+        
+        return members.filter { member in
+            if let user = users[member.id.user] {
+                return user.username.lowercased().contains(lowercaseQuery) ||
+                       (user.display_name?.lowercased().contains(lowercaseQuery) ?? false)
+            }
+            return false
+        }
+    }
+    
+    /// Get members count for a server
+    func getMembersCount(forServer serverId: String) async -> Int {
+        let members = await fetchMembers(forServer: serverId)
+        return members.count
+    }
+    
+    /// Get formatted members count for a server
+    func getFormattedMembersCount(forServer serverId: String) async -> String {
+        let count = await getMembersCount(forServer: serverId)
+        return count.formattedWithSeparator()
+    }
+    
+    /// Save members with users (from API response)
+    func saveMembersWithUsers(_ members: [Types.Member], users: [Types.User]) async {
+        // Save users first
+        await UserRepository.shared.saveUsers(users)
+        
+        // Then save members
+        await saveMembers(members)
+        
+        logger.debug("✅ Saved \(members.count) members and \(users.count) users")
+    }
+    
+    /// Check if data is stale (older than 5 minutes)
+    func isDataStale(forServer serverId: String) async -> Bool {
+        // For now, always consider data fresh since we have real-time updates
+        // In the future, we could add timestamp checking
+        return false
+    }
+    
+    /// Clear all members data for a specific server
+    func clearMembersData(forServer serverId: String) async {
+        let realms = await realmManager.getListOfObjects(type: MemberRealm.self)
+        let serverMembers = realms.filter { $0.memberIdRealm?.server == serverId }
+        
+        await realmManager.deleteBatch(serverMembers)
+        logger.debug("✅ Cleared members data for server \(serverId)")
+    }
 }

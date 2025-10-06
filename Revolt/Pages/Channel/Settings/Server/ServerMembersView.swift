@@ -1,5 +1,6 @@
 import SwiftUI
 import Types
+import OSLog
 
 struct ServerMembersView: View {
     @EnvironmentObject var viewState: ViewState
@@ -9,6 +10,8 @@ struct ServerMembersView: View {
     @State private var searchTextFieldState: PeptideTextFieldState = .default
     @State private var members: [Member] = []
     @State private var isLoading: Bool = true
+    
+    private let logger = Logger(subsystem: "chat.revolt.app", category: "ServerMembersView")
     
     
     var filteredMembers: [Member] {
@@ -199,23 +202,24 @@ struct ServerMembersView: View {
         }
     }
     
+    // MARK: - Database-First Data Loading
+    
     private func fetchMembers() async {
+        logger.info("🔄 Loading members for server \(serverId) from database")
         isLoading = true
-        let response = await viewState.http.fetchServerMembers(target: serverId)
         
-        switch response {
-        case .success(let fetchedMembers):
-            members = fetchedMembers.members
-            // Update users in viewState if needed
-//            for member in fetchedMembers.members {
-//                if let user = member {
-//                    viewState.users[user.id] = user
-//                }
-//            }
-        case .failure(_):
-            viewState.showAlert(message: "Failed to load members", icon: .peptideInfo)
+        // 1. Load from database first
+        let dbMembers = await MemberRepository.shared.fetchMembers(forServer: serverId)
+        
+        await MainActor.run {
+            self.members = dbMembers
+            self.isLoading = false
         }
-        isLoading = false
+        
+        logger.info("✅ Loaded \(dbMembers.count) members from database")
+        
+        // 2. Trigger background sync for fresh data
+        NetworkSyncService.shared.syncServerMembers(serverId: serverId)
     }
 }
 

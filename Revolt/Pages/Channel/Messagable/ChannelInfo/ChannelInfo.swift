@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Types
+import OSLog
 
 /// Represents a URL for an invite, conforming to Identifiable.
 struct InviteUrl: Identifiable {
@@ -230,6 +231,8 @@ struct ChannelInfo: View {
     @State private var isFocused : Bool = false
     @State private var members: [Member] = []
     @State private var textChannelMembers: [UserMaybeMember] = []
+    
+    private let logger = Logger(subsystem: "chat.revolt.app", category: "ChannelInfo")
     
     
     func getRoleSectionHeaders() -> [(String, Role)] {
@@ -735,21 +738,35 @@ struct ChannelInfo: View {
         }*/
     }
     
+    // MARK: - Database-First Data Loading
+    
     private func fetchMembers() async {
-        
-        let response = await viewState.http.fetchServerMembers(target: self.channel.server ?? "", excludeOffline: false)
-        
-        switch response {
-        case .success(let fetchedMembers):
-            members = fetchedMembers.members
-            
-            textChannelMembers = fetchedMembers.users.compactMap{ user in
-                let member = fetchedMembers.members.first{ member in member.id.user == user.id}
-                return UserMaybeMember(user: user, member: member)
-            }
-        case .failure(_):
-            viewState.showAlert(message: "Failed to load members", icon: .peptideInfo)
+        guard let serverId = channel.server else {
+            logger.warning("⚠️ No server ID for channel")
+            return
         }
+        
+        logger.info("🔄 Loading members for server \(serverId) from database")
+        
+        // 1. Load from database first
+        let dbMembers = await MemberRepository.shared.fetchMembers(forServer: serverId)
+        
+        await MainActor.run {
+            self.members = dbMembers
+            
+            // Build textChannelMembers from database
+            self.textChannelMembers = dbMembers.compactMap { member in
+                if let user = viewState.users[member.id.user] {
+                    return UserMaybeMember(user: user, member: member)
+                }
+                return nil
+            }
+        }
+        
+        logger.info("✅ Loaded \(dbMembers.count) members from database")
+        
+        // 2. Trigger background sync for fresh data
+        NetworkSyncService.shared.syncServerMembers(serverId: serverId, excludeOffline: false)
     }
 }
 

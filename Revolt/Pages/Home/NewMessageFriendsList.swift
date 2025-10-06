@@ -1,5 +1,6 @@
 import SwiftUI
 import Types
+import OSLog
 
 struct NewMessageFriendsList: View {
     @EnvironmentObject var viewState: ViewState
@@ -7,18 +8,53 @@ struct NewMessageFriendsList: View {
     @State var userSort: UserSort = .alphabetical
     @State private var searchTextFieldState: PeptideTextFieldState = .default
     
+    // Database-first state
+    @State private var friends: [Types.User] = []
+    @State private var isLoading: Bool = true
+    
+    private let logger = Logger(subsystem: "chat.revolt.app", category: "NewMessageFriendsList")
+    
     var groupedFriends: [String: [User]] {
-        let friends = viewState.users.values
+        let filteredFriends = friends
             .filter { user in
-                user.relationship == .Friend &&
-                (searchQuery.isEmpty ||
-                 user.username.lowercased().contains(searchQuery.lowercased()) ||
-                 (user.display_name?.lowercased().contains(searchQuery.lowercased()) ?? false))
+                searchQuery.isEmpty ||
+                user.username.lowercased().contains(searchQuery.lowercased()) ||
+                (user.display_name?.lowercased().contains(searchQuery.lowercased()) ?? false)
             }
         
-        return Dictionary(grouping: friends) { String($0.username.prefix(1)).uppercased() }
+        return Dictionary(grouping: filteredFriends) { String($0.username.prefix(1)).uppercased() }
             .sorted { $0.key < $1.key }
             .reduce(into: [:]) { initialResult, updatedResult in initialResult[updatedResult.key] = updatedResult.value }
+    }
+    
+    // MARK: - Data Loading
+    
+    /// Loads friends data from database
+    private func loadFriendsData() {
+        logger.info("🔄 Loading friends data from database")
+        
+        Task {
+            do {
+                // Load friends from database
+                let allFriends = await FriendsRepository.shared.fetchAllFriends()
+                
+                await MainActor.run {
+                    self.friends = allFriends
+                    self.isLoading = false
+                }
+                
+                logger.info("✅ Loaded \(allFriends.count) friends from database")
+                
+                // Trigger background sync
+                NetworkSyncService.shared.syncFriends()
+                
+            } catch {
+                logger.error("❌ Failed to load friends data: \(error.localizedDescription)")
+                await MainActor.run {
+                    self.isLoading = false
+                }
+            }
+        }
     }
     
     
@@ -176,6 +212,9 @@ struct NewMessageFriendsList: View {
                     }
                 }
             }
+        }
+        .onAppear {
+            loadFriendsData()
         }
     }
 }

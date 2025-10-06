@@ -24,6 +24,8 @@ class DatabaseObserver: ObservableObject {
     @Published var messages: [MessageRealm] = []
     @Published var channels: [ChannelRealm] = []
     @Published var servers: [ServerRealm] = []
+    @Published var friends: [UserRealm] = []
+    @Published var members: [MemberRealm] = []
     
     private let processingQueue = DispatchQueue(label: "com.revolt.database.observer", qos: .utility)
     
@@ -256,6 +258,127 @@ class DatabaseObserver: ObservableObject {
         print("ViewState merged \(serversDictionary.count) servers from database")
     }
     
+    // MARK: - Friends Observer
+    
+    private func observeFriends() async {
+        print("Setting up friends observer")
+        
+        do {
+            let realm = try await Realm()
+            let results = realm.objects(UserRealm.self)
+                .filter("relationship == 'Friend' OR relationship == 'Incoming' OR relationship == 'Outgoing' OR relationship == 'Blocked' OR relationship == 'BlockedOther'")
+            
+            let token = results.observe { [weak self] changes in
+                Task { @MainActor in
+                    self?.handleFriendsChanges(changes)
+                }
+            }
+            
+            tokens.append(token)
+            
+            // Initial load
+            await MainActor.run {
+                self.friends = Array(results)
+                self.notifyViewStateFriendsChanged()
+            }
+            
+            print("Friends observer setup complete with \(results.count) friends")
+            
+        } catch {
+            print("Failed to setup friends observer: \(error)")
+        }
+    }
+    
+    private func handleFriendsChanges(_ changes: RealmCollectionChange<Results<UserRealm>>) {
+        switch changes {
+        case .initial(let results):
+            print("Friends observer initial load: \(results.count) friends")
+            self.friends = Array(results)
+            self.notifyViewStateFriendsChanged()
+            
+        case .update(let results, let deletions, let insertions, let modifications):
+            print("Friends observer update: \(results.count) friends, \(insertions.count) insertions, \(modifications.count) modifications, \(deletions.count) deletions")
+            self.friends = Array(results)
+            self.notifyViewStateFriendsChanged()
+            
+        case .error(let error):
+            print("Friends observer error: \(error)")
+        }
+    }
+    
+    private func notifyViewStateFriendsChanged() {
+        let convertedFriends = self.friends.compactMap { $0.toOriginal() as Types.User? }
+        let friendsDictionary = Dictionary(uniqueKeysWithValues: convertedFriends.map { ($0.id, $0) })
+        self.viewState?.updateUsersFromDatabase(friendsDictionary)
+        print("ViewState merged \(friendsDictionary.count) friends from database")
+    }
+    
+    // MARK: - Members Observer
+    
+    private func observeMembers() async {
+        print("Setting up members observer")
+        
+        do {
+            let realm = try await Realm()
+            let results = realm.objects(MemberRealm.self)
+            
+            let token = results.observe { [weak self] changes in
+                Task { @MainActor in
+                    self?.handleMembersChanges(changes)
+                }
+            }
+            
+            tokens.append(token)
+            
+            // Initial load
+            await MainActor.run {
+                self.members = Array(results)
+                self.notifyViewStateMembersChanged()
+            }
+            
+            print("Members observer setup complete with \(results.count) members")
+            
+        } catch {
+            print("Failed to setup members observer: \(error)")
+        }
+    }
+    
+    private func handleMembersChanges(_ changes: RealmCollectionChange<Results<MemberRealm>>) {
+        switch changes {
+        case .initial(let results):
+            print("Members observer initial load: \(results.count) members")
+            self.members = Array(results)
+            self.notifyViewStateMembersChanged()
+            
+        case .update(let results, let deletions, let insertions, let modifications):
+            print("Members observer update: \(results.count) members, \(insertions.count) insertions, \(modifications.count) modifications, \(deletions.count) deletions")
+            self.members = Array(results)
+            self.notifyViewStateMembersChanged()
+            
+        case .error(let error):
+            print("Members observer error: \(error)")
+        }
+    }
+    
+    private func notifyViewStateMembersChanged() {
+        let convertedMembers = self.members.compactMap { $0.toOriginal() as Types.Member? }
+        
+        // Group members by server
+        var membersByServer: [String: [String: Types.Member]] = [:]
+        for member in convertedMembers {
+            let serverId = member.id.server
+            let userId = member.id.user
+            
+            if membersByServer[serverId] == nil {
+                membersByServer[serverId] = [:]
+            }
+            membersByServer[serverId]?[userId] = member
+        }
+        
+        self.viewState?.updateMembersFromDatabase(membersByServer)
+        print("ViewState merged \(convertedMembers.count) members from database")
+    }
+    
     // MARK: - Public Methods
     
     func refreshAllObservers() {
@@ -264,17 +387,21 @@ class DatabaseObserver: ObservableObject {
         Task {
             await observeUsers()
             await observeMessages()
-            await observeChannels() 
+            await observeChannels()
             await observeServers()
+            await observeFriends()
+            await observeMembers()
         }
     }
     
-    func getObserverStats() -> (users: Int, messages: Int, channels: Int, servers: Int) {
+    func getObserverStats() -> (users: Int, messages: Int, channels: Int, servers: Int, friends: Int, members: Int) {
         return (
             users: users.count,
             messages: messages.count,
             channels: channels.count,
-            servers: servers.count
+            servers: servers.count,
+            friends: friends.count,
+            members: members.count
         )
     }
 }
@@ -323,6 +450,18 @@ extension ViewState {
     func updateServersFromDatabase(_ servers: [String: Types.Server]) {
         for (id, server) in servers {
             self.servers[id] = server
+        }
+    }
+    
+    func updateMembersFromDatabase(_ membersByServer: [String: [String: Types.Member]]) {
+        for (serverId, serverMembers) in membersByServer {
+            if self.members[serverId] == nil {
+                self.members[serverId] = [:]
+            }
+            
+            for (userId, member) in serverMembers {
+                self.members[serverId]?[userId] = member
+            }
         }
     }
 }

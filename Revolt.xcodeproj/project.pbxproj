@@ -300,6 +300,7 @@
 		85FD19162E93298100DDF989 /* DiscoverModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD19152E93298100DDF989 /* DiscoverModels.swift */; };
 		85FD19182E9329A200DDF989 /* DiscoverRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD19172E9329A200DDF989 /* DiscoverRepository.swift */; };
 		85FD191A2E932A6F00DDF989 /* DiscoverMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD19192E932A6F00DDF989 /* DiscoverMappers.swift */; };
+		85FD19322E9458CB00DDF989 /* FriendsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85FD19312E9458CB00DDF989 /* FriendsRepository.swift */; };
 		911131412D8807F500667031 /* DeleteMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911131402D8807F500667031 /* DeleteMessageView.swift */; };
 		911A24B72D5B83C200ADD85D /* BlockUserPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */; };
 		912539CB2D79E569003BAA57 /* Assets 2.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 912539CA2D79E569003BAA57 /* Assets 2.xcassets */; };
@@ -688,6 +689,7 @@
 		85FD19152E93298100DDF989 /* DiscoverModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverModels.swift; sourceTree = "<group>"; };
 		85FD19172E9329A200DDF989 /* DiscoverRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverRepository.swift; sourceTree = "<group>"; };
 		85FD19192E932A6F00DDF989 /* DiscoverMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverMappers.swift; sourceTree = "<group>"; };
+		85FD19312E9458CB00DDF989 /* FriendsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsRepository.swift; sourceTree = "<group>"; };
 		911131402D8807F500667031 /* DeleteMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteMessageView.swift; sourceTree = "<group>"; };
 		911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockUserPopup.swift; sourceTree = "<group>"; };
 		912539CA2D79E569003BAA57 /* Assets 2.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets 2.xcassets"; sourceTree = "<group>"; };
@@ -1600,6 +1602,7 @@
 		85A81F342E901DE60017BBCF /* Repository */ = {
 			isa = PBXGroup;
 			children = (
+				85FD19312E9458CB00DDF989 /* FriendsRepository.swift */,
 				85A81F2E2E901DE60017BBCF /* ChannelRepository.swift */,
 				85FD19172E9329A200DDF989 /* DiscoverRepository.swift */,
 				85A81F2F2E901DE60017BBCF /* MemberRepository.swift */,
@@ -2137,6 +2140,7 @@
 				178BB1172B02E63B001143A4 /* LoadingSpinnerView.swift in Sources */,
 				17CE783F2B129E28006C1D2C /* ServerScrollView.swift in Sources */,
 				059B24CA2DE5BB44007ACFFB /* ReplyMessage.swift in Sources */,
+				85FD19322E9458CB00DDF989 /* FriendsRepository.swift in Sources */,
 				059381C22D29089700A49BD5 /* IdentitySheet.swift in Sources */,
 				05F3042D2DCF48660058E80E /* NSLockExtensions.swift in Sources */,
 				DA99EC5029D5F35900419FDA /* Login.swift in Sources */,

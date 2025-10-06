@@ -9,6 +9,7 @@
 import Foundation
 import OSLog
 import SwiftCSV
+import Types
 
 /// Service responsible for syncing data from Network to Database
 /// UI components should NOT call this directly - they read from Database only
@@ -22,6 +23,130 @@ class NetworkSyncService {
     private var activeSyncs: Set<String> = [] // Prevent duplicate syncs
     
     private init() {}
+    
+    // MARK: - Members Sync
+    
+    /// Syncs server members from API to database
+    /// Returns immediately - sync happens in background
+    func syncServerMembers(serverId: String, excludeOffline: Bool = false) {
+        let syncKey = "members_\(serverId)"
+        guard !activeSyncs.contains(syncKey) else {
+            logger.debug("⏭️ Members sync for server \(serverId) already active")
+            return
+        }
+        
+        activeSyncs.insert(syncKey)
+        logger.info("🔄 Starting background sync for server members: \(serverId)")
+        
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self = self else { return }
+            
+            do {
+                // Check if data is stale first
+                let isStale = await MemberRepository.shared.isDataStale(forServer: serverId)
+                if !isStale {
+                    logger.debug("✅ Members data is fresh for server \(serverId), skipping sync")
+                    await MainActor.run {
+                        self.activeSyncs.remove(syncKey)
+                    }
+                    return
+                }
+                
+                // Fetch members from API
+                let response = try await self.fetchServerMembersFromAPI(serverId: serverId, excludeOffline: excludeOffline)
+                
+                // Save to database
+                await MemberRepository.shared.saveMembersWithUsers(response.members, users: response.users)
+                
+                logger.info("✅ Members sync completed for server \(serverId): \(response.members.count) members")
+                
+            } catch {
+                logger.error("❌ Members sync failed for server \(serverId): \(error.localizedDescription)")
+            }
+            
+            await MainActor.run {
+                self.activeSyncs.remove(syncKey)
+            }
+        }
+    }
+    
+    /// Fetches server members from API
+    private func fetchServerMembersFromAPI(serverId: String, excludeOffline: Bool) async throws -> MembersWithUsers {
+        logger.debug("🌐 Fetching members for server \(serverId) from API...")
+        
+        // Get ViewState reference
+        guard let viewState = await MainActor.run(body: { ViewState.shared }) else {
+            throw NSError(domain: "NetworkSyncService", code: -1, userInfo: [NSLocalizedDescriptionKey: "ViewState not available"])
+        }
+        
+        // Call API
+        let result = await viewState.http.fetchServerMembers(target: serverId, excludeOffline: excludeOffline)
+        
+        switch result {
+        case .success(let response):
+            return response
+        case .failure(let error):
+            throw error
+        }
+    }
+    
+    // MARK: - Friends Sync
+    
+    /// Syncs friends data from API to database
+    /// Returns immediately - sync happens in background
+    func syncFriends() {
+        guard !activeSyncs.contains("friends") else {
+            logger.debug("⏭️ Friends sync already active")
+            return
+        }
+        
+        activeSyncs.insert("friends")
+        logger.info("🔄 Starting background sync for friends")
+        
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self = self else { return }
+            
+            do {
+                // Check if data is stale first
+                let isStale = await FriendsRepository.shared.isDataStale()
+                if !isStale {
+                    logger.debug("✅ Friends data is fresh, skipping sync")
+                    await MainActor.run {
+                        self.activeSyncs.remove("friends")
+                    }
+                    return
+                }
+                
+                // Fetch friends from API
+                let friends = try await self.fetchFriendsFromAPI()
+                
+                // Save to database
+                await FriendsRepository.shared.saveFriends(friends)
+                
+                logger.info("✅ Friends sync completed: \(friends.count) friends")
+                
+            } catch {
+                logger.error("❌ Friends sync failed: \(error.localizedDescription)")
+            }
+            
+            await MainActor.run {
+                self.activeSyncs.remove("friends")
+            }
+        }
+    }
+    
+    /// Fetches friends from API
+    private func fetchFriendsFromAPI() async throws -> [Types.User] {
+        // This would typically call the actual API endpoint
+        // For now, return empty array as placeholder
+        logger.debug("🌐 Fetching friends from API...")
+        
+        // TODO: Implement actual API call
+        // let response = try await http.fetchFriends()
+        // return response.users
+        
+        return []
+    }
     
     // MARK: - Discover Servers Sync
     
