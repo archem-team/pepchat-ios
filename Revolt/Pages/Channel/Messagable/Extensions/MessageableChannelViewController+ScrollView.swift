@@ -238,24 +238,24 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
     }
     
     func scrollToBottom(animated: Bool) {
-        print("🔍 SCROLL_TO_BOTTOM: Called with animated: \(animated)")
+        print("🔍 SCROLL_TO_TOP: Called with animated: \(animated) (newest messages are now at top)")
         debugTargetMessageProtection()
         
         guard !localMessages.isEmpty else { 
-            print("🚫 SCROLL_TO_BOTTOM: No messages, returning")
+            print("🚫 SCROLL_TO_TOP: No messages, returning")
             return 
         }
         
         // SIMPLIFIED TARGET MESSAGE PROTECTION
         if targetMessageProtectionActive {
-            print("🎯 scrollToBottom: Target message protection active, blocking auto-scroll")
+            print("🎯 scrollToTop: Target message protection active, blocking auto-scroll")
             print("🎯 Protection details - targetMessageId: \(targetMessageId != nil), isInPosition: \(isInTargetMessagePosition), processed: \(targetMessageProcessed)")
             return
         }
         
         // ADDITIONAL SAFEGUARD: Double-check that we're not in the middle of target message operations
         if let targetId = targetMessageId {
-            print("🛡️ scrollToBottom: Additional check - target message \(targetId) still exists, blocking scroll")
+            print("🛡️ scrollToTop: Additional check - target message \(targetId) still exists, blocking scroll")
             return
         }
         
@@ -317,23 +317,24 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
             self.view.layoutIfNeeded()
             self.tableView.layoutIfNeeded()
             
-            let lastIndex = self.localMessages.count - 1
-            let indexPath = IndexPath(row: lastIndex, section: 0)
+            // Scroll to top (row 0) since newest messages are now at the top
+            let topIndex = 0
+            let indexPath = IndexPath(row: topIndex, section: 0)
             
             // Check if the index path is valid
-            guard lastIndex >= 0 && lastIndex < self.tableView.numberOfRows(inSection: 0) else {
-                // print("📊 SCROLL_TO_BOTTOM: Invalid index path \(indexPath)")
+            guard topIndex >= 0 && topIndex < self.tableView.numberOfRows(inSection: 0) else {
+                // print("📊 SCROLL_TO_TOP: Invalid index path \(indexPath)")
                 return
             }
             
-            // Always use .bottom positioning when keyboard is visible
-            self.tableView.scrollToRow(at: indexPath, at: .bottom, animated: animated)
+            // Always use .top positioning since newest messages are at the top
+            self.tableView.scrollToRow(at: indexPath, at: .top, animated: animated)
             
             // For keyboard visible state, do an extra scroll after animation
             if self.isKeyboardVisible && animated {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    self.tableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
-                    // print("📊 SCROLL_TO_BOTTOM: Extra scroll for keyboard visibility")
+                    self.tableView.scrollToRow(at: indexPath, at: .top, animated: false)
+                    // print("📊 SCROLL_TO_TOP: Extra scroll for keyboard visibility")
                 }
             }
         }

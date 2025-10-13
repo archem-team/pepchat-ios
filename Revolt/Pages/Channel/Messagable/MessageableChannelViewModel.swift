@@ -208,11 +208,11 @@ extension MessageableChannelViewModel {
                     // print("   - Are ViewModel and final IDs identical: \(self.messages == finalMessageIds)")
                 } else {
                     // Initial load (both before and after are nil)
-                    // Sort messages by timestamp to ensure correct order
+                    // Sort messages by timestamp to ensure reverse chronological order (newest first)
                     let sortedMessages = result.messages.sorted { msg1, msg2 in
                         let date1 = createdAt(id: msg1.id)
                         let date2 = createdAt(id: msg2.id)
-                        return date1 < date2
+                        return date1 > date2
                     }
                     
                     // Get IDs in sorted order

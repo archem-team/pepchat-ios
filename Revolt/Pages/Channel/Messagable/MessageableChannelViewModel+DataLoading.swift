@@ -35,11 +35,11 @@ extension MessageableChannelViewModel {
                 viewState.messages[message.id] = message
             }
             
-            // Sort and update channel messages
+            // Sort and update channel messages (newest first)
             let sortedIds = dbMessages.map { $0.id }.sorted { id1, id2 in
                 let date1 = createdAt(id: id1)
                 let date2 = createdAt(id: id2)
-                return date1 < date2
+                return date1 > date2
             }
             
             viewState.channelMessages[channel.id] = sortedIds
@@ -79,7 +79,7 @@ extension MessageableChannelViewModel {
                 }
                 
                 let sortedIds = dbMessages.map { $0.id }.sorted { id1, id2 in
-                    createdAt(id: id1) < createdAt(id: id2)
+                    createdAt(id: id1) > createdAt(id: id2)
                 }
                 
                 viewState.channelMessages[channel.id] = sortedIds

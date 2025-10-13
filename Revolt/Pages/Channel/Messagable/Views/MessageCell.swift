@@ -114,9 +114,12 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         setupGestureRecognizer()
         setupSwipeGestureRecognizer()
         
+        self.transform = CGAffineTransform(scaleX: 1, y: -1)
+        
         // Set default layout margins
         contentView.layoutMargins = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
     }
+    
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
@@ -224,13 +227,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         // PERFORMANCE: Reset swipe state immediately
         isSwiping = false
         actionTriggered = false
-        contentView.transform = .identity
         swipeReplyIconView?.isHidden = true
         
         // PERFORMANCE: Clear highlight state when reusing cell
         isTargetMessageHighlighted = false
         originalBackgroundColorForHighlight = nil
-        contentView.transform = .identity
         contentView.layer.borderWidth = 0.0
         contentView.backgroundColor = .clear
         tag = 0
@@ -2278,7 +2279,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             // print("🧹 Starting clear highlight animation")
             UIView.animate(withDuration: 0.3) {
                 self.contentView.backgroundColor = self.originalBackgroundColorForHighlight
-                self.contentView.transform = .identity
                 self.contentView.layer.borderWidth = 0.0
                 // print("🧹 Clear highlight animation properties applied")
             }

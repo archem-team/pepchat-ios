@@ -322,8 +322,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     /// Sets up only essential UI components for immediate display
     private func setupBasicUI() {
-        // Match bgDefaultPurple13 color
+        // Match bgDefaultPurple13 color - CRITICAL: Set this FIRST and ensure it's opaque
         view.backgroundColor = .bgDefaultPurple13
+        view.isOpaque = true
         
         // Make sure we extend to all edges of the screen including notch area
         edgesForExtendedLayout = .all
@@ -751,7 +752,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         super.viewDidAppear(animated)
         
         // 🚀 PERFORMANCE: Data already loaded in viewDidLoad, just handle viewDidAppear logic
-        handleViewDidAppearLogic()
+        //handleViewDidAppearLogic()
         
         print("⚡ PERFORMANCE: viewDidAppear completed - data already loaded")
     }
@@ -771,9 +772,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             targetMessageId = targetFromViewState
             targetMessageProcessed = false
         } else {
-            // Load messages immediately
-            Task {
-                await loadInitialMessages()
+            // Check if we already have messages in the database
+            let channelId = viewModel.channel.id
+            let hasExistingMessages = !(viewModel.viewState.channelMessages[channelId]?.isEmpty ?? true) &&
+                                     viewModel.viewState.channelMessages[channelId]?.first(where: { viewModel.viewState.messages[$0] != nil }) != nil
+            
+            if hasExistingMessages {
+                print("⚡ PERFORMANCE: Database already has messages, showing them immediately")
+                // We have existing messages, just refresh the UI without loading
+                refreshMessages()
+            } else {
+				Task {
+					await loadInitialMessages()
+				}
+                
             }
         }
     }
@@ -785,11 +797,46 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             print("🎯 VIEW_DID_APPEAR: Restoring target message from ViewState: \(targetFromViewState)")
             targetMessageId = targetFromViewState
             targetMessageProcessed = false
+            
+            // For target messages, we need to load from database/API
+            // CRITICAL FIX: Set loading state and hide empty state before starting
+            messageLoadingState = .loading
+            DispatchQueue.main.async {
+                self.hideEmptyStateView()
+                print("🚫 VIEW_DID_APPEAR: Hidden empty state before target message loading")
+            }
+            
+            // Show loading spinner and trigger target message loading (keep table visible)
+            let spinner = UIActivityIndicatorView(style: .large)
+            spinner.color = .white
+            spinner.startAnimating()
+            spinner.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 100)
+            tableView.tableFooterView = spinner
+            
+            // Trigger target message loading which will use nearby API
+            Task {
+                print("🎯 VIEW_DID_APPEAR: Triggering target message loading")
+                await loadInitialMessages()
+                
+                // Adjust table insets after loading messages
+                DispatchQueue.main.async {
+                    self.adjustTableInsetsForMessageCount()
+                    
+                    // CRITICAL FIX: Check for missing reply content after initial load with delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        Task {
+                            print("🔗 VIEW_APPEARED: Checking for missing replies after delay (first case)")
+                            await self.checkAndFetchMissingReplies()
+                        }
+                    }
+                }
+            }
+            return
         }
         
-        // Check if we're returning from search - if so, reload messages and skip scroll-related operations
+        // Check if we're returning from search - if so, just refresh UI without reloading from database
         if isReturningFromSearch {
-            print("🔍 VIEW_DID_APPEAR: Returning from search, reloading messages")
+            print("🔍 VIEW_DID_APPEAR: Returning from search, refreshing UI only")
             
             // Re-register observer
             NotificationCenter.default.removeObserver(self, name: NSNotification.Name("MessagesDidChange"), object: nil)
@@ -800,38 +847,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 object: nil
             )
             
-            // Check if we have messages in ViewState
-            let channelId = viewModel.channel.id
-            let hasMessages = !(viewModel.viewState.channelMessages[channelId]?.isEmpty ?? true)
+            // Just refresh the UI with existing messages, don't reload from database
+            refreshMessages()
             
-            if hasMessages {
-                // Reload messages to show them again
-                refreshMessages()
-                
-                // Show table view if hidden
-                if tableView.alpha == 0.0 {
-                    tableView.alpha = 1.0
-                }
-                
-                // Scroll to bottom if messages exist
-                if !localMessages.isEmpty {
-                    scrollToBottom(animated: false)
-                }
-            } else {
-                // No messages in ViewState, need to reload from API
-                print("🔍 VIEW_DID_APPEAR: No messages in ViewState, reloading from API")
-                
-                // Show loading indicator
-                tableView.alpha = 0.0
-                let spinner = UIActivityIndicatorView(style: .large)
-                spinner.startAnimating()
-                spinner.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 44)
-                tableView.tableFooterView = spinner
-                
-                // Reload messages from API
-                Task {
-                    await loadInitialMessages()
-                }
+            // Scroll to bottom if messages exist
+            if !localMessages.isEmpty {
+                scrollToBottom(animated: false)
             }
             
             // Reset the flag after processing
@@ -888,93 +909,38 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             return
         }
         
-        // CRITICAL FIX: Always prioritize target message handling over existing messages
+        // CRITICAL FIX: Don't load from database in viewDidAppear - only refresh UI
         if targetMessageId != nil {
-            print("🎯 VIEW_DID_APPEAR: Target message found, using nearby API (prioritized over existing messages)")
+            print("🎯 VIEW_DID_APPEAR: Target message found, just refreshing UI")
             
-            // CRITICAL FIX: Don't trigger loading if already in progress
-            if messageLoadingState == .loading {
-                print("🎯 VIEW_DID_APPEAR: Loading already in progress, skipping duplicate trigger")
-                return
-            }
+            // Just refresh the UI, don't load from database
+            refreshMessages()
             
-            // CRITICAL FIX: Set loading state and hide empty state before starting
-            messageLoadingState = .loading
+            // Adjust table insets
             DispatchQueue.main.async {
-                self.hideEmptyStateView()
-                print("🚫 VIEW_DID_APPEAR: Hidden empty state before target message loading")
-            }
-            
-            // Show loading spinner and trigger target message loading
-            tableView.alpha = 0.0
-            let spinner = UIActivityIndicatorView(style: .large)
-            spinner.startAnimating()
-            spinner.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 44)
-            tableView.tableFooterView = spinner
-            
-            // Trigger target message loading which will use nearby API
-            Task {
-                print("🎯 VIEW_DID_APPEAR: Triggering target message loading")
-                await loadInitialMessages()
+                self.adjustTableInsetsForMessageCount()
                 
-                // Adjust table insets after loading messages
-                DispatchQueue.main.async {
-                    self.adjustTableInsetsForMessageCount()
-                    
-                    // CRITICAL FIX: Check for missing reply content after initial load with delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        Task {
-                            print("🔗 VIEW_APPEARED: Checking for missing replies after delay (first case)")
-                            await self.checkAndFetchMissingReplies()
-                        }
+                // Check for missing reply content after delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    Task {
+                        print("🔗 VIEW_APPEARED: Checking for missing replies after delay")
+                        await self.checkAndFetchMissingReplies()
                     }
                 }
             }
         } else {
-            // SMART LOADING: Check if we have actual message objects, not just IDs (only when no target message)
-            let hasActualMessages = !(viewModel.viewState.channelMessages[channelId]?.isEmpty ?? true) &&
-                                   viewModel.viewState.channelMessages[channelId]?.first(where: { viewModel.viewState.messages[$0] != nil }) != nil
+            // Just refresh UI with existing messages, don't load from database in viewDidAppear
+            print("✅ VIEW_DID_APPEAR: Refreshing UI with existing messages")
+            tableView.tableFooterView = nil
+            refreshMessages()
             
-            if hasActualMessages {
-                print("✅ VIEW_DID_APPEAR: Messages already loaded, showing immediately")
-                // Messages exist, show them immediately without loading
-                tableView.alpha = 1.0
-                tableView.tableFooterView = nil
-                refreshMessages()
-                
-                // Adjust table insets and check for missing replies
-                Task {
-                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-                    await MainActor.run {
+            // Adjust table insets and check for missing replies
+            Task {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                await MainActor.run {
                     self.adjustTableInsetsForMessageCount()
-                    }
-                    await self.checkAndFetchMissingReplies()
                 }
-            } else {
-                print("🚀 VIEW_DID_APPEAR: No messages found, loading from API IMMEDIATELY")
-                
-                // Show skeleton loading view instead of spinner
-                showSkeletonView()
-                
-                // Start loading immediately without any delays
-                Task {
-                    print("🚀 IMMEDIATE_LOAD: Starting API call NOW for channel \(channelId)")
-                    //await loadInitialMessagesImmediate()
-                    
-                    // Hide skeleton and show messages
-                    DispatchQueue.main.async {
-                        self.hideSkeletonView()
-                        self.adjustTableInsetsForMessageCount()
-                    
-                    // CRITICAL FIX: Check for missing reply content after initial load with delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        Task {
-                            print("🔗 VIEW_APPEARED: Checking for missing replies after delay (second case)")
-                            await self.checkAndFetchMissingReplies()
-                        }
-                    }
-                    }
-                }
+                await self.checkAndFetchMissingReplies()
             }
         }
         
@@ -1499,6 +1465,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         tableView = UITableView()
         tableView.translatesAutoresizingMaskIntoConstraints = false
         
+        // Apply vertical flip transform to reverse message order
+        tableView.transform = CGAffineTransform(scaleX: 1, y: -1)
+        
         // Initialize the data source first (use LocalMessagesDataSource)
         dataSource = LocalMessagesDataSource(viewModel: viewModel, viewController: self, localMessages: localMessages)
         
@@ -1544,8 +1513,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Don't add loading header view initially - will be added when needed
         // tableView.tableHeaderView = loadingHeaderView
         
-        // CRITICAL: Hide table view initially to prevent visual jump
-        tableView.alpha = 0.0
+        // CRITICAL FIX: Keep table view visible with opaque background
+        tableView.alpha = 1.0
+        tableView.backgroundColor = .bgDefaultPurple13
+        tableView.isOpaque = true
+        
+        // Don't show loading indicator here - it will be shown only when actually loading from API
         
         view.addSubview(tableView)
         
@@ -1574,8 +1547,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // This helps detect when new content is added
         tableView.addObserver(self, forKeyPath: "contentSize", options: [.new, .old], context: nil)
         
-        // Initial reload
-        refreshMessages()
+        // CRITICAL FIX: Don't call refreshMessages in setupBindings - this should only happen in initial setup
+        // refreshMessages() // Removed - database loading should only happen in loadInitialDataIfNeeded()
     }
     
     // Override observeValue to detect content size changes
@@ -1787,8 +1760,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Skip if user is scrolling (for regular message updates)
         guard !tableView.isDragging, !tableView.isDecelerating else { return }
         
-        // Use lightweight refresh
-        refreshMessages()
+        // CRITICAL FIX: Don't refresh messages on scroll - this should only happen in initial setup
+        // refreshMessages() // Removed - database loading should only happen in loadInitialDataIfNeeded()
     }
     
     // Legacy method for compatibility (can be removed after testing)
@@ -1815,14 +1788,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             return
         }
         
-        // If table is hidden, use positionTableAtBottomBeforeShowing instead
-        if tableView.alpha == 0.0 {
-            // CRITICAL FIX: Don't auto-position if target message was recently highlighted
-            if let highlightTime = lastTargetMessageHighlightTime,
-               Date().timeIntervalSince(highlightTime) < 10.0 {
+        // CRITICAL FIX: Don't auto-position if target message was recently highlighted
+        if let highlightTime = lastTargetMessageHighlightTime,
+           Date().timeIntervalSince(highlightTime) < 10.0 {
                 print("🎯 SCROLL_TO_BOTTOM: Target message highlighted recently, skipping position")
-                return
-            }
+//                return
+            
+    
             
             // print("🔽 SCROLL_TO_BOTTOM: Table is hidden, using positionTableAtBottomBeforeShowing")
             positionTableAtBottomBeforeShowing()
@@ -2733,17 +2705,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 return
             }
             
-            // Hide table and show loading spinner
-            tableView.alpha = 0.0
-            let spinner = UIActivityIndicatorView(style: .large)
-            spinner.startAnimating()
-            spinner.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 44)
-            tableView.tableFooterView = spinner
-            
-            // Force load messages if we only have IDs
-            Task {
-                await loadInitialMessages()
-            }
+            // CRITICAL FIX: Don't load from database in refreshMessages - this should only happen in initial setup
+            print("🔄 BLOCKED: refreshMessages called without actual messages - skipping database load")
             return
         }
         
@@ -2941,6 +2904,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         print("⚠️ SYSTEM_CELL_ERROR: Failed to dequeue SystemMessageCell")
                         return createFallbackCell(tableView: tableView, indexPath: indexPath, reason: "System cell dequeue failed")
                     }
+                    
                     systemCell.configure(with: message, viewState: viewModelRef.viewState)
                     return systemCell
                 }
@@ -3146,8 +3110,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             messageLoadingState = .notLoading
             print("🎯 Reset messageLoadingState to .notLoading - loadInitialMessages complete")
             
+            // Remove loading indicator
             DispatchQueue.main.async {
-                self.tableView.alpha = 1.0
+                self.tableView.tableFooterView = nil
             }
         }
         
@@ -3290,17 +3255,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     // CRITICAL FIX: Don't auto-position if target message was recently highlighted
                     if let highlightTime = self.lastTargetMessageHighlightTime,
                        Date().timeIntervalSince(highlightTime) < 10.0 {
-                        // Just show table without positioning
-                        self.tableView.alpha = 1.0
+                        // Just adjust insets without positioning
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             self.adjustTableInsetsForMessageCount()
                         }
                     } else {
-                        // Position at bottom and show table
+                        // Position at bottom
                         self.positionTableAtBottomBeforeShowing()
-                        
-                        // Ensure table is visible
-                        self.tableView.alpha = 1.0
                         
                         // Adjust table insets after positioning
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -3308,9 +3269,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         }
                     }
                 } else {
-                    // print("👆 User has manually scrolled up, showing table without auto-positioning")
-                    // Just show table and adjust insets
-                    self.showTableViewWithFade()
+                    // Just adjust insets without auto-positioning
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         self.adjustTableInsetsForMessageCount()
                     }
@@ -3386,11 +3345,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         print("🔗 PRELOAD_CHECK: Checking \(allCurrentMessages.count) total messages for missing replies after regular load")
                         await fetchReplyMessagesContentAndRefreshUI(for: allCurrentMessages)
                 
-                // Sort messages by creation timestamp to ensure chronological order
+                // Sort messages by creation timestamp to ensure reverse chronological order (newest first)
                 let sortedMessages = fetchResult.messages.sorted { msg1, msg2 in
                     let date1 = createdAt(id: msg1.id)
                     let date2 = createdAt(id: msg2.id)
-                    return date1 < date2
+                    return date1 > date2
                 }
                 
                 // Create the list of sorted message IDs
@@ -3454,8 +3413,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         // CRITICAL FIX: Don't auto-position if target message was recently highlighted
                         if let highlightTime = self.lastTargetMessageHighlightTime,
                            Date().timeIntervalSince(highlightTime) < 10.0 {
-                            // Just show table without positioning
-                            self.tableView.alpha = 1.0
+                            // Just adjust insets without positioning
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                                 self.adjustTableInsetsForMessageCount()
                             }
@@ -3468,13 +3426,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             }
                         }
                     } else {
-                        // print("👆 User has manually scrolled up, showing table without auto-positioning")
-                        // Just show table and adjust insets
-                        self.showTableViewWithFade()
-                        
-                        // Ensure table is visible
-                        self.tableView.alpha = 1.0
-                        
+                        // Just adjust insets without auto-positioning
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             self.adjustTableInsetsForMessageCount()
                         }
@@ -4248,11 +4200,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         await self.fetchReplyMessagesContent(for: result.messages)
                     }
                     
-                    // Sort messages by timestamp to ensure chronological order
+                    // Sort messages by timestamp to ensure reverse chronological order (newest first)
                     let sortedMessages = result.messages.sorted { msg1, msg2 in
                         let date1 = createdAt(id: msg1.id)
                         let date2 = createdAt(id: msg2.id)
-                        return date1 < date2
+                        return date1 > date2
                     }
                     
                     // Create a list of message IDs in sorted order
@@ -5054,7 +5006,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             await MainActor.run {
                 self.messageLoadingState = .notLoading
                 self.hideEmptyStateView()
-                self.tableView.alpha = 1.0
                 self.tableView.tableFooterView = nil
                 self.loadingHeaderView.isHidden = true
                 self.targetMessageId = nil
@@ -5517,7 +5468,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             self.loadingHeaderView.isHidden = true
                             self.targetMessageId = nil
                             self.viewModel.viewState.currentTargetMessageId = nil
-                            self.tableView.alpha = 1.0
                             self.tableView.tableFooterView = nil
                             
                             print("❌ REPLY_CLICK_ERROR: Failed to load message. Please try again.")
@@ -5937,12 +5887,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
     }
     
-    // Helper method to show table view with smooth fade-in
+    // Helper method to show table view (no-op since table is always visible)
     private func showTableViewWithFade() {
-        UIView.animate(withDuration: 0.2) {
-            self.tableView.alpha = 1.0
-        }
-        // print("✨ [POSITION] Table view shown with fade-in")
+        // Table view is always visible now, no fade needed
+        // print("✨ [POSITION] Table view already visible")
     }
     
     // MARK: - Skeleton Loading Methods (DISABLED FOR PERFORMANCE)
@@ -6864,10 +6812,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
 //            }
 //        }
 //    }
-}
 
 // RepliesContainerViewDelegate conformance moved to RepliesManager
 
+}
 
 // Add image tap handler to MessageCell
 extension MessageCell {
@@ -7628,7 +7576,6 @@ extension MessageableChannelViewController {
             }
         }
     }
-}
 
 // MARK: - Helper Functions
 /// Generates a dynamic message link based on the current domain
@@ -7660,5 +7607,4 @@ private func generateMessageLink(serverId: String?, channelId: String, messageId
         return "\(webDomain)/channel/\(channelId)/\(messageId)"
     }
 }
-
- 
+}

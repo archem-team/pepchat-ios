@@ -73,19 +73,20 @@ class ScrollPositionManager {
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self, let viewController = self.viewController else { return }
             
-            let lastIndex = viewController.localMessages.count - 1
-            let indexPath = IndexPath(row: lastIndex, section: 0)
+            // Scroll to top (row 0) since newest messages are now at the top
+            let topIndex = 0
+            let indexPath = IndexPath(row: topIndex, section: 0)
             
             // Check if the index path is valid
-            guard lastIndex >= 0 && lastIndex < viewController.tableView.numberOfRows(inSection: 0) else {
-                // print("📊 SCROLL_TO_BOTTOM: Invalid index path \(indexPath)")
+            guard topIndex >= 0 && topIndex < viewController.tableView.numberOfRows(inSection: 0) else {
+                // print("📊 SCROLL_TO_TOP: Invalid index path \(indexPath)")
                 return
             }
             
             if animated {
-                viewController.tableView.scrollToRow(at: indexPath, at: .bottom, animated: true)
+                viewController.tableView.scrollToRow(at: indexPath, at: .top, animated: true)
             } else {
-                viewController.tableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
+                viewController.tableView.scrollToRow(at: indexPath, at: .top, animated: false)
             }
         }
         
@@ -140,20 +141,20 @@ class ScrollPositionManager {
     func isUserNearBottom(threshold: CGFloat? = nil) -> Bool {
         guard let viewController = viewController else { return false }
         
-        // If user has manually scrolled up recently, they're definitely not near bottom
+        // If user has manually scrolled down recently, they're definitely not near top
         if hasManuallyScrolledUpRecently {
-            // print("📊 IS_USER_NEAR_BOTTOM: User scrolled up recently, returning false")
+            // print("📊 IS_USER_NEAR_TOP: User scrolled down recently, returning false")
             return false
         }
         
-        // If user is actively scrolling, don't consider them at bottom
+        // If user is actively scrolling, don't consider them at top
         if viewController.tableView.isDragging || viewController.tableView.isDecelerating {
-            // print("📊 IS_USER_NEAR_BOTTOM: User is actively scrolling, returning false")
+            // print("📊 IS_USER_NEAR_TOP: User is actively scrolling, returning false")
             return false
         }
         
         // SPECIAL CASE: For read-only channels with markdown content
-        // Be more conservative about considering user "near bottom"
+        // Be more conservative about considering user "near top"
         let isReadOnlyChannel = !viewController.sendMessagePermission
         
         let actualThreshold = threshold ?? MessageableChannelConstants.nearBottomThreshold
@@ -165,18 +166,19 @@ class ScrollPositionManager {
         
         // Make sure we have valid content dimensions
         guard contentHeight > 0, frameHeight > 0 else {
-            // print("📊 IS_USER_NEAR_BOTTOM: Invalid dimensions, returning true")
+            // print("📊 IS_USER_NEAR_TOP: Invalid dimensions, returning true")
             return true
         }
         
-        let distanceFromBottom = contentHeight - (offsetY + frameHeight)
-        let isNearBottom = distanceFromBottom <= adjustedThreshold
+        // Calculate distance from top (newest messages are now at top)
+        let distanceFromTop = offsetY
+        let isNearTop = distanceFromTop <= adjustedThreshold
         
         // Add detailed logging to debug the issue
-        // print("📊 IS_USER_NEAR_BOTTOM: offsetY=\(offsetY), contentHeight=\(contentHeight), frameHeight=\(frameHeight)")
-        // print("📊 IS_USER_NEAR_BOTTOM: distanceFromBottom=\(distanceFromBottom), threshold=\(adjustedThreshold), isReadOnly=\(isReadOnlyChannel), isNearBottom=\(isNearBottom)")
+        // print("📊 IS_USER_NEAR_TOP: offsetY=\(offsetY), contentHeight=\(contentHeight), frameHeight=\(frameHeight)")
+        // print("📊 IS_USER_NEAR_TOP: distanceFromTop=\(distanceFromTop), threshold=\(adjustedThreshold), isReadOnly=\(isReadOnlyChannel), isNearTop=\(isNearTop)")
         
-        return isNearBottom
+        return isNearTop
     }
     
     func isAtTop() -> Bool {
@@ -202,7 +204,7 @@ class ScrollPositionManager {
     func maintainScrollPositionAfterInsertingMessages(at insertionIndex: Int, count: Int, animated: Bool) {
         guard let viewController = viewController else { return }
         
-        // If user is near bottom, scroll to bottom after insertion
+        // If user is near top, scroll to top after insertion (newest messages are at top)
         if isUserNearBottom() {
             DispatchQueue.main.async {
                 self.scrollToBottom(animated: animated)
