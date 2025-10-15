@@ -261,6 +261,11 @@ struct ServerScrollView: View {
                 didDrop = false
             }
         }
+        .onAppear {
+            // DATABASE-FIRST: Trigger background sync for servers and channels
+            NetworkSyncService.shared.syncAllServers()
+            NetworkSyncService.shared.syncAllChannels()
+        }
     }
 }
 

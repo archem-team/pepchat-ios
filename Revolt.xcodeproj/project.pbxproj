@@ -70,7 +70,6 @@
 		059381D02D29630A00A49BD5 /* ChannelCategoryCreateSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059381CF2D29630A00A49BD5 /* ChannelCategoryCreateSheet.swift */; };
 		059803DD2D384FCE001FD019 /* PeptidePagination.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059803DC2D384FCE001FD019 /* PeptidePagination.swift */; };
 		059833E22CCFC24C005227A3 /* PeptideButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059833E12CCFC24C005227A3 /* PeptideButton.swift */; };
-		059B24B32DE5BADF007ACFFB /* MessageableChannelViewController+TableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059B24B22DE5BAB3007ACFFB /* MessageableChannelViewController+TableView.swift */; };
 		059B24B52DE5BAEF007ACFFB /* MessageableChannelViewController+ScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059B24B42DE5BAE7007ACFFB /* MessageableChannelViewController+ScrollView.swift */; };
 		059B24B72DE5BAF3007ACFFB /* MessageableChannelViewController+TextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059B24B62DE5BAF1007ACFFB /* MessageableChannelViewController+TextView.swift */; };
 		059B24B92DE5BAFA007ACFFB /* MessageableChannelViewController+Keyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059B24B82DE5BAF9007ACFFB /* MessageableChannelViewController+Keyboard.swift */; };
@@ -476,7 +475,6 @@
 		059381CF2D29630A00A49BD5 /* ChannelCategoryCreateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelCategoryCreateSheet.swift; sourceTree = "<group>"; };
 		059803DC2D384FCE001FD019 /* PeptidePagination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeptidePagination.swift; sourceTree = "<group>"; };
 		059833E12CCFC24C005227A3 /* PeptideButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeptideButton.swift; sourceTree = "<group>"; };
-		059B24B22DE5BAB3007ACFFB /* MessageableChannelViewController+TableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+TableView.swift"; sourceTree = "<group>"; };
 		059B24B42DE5BAE7007ACFFB /* MessageableChannelViewController+ScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+ScrollView.swift"; sourceTree = "<group>"; };
 		059B24B62DE5BAF1007ACFFB /* MessageableChannelViewController+TextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+TextView.swift"; sourceTree = "<group>"; };
 		059B24B82DE5BAF9007ACFFB /* MessageableChannelViewController+Keyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+Keyboard.swift"; sourceTree = "<group>"; };
@@ -1126,7 +1124,6 @@
 				059B24B82DE5BAF9007ACFFB /* MessageableChannelViewController+Keyboard.swift */,
 				059B24B62DE5BAF1007ACFFB /* MessageableChannelViewController+TextView.swift */,
 				059B24B42DE5BAE7007ACFFB /* MessageableChannelViewController+ScrollView.swift */,
-				059B24B22DE5BAB3007ACFFB /* MessageableChannelViewController+TableView.swift */,
 				05F3042E2DCF486D0058E80E /* UIViewExtensions.swift */,
 				05F3042C2DCF48640058E80E /* NSLockExtensions.swift */,
 			);
@@ -2024,7 +2021,6 @@
 				917980F52D636DC300E7252E /* IncomingFriendRequestsSheet.swift in Sources */,
 				178BB11B2B02FCDD001143A4 /* Responses.swift in Sources */,
 				05FAF1B42CE33A110067B7E3 /* PeptideAuthHeaderView.swift in Sources */,
-				059B24B32DE5BADF007ACFFB /* MessageableChannelViewController+TableView.swift in Sources */,
 				059B24D42DE748FF007ACFFB /* LinkPreviewView.swift in Sources */,
 				05416D922D21DAB1001858B0 /* DeleteServerSheet.swift in Sources */,
 				05104E9F2CE13BAF00B9147B /* OnboardingStage.swift in Sources */,

@@ -89,11 +89,9 @@ struct ChannelScrollController {
     @Binding var highlighted: String?
     
     func scrollTo(message id: String) {
-        // print("🎯 ChannelScrollController: Scrolling to message \(id)")
         withAnimation(.easeInOut) {
             proxy?.scrollTo(id)
             highlighted = id
-            // print("🎯 ChannelScrollController: Set highlighted to \(id)")
         }
         
         Task {
@@ -103,12 +101,10 @@ struct ChannelScrollController {
                 await MainActor.run {
                     withAnimation(.easeInOut) {
                         highlighted = nil
-                        // print("🎯 ChannelScrollController: Cleared highlight")
                     }
                 }
             } catch {
                 // Handle cancellation gracefully
-                // print("Highlight clear task was cancelled")
             }
         }
     }
@@ -165,9 +161,6 @@ class MessageableChannelViewModel: ObservableObject {
     func loadMoreMessages(before: String? = nil) async -> FetchHistory? {
         if isPreview { return nil }
         
-        // Create an array of message IDs to include in the request
-        let messageIds: [String] = before != nil ? [before!] : []
-        
         // Get the server ID from the channel
         let serverId = channel.server
         
@@ -178,8 +171,12 @@ class MessageableChannelViewModel: ObservableObject {
             channel: channel.id,
             limit: messageLimit, // Smart limit based on channel
             before: before,
+            after: nil,
+            nearby: nil,
+            sort: "Latest",
             server: serverId,
-            messages: messageIds
+            messages: [],
+            include_users: true
         ).get()) ?? FetchHistory(messages: [], users: [])
         
         for user in result.users {
@@ -199,12 +196,11 @@ class MessageableChannelViewModel: ObservableObject {
             ids.append(message.id)
         }
         
-        // Safely handle the case when channelMessages[channel.id] might be nil
-        if let existingMessages = viewState.channelMessages[channel.id] {
-            viewState.channelMessages[channel.id] = ids.reversed() + existingMessages
-        } else {
-            viewState.channelMessages[channel.id] = ids.reversed()
-        }
+        // Append older messages without reversing; deduplicate before appending
+        let existing = viewState.channelMessages[channel.id] ?? []
+        let existingSet = Set(existing)
+        let newUnique = ids.filter { !existingSet.contains($0) }
+        viewState.channelMessages[channel.id] = existing + newUnique
         
         // Notify that messages have changed
         DispatchQueue.main.async {
@@ -823,7 +819,6 @@ struct MessageableChannelView: View {
                let isReturning = userInfo["isReturning"] as? Bool,
                channelId == viewModel.channel.id && isReturning {
                 
-                print("🔍 SWIFTUI: Received search closing notification, reloading messages")
                 
                 // Check if we have messages in ViewState
                 let hasMessages = !(viewModel.viewState.channelMessages[channelId]?.isEmpty ?? true)
@@ -840,7 +835,6 @@ struct MessageableChannelView: View {
                     }
                 } else {
                     // No messages in ViewState, need to reload from API
-                    print("🔍 SWIFTUI: No messages in ViewState, reloading from API")
                     
                     Task {
                         await loadMoreMessages(before: nil)
@@ -1051,7 +1045,6 @@ struct MessageableChannelView: View {
     func sendAck(for messageId: String) {
         // Check if auto-acknowledgment is temporarily disabled
         if viewState.shouldDisableAutoAck() {
-            print("🚫 SwiftUI: Auto-acknowledgment disabled - skipping sendAck")
             return
         }
         
@@ -1061,7 +1054,6 @@ struct MessageableChannelView: View {
                     do {
                         _ = try await viewState.http.ackMessage(channel: viewModel.channel.id, message: messageId).get()
                     } catch {
-                        // print("Unexpected send ack: \(error)")
                         }
                     }
             }
@@ -1212,9 +1204,7 @@ struct MessageableChannelView: View {
         .animation(.easeInOut(duration: 0.3), value: highlighted)
         .onChange(of: highlighted) { oldValue, newValue in
             if newValue == msgViewModel.message.id {
-                // print("🎯 Message \(msgViewModel.message.id) is now highlighted")
             } else if oldValue == msgViewModel.message.id {
-                // print("🎯 Message \(msgViewModel.message.id) highlight cleared")
             }
         }
         .id(msgViewModel.message.id)

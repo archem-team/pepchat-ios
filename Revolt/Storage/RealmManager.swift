@@ -97,13 +97,14 @@ actor RealmManager {
     }
     
     /// Fetches first object with given primary key (returns frozen thread-safe object)
+    @MainActor
     func fetchItemByPrimaryKey<T: Object>(_ type: T.Type, primaryKey: Any) async -> T? {
         do {
-			let realm = try await Realm()
+            let realm = try await Realm()
             let object = realm.object(ofType: type, forPrimaryKey: primaryKey)
             return object?.freeze()
         } catch {
-            logger.error("Failed to fetch item by primary key: \(error.localizedDescription)")
+            Logger(subsystem: "Revolt", category: "RealmManager").error("Failed to fetch item by primary key: \(error.localizedDescription)")
             return nil
         }
     }

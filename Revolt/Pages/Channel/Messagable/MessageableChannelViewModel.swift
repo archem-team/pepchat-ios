@@ -27,70 +27,59 @@ extension MessageableChannelViewModel {
         // TIMING: Start measuring API call duration
         let apiStartTime = Date()
         let callType = before != nil ? "BEFORE" : (after != nil ? "AFTER" : "INITIAL")
-        // print("⏱️ API_CALL_START [\(callType)]: \(apiStartTime.timeIntervalSince1970)")
         
         // Get the server ID from the channel
         let serverId = channel.server
         
         // Log which type of call we're making
         if before != nil {
-            // print("🧠 VIEW_MODEL: Making BEFORE API call for messageId=\(before!)")
         } else if after != nil {
-            // print("🧠 VIEW_MODEL: Making AFTER API call for messageId=\(after!)")
         } else {
-            // print("🧠 VIEW_MODEL: Making INITIAL API call (no before/after)")
         }
         
-        // print("🧠 VIEW_MODEL: Loading messages from API")
-        // print("   - Channel ID: \(channel.id)")
-        // print("   - Before: \(before ?? "nil")")
-        // print("   - After: \(after ?? "nil")")
-        // print("   - Sort: \(sort ?? "Latest")")
         
         // CRITICAL: Don't include the 'messages' parameter in the API call
         // as it's causing a 500 error
         // Fetch messages from API with reduced limit for faster response
-        let result = try? await viewState.http.fetchHistory(
+        
+        let apiResult = await viewState.http.fetchHistory(
             channel: channel.id,
             limit: 100, // Reduced from 100 to 50 for faster API response
             before: before,
             after: after,
             sort: sort ?? "Latest",
             server: serverId
-        ).get()
+        )
+        
         
         // TIMING: Calculate API call duration
         let apiEndTime = Date()
         let apiDuration = apiEndTime.timeIntervalSince(apiStartTime)
-        // print("⏱️ API_CALL_END [\(callType)]: \(apiEndTime.timeIntervalSince1970)")
-        // print("⏱️ API_CALL_DURATION [\(callType)]: \(String(format: "%.2f", apiDuration)) seconds")
         
-        // Early return if we didn't get a result
-        guard let result = result else {
-            // print("❌ VIEW_MODEL: API request failed or returned nil after \(String(format: "%.2f", apiDuration))s")
+        // Check if the result is success or failure
+        let result: FetchHistory
+        switch apiResult {
+        case .success(let fetchHistory):
+            result = fetchHistory
+        case .failure(let error):
             return nil
         }
         
-        // print("✅ VIEW_MODEL: Received \(result.messages.count) messages from API in \(String(format: "%.2f", apiDuration))s")
         
         // TIMING: Start processing time
         let processingStartTime = Date()
-        // print("⏱️ PROCESSING_START [\(callType)]: \(processingStartTime.timeIntervalSince1970)")
         
         // Add message IDs for debugging
         if !result.messages.isEmpty {
             let firstMsg = result.messages.first?.id ?? "unknown"
             let lastMsg = result.messages.last?.id ?? "unknown"
-            // print("📝 VIEW_MODEL: Message range from \(firstMsg) to \(lastMsg)")
         }
         
         // Process all users from the response
-        // print("📥 LOADING_USERS: Processing \(result.users.count) users from fetchHistory response")
         for user in result.users {
             viewState.users[user.id] = user
             // CRITICAL FIX: Also store in event users for permanent access
             viewState.allEventUsers[user.id] = user
-            // print("📥 LOADING_USERS: Added user \(user.username) (ID: \(user.id)) to both users and allEventUsers")
         }
         
         // Process members if present
@@ -109,7 +98,6 @@ extension MessageableChannelViewModel {
                 // Try to get from allEventUsers first
                 if let storedUser = viewState.allEventUsers[message.author] {
                     viewState.users[message.author] = storedUser
-                    // print("📥 MESSAGE_AUTHOR: Restored author \(storedUser.username) from allEventUsers for message \(message.id)")
                 } else {
                     // Create placeholder user as last resort
                     let placeholderUser = Types.User(
@@ -120,16 +108,13 @@ extension MessageableChannelViewModel {
                     )
                     viewState.users[message.author] = placeholderUser
                     viewState.allEventUsers[message.author] = placeholderUser
-                    // print("⚠️ MESSAGE_AUTHOR: Created placeholder for missing author \(message.author) of message \(message.id)")
                 }
             }
         }
         
         // CRITICAL FIX: After processing all messages, ensure ALL message authors are available
-        // print("🔄 FINAL_CHECK: Ensuring all \(result.messages.count) message authors are in users dictionary")
         for message in result.messages {
             if viewState.users[message.author] == nil {
-                // print("🚨 MISSING_USER: Found missing user \(message.author) for message \(message.id) after processing!")
                 
                 // Force creation of placeholder
                 let emergencyPlaceholder = Types.User(
@@ -152,13 +137,13 @@ extension MessageableChannelViewModel {
         // Update viewState and viewModel on the main thread to ensure thread safety
         await MainActor.run {
             if let after = after {
-                // When loading newer messages (after), append them to the end
+                // When loading newer messages (after), insert them at the beginning (newest-first order)
                 var currentMessages = viewState.channelMessages[channel.id] ?? []
                 
-                // For each message, add it if not already present
-                for message in result.messages {
+                // For each message in reverse order, insert at beginning if not already present
+                for message in result.messages.reversed() {
                     if !currentMessages.contains(message.id) {
-                        currentMessages.append(message.id)
+                        currentMessages.insert(message.id, at: 0)
                     }
                 }
                 
@@ -170,42 +155,45 @@ extension MessageableChannelViewModel {
                 
                 // CRITICAL: Update our local messages array to match
                 self.messages = finalMessageIds
-                // print("✅ VIEW_MODEL: Messages updated (after)")
-                // print("   - ViewState messages count: \(currentMessages.count)")
-                // print("   - Final IDs count: \(finalMessageIds.count)")
-                // print("   - ViewModel messages count: \(self.messages.count)")
-                // print("   - Are ViewModel and final IDs identical: \(self.messages == finalMessageIds)")
             } else {
                 // When loading older messages (before) or initial messages
                 
                 // If we're loading older messages (before), put them at the beginning
                 if before != nil && !resultMessageIds.isEmpty {
                     var existingMessages = viewState.channelMessages[channel.id] ?? []
-                    // print("📊 VIEW_MODEL: Current existingMessages: \(existingMessages.count), new messages: \(resultMessageIds.count)")
                     
-                    // Create a reversed copy for better logging
-                    let reversedNewMessages = resultMessageIds.reversed()
-                    
-                    // Log the first few message IDs
-                    if !reversedNewMessages.isEmpty {
-                        let firstFew = Array(reversedNewMessages.prefix(min(3, reversedNewMessages.count)))
-                        // print("📊 VIEW_MODEL: Adding these messages at beginning: \(firstFew)")
+                    // Log the first few message IDs from API
+                    if !resultMessageIds.isEmpty {
+                        let firstFew = Array(resultMessageIds.prefix(min(3, resultMessageIds.count)))
+                        
+                        // Also log what we're requesting before
+                        if let beforeId = before {
+                            if let beforeIndex = existingMessages.firstIndex(of: beforeId) {
+                            }
+                        }
                     }
                     
-                    // Add new messages before existing ones (but reverse them for chronological order)
-                    let updatedMessages = reversedNewMessages + existingMessages
-                    viewState.channelMessages[channel.id] = updatedMessages
+                    // CRITICAL: Filter out duplicates before adding
+                    let existingSet = Set(existingMessages)
+                    let newUniqueMessages = resultMessageIds.filter { !existingSet.contains($0) }
+                    
+                    
+                    // Declare updatedMessages before the if block so it's available later
+                    var updatedMessages = existingMessages
+                    
+                    if !newUniqueMessages.isEmpty {
+                        // Add new older messages to the end (API returns in Latest order, which matches our array)
+                        updatedMessages = existingMessages + newUniqueMessages
+                        viewState.channelMessages[channel.id] = updatedMessages
+                    } else {
+                        // Don't update the array if there are no new messages - keep existing
+                    }
                     
                     // CRITICAL: Create a new explicit copy of the array to ensure value semantics
                     finalMessageIds = Array(updatedMessages)
                     
                     // CRITICAL: Update our local messages array to match viewState
                     self.messages = finalMessageIds
-                    // print("✅ VIEW_MODEL: Messages updated (before)")
-                    // print("   - ViewState messages count: \(updatedMessages.count)")
-                    // print("   - Final IDs count: \(finalMessageIds.count)")
-                    // print("   - ViewModel messages count: \(self.messages.count)")
-                    // print("   - Are ViewModel and final IDs identical: \(self.messages == finalMessageIds)")
                 } else {
                     // Initial load (both before and after are nil)
                     // Sort messages by timestamp to ensure reverse chronological order (newest first)
@@ -226,17 +214,11 @@ extension MessageableChannelViewModel {
                     
                     // CRITICAL: Update our local messages array to match viewState with explicit assignment
                     self.messages = finalMessageIds
-                    // print("✅ VIEW_MODEL: Messages updated (initial)")
-                    // print("   - ViewState messages count: \(sortedIds.count)")
-                    // print("   - Final IDs count: \(finalMessageIds.count)")
-                    // print("   - ViewModel messages count: \(self.messages.count)")
-                    // print("   - Are ViewModel and final IDs identical: \(self.messages == finalMessageIds)")
                 }
             }
             
             // Double-check after assignment that messages are actually set
             if self.messages.isEmpty && !finalMessageIds.isEmpty {
-                // print("⚠️ WARNING: Messages array is still empty after assignment! Forcing direct array copy...")
                 self.messages = Array(finalMessageIds)
             }
             
@@ -247,13 +229,9 @@ extension MessageableChannelViewModel {
         // TIMING: Calculate processing duration
         let processingEndTime = Date()
         let processingDuration = processingEndTime.timeIntervalSince(processingStartTime)
-        // print("⏱️ PROCESSING_END [\(callType)]: \(processingEndTime.timeIntervalSince1970)")
-        // print("⏱️ PROCESSING_DURATION [\(callType)]: \(String(format: "%.2f", processingDuration)) seconds")
         
         // TIMING: Calculate total duration
         let totalDuration = processingEndTime.timeIntervalSince(apiStartTime)
-        // print("⏱️ TOTAL_DURATION [\(callType)]: \(String(format: "%.2f", totalDuration)) seconds")
-        // print("⏱️ BREAKDOWN [\(callType)]: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s")
         
         // Return the result for caller to use
         return result
@@ -265,18 +243,15 @@ extension MessageableChannelViewModel {
     func resetNearbyLoadingFlag() {
         MessageableChannelViewModel.hasLoadedNearby = false
         MessageableChannelViewModel.nearbyLoadTimestamp = nil
-        // print("🔄 Reset nearby loading flag for new channel navigation")
     }
 
     // Add debug helper to sync messages with viewState
     func syncMessagesWithViewState() {
         // Debug print for messages count
-        // print("🔄 Syncing messages with viewState, messages count: \(messages.count)")
         
         // Make sure the channelMessages in viewState is synced with our local messages
         if messages.count > 0 {
             viewState.channelMessages[channel.id] = messages
-            // print("📋 Synced with viewState.channelMessages[\(channel.id)]")
         }
         
         // Call the existing notification method
@@ -294,9 +269,6 @@ extension MessageableChannelViewModel {
         if let channelMessages = viewState.channelMessages[channel.id] {
             // Check if we actually need to synchronize
             if messages.count != channelMessages.count || messages != channelMessages {
-                // print("🔄 FORCE SYNC: Detected mismatch between viewModel messages and viewState")
-                // print("   - viewModel.messages count: \(messages.count)")
-                // print("   - viewState.channelMessages[\(channel.id)] count: \(channelMessages.count)")
                 
                 // Create a completely new array to avoid any reference issues
                 let forcedCopy = Array(channelMessages)
@@ -304,17 +276,13 @@ extension MessageableChannelViewModel {
                 // Force assign directly to messages with self to ensure property setter is called
                 self.messages = forcedCopy
                 
-                // print("✅ FORCE SYNC: Completed synchronization")
-                // print("   - Now viewModel messages count: \(messages.count)")
                 
                 // Notify observers of the change
                 notifyMessagesDidChange()
             } else {
-                // print("✓ Messages already in sync. No action needed.")
             }
         } else if !messages.isEmpty {
             // If viewState has no messages but viewModel does, update viewState
-            // print("🔄 FORCE SYNC: viewState has no messages but viewModel does. Updating viewState.")
             viewState.channelMessages[channel.id] = Array(messages)
         }
     }

@@ -260,16 +260,13 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     // MARK: - Cleanup Helper
     private func cleanupTempVideos() {
         if !tempVideoURLs.isEmpty {
-            // print("🧹 Cleaning up \(tempVideoURLs.count) temp video files...")
         }
         for url in tempVideoURLs {
             do {
                 if FileManager.default.fileExists(atPath: url.path) {
                     try FileManager.default.removeItem(at: url)
-                    // print("✅ Deleted temp video: \(url.lastPathComponent)")
                 }
             } catch {
-                // print("❌ Failed to delete temp video: \(error)")
             }
         }
         tempVideoURLs.removeAll()
@@ -1228,7 +1225,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     let channelId = String(result[channelIdRange])
                     
                     // Try to find channel in viewState
-                    if let channel = viewState.channels[channelId] ?? viewState.allEventChannels[channelId] {
+                    if let channel = viewState.channels[channelId] {
                         // Get the mention range
                         let mentionRange = Range(match.range, in: result)!
                         
@@ -1257,7 +1254,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 }
             }
         } catch {
-            // print("Error creating regex for channel mentions: \(error)")
         }
         
         return result
@@ -1298,7 +1294,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 }
             }
         } catch {
-            // print("Error creating regex for mentions: \(error)")
         }
         
         return result
@@ -1333,7 +1328,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             let channelMatches = channelRegex.matches(in: text, range: range)
             
             // Debug: Print found matches
-            print("🔍 MessageCell Channel mention processing: Found \(channelMatches.count) matches in: \(text)")
             
             // Process matches in reverse to avoid index issues when replacing
             for match in channelMatches.reversed() {
@@ -1341,9 +1335,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     let channelId = String(text[channelIdRange])
                     
                     // Try to find channel in viewState
-                    print("🔍 MessageCell Processing channel ID: \(channelId)")
-                    if let channel = viewState.channels[channelId] ?? viewState.allEventChannels[channelId] {
-                        print("✅ MessageCell Found channel: \(channel.getName(viewState)) for ID: \(channelId)")
+                    if let channel = viewState.channels[channelId] {
                         // Get the mention range in the original text
                         let mentionRange = match.range
                         
@@ -1351,7 +1343,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         guard mentionRange.location >= 0,
                               mentionRange.location < mutableAttributedString.length,
                               mentionRange.location + mentionRange.length <= mutableAttributedString.length else {
-                            // print("DEBUG: Invalid channel mention range: \(mentionRange) for string length: \(mutableAttributedString.length)")
                             continue
                         }
                         
@@ -1382,7 +1373,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         // Safety check for new range
                         guard newRange.location >= 0,
                               newRange.location + newRange.length <= mutableAttributedString.length else {
-                            // print("DEBUG: Invalid new channel range: \(newRange) for string length: \(mutableAttributedString.length)")
                             continue
                         }
                         
@@ -1396,10 +1386,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                                 ], range: newRange)
                             }
                         } catch {
-                            // print("DEBUG: Error adding attributes to channel mention: \(error)")
                         }
                     } else {
-                        print("❌ MessageCell Channel not found for ID: \(channelId)")
                         // Channel not found - replace with #unknown-channel
                         let mentionRange = match.range
                         guard mentionRange.location >= 0,
@@ -1424,7 +1412,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 }
             }
         } catch {
-            // print("Error creating regex for channel mentions: \(error)")
         }
         
         // Then handle user mentions: <@user_id>
@@ -1459,7 +1446,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         guard mentionRange.location >= 0,
                               mentionRange.location < mutableAttributedString.length,
                               mentionRange.location + mentionRange.length <= mutableAttributedString.length else {
-                            // print("DEBUG: Invalid mention range: \(mentionRange) for string length: \(mutableAttributedString.length)")
                             continue
                         }
                         
@@ -1476,7 +1462,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         // Safety check for new range
                         guard newRange.location >= 0,
                               newRange.location + newRange.length <= mutableAttributedString.length else {
-                            // print("DEBUG: Invalid new range: \(newRange) for string length: \(mutableAttributedString.length)")
                             continue
                         }
                         
@@ -1490,13 +1475,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                                 ], range: newRange)
                             }
                         } catch {
-                            // print("DEBUG: Error adding attributes to mention: \(error)")
                         }
                     }
                 }
             }
         } catch {
-            // print("Error creating regex for mentions: \(error)")
         }
         
         return mutableAttributedString
@@ -1647,7 +1630,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         let finalImageWidth: CGFloat = attachments.count == 1 ? min(availableWidth * 0.7, 220) : min((availableWidth - imageSpacing) / 2, 150)
         let imageHeight: CGFloat = attachments.count == 1 ? min(finalImageWidth * 0.75, 165) : min(finalImageWidth * 0.75, 110)
         
-        // print("🖼️ Calculated sizes - Image width: \(finalImageWidth), Image height: \(imageHeight), Available width: \(availableWidth), Screen width: \(UIScreen.main.bounds.width)")
         
         var currentX: CGFloat = 0
         var currentY: CGFloat = 0
@@ -1744,7 +1726,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                                     imageView.image = nil
                                 }
                             case .failure(let error):
-                                // print("Error loading image: \(error.localizedDescription)")
                                 // Show error placeholder
                                 imageView.image = UIImage(systemName: "exclamationmark.triangle")
                             }
@@ -1790,16 +1771,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                      filename.hasSuffix(".ogg") ||
                      filename.hasSuffix(".flac")
         
-        // print("🔍 AUDIO CHECK: '\(file.filename)'")
-        // print("  📋 Content-Type: '\(file.content_type)'")
-        // print("  📋 Lowercase: '\(contentType)'")
-        // print("  📋 Filename: '\(filename)'")
-        // print("  ✅ Is Audio: \(isAudio)")
         
         if isAudio {
-            // print("  🎵 DETECTED AS AUDIO FILE!")
         } else {
-            // print("  📄 Not an audio file")
         }
         
         return isAudio
@@ -1820,17 +1794,12 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                      filename.hasSuffix(".wmv") ||
                      filename.hasSuffix(".flv")
         
-        // print("🎬 VIDEO CHECK: '\(file.filename)'")
-        // print("  📋 Content-Type: '\(file.content_type)'")
-        // print("  ✅ Is Video: \(isVideo)")
         
         return isVideo
     }
     
     private func loadFileAttachments(attachments: [Types.File], viewState: ViewState) {
-        // print("🎯 loadFileAttachments called with \(attachments.count) attachments")
         for (index, att) in attachments.enumerated() {
-            // print("  [\(index)] \(att.filename) - ID: \(att.id)")
         }
         
         guard !attachments.isEmpty else {
@@ -1848,11 +1817,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             contentView.addSubview(fileAttachmentsContainer!)
         } else {
             // Clear existing file views
-            // print("🧹 CLEARING EXISTING FILE VIEWS: \(fileAttachmentViews.count) views")
             fileAttachmentViews.forEach { fileView in
                 // If it's an AudioPlayerView, stop any playing audio
                 if let audioPlayer = fileView as? AudioPlayerView {
-                    // print("🧹 Removing audio player")
                 }
                 fileView.removeFromSuperview()
             }
@@ -1860,7 +1827,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             
             // Clear all subviews from container to be sure
             fileAttachmentsContainer!.subviews.forEach { $0.removeFromSuperview() }
-            // print("🧹 Cleared all subviews from file container")
         }
         
         // Clear any existing constraints for the container
@@ -1903,7 +1869,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         for (index, attachment) in attachments.enumerated() {
             // Skip if already processed (prevents duplicates)
             if processedAttachmentIds.contains(attachment.id) {
-                // print("⚠️ Skipping duplicate attachment: \(attachment.filename) - ID: \(attachment.id)")
                 continue
             }
             processedAttachmentIds.insert(attachment.id)
@@ -1915,15 +1880,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 // Create audio player view for audio files
                 let audioPlayer = AudioPlayerView()
                 let audioURL = viewState.formatUrl(fromId: attachment.id, withTag: "attachments")
-                // print("🎵 Creating audio player with:")
-                // print("  ↳ filename: \(attachment.filename)")
-                // print("  ↳ size: \(attachment.size) bytes")
                 
                 // Store OGG indicator in the audio player
                 let isOggFile = attachment.filename.lowercased().hasSuffix(".ogg") || 
                                attachment.filename.lowercased().contains(".oog")
                 if isOggFile {
-                    // print("  ↳ OGG file detected: \(attachment.filename)")
                 }
                 
                 audioPlayer.configure(with: audioURL, filename: attachment.filename, fileSize: attachment.size, sessionToken: viewState.sessionToken)
@@ -1931,7 +1892,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 audioPlayer.translatesAutoresizingMaskIntoConstraints = false
                 fileView = audioPlayer
                 viewHeight = audioPlayerHeight
-                // print("🎵 Created audio player for: \(attachment.filename)")
             } else if isVideoFile(attachment) {
                 // Create video player view for video files
                 let videoPlayer = VideoPlayerView()
@@ -1940,12 +1900,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 if let token = viewState.sessionToken {
                     headers["x-session-token"] = token
                 }
-                // print("🎬 Creating video player with:")
-                // print("  ↳ attachment id: \(attachment.id)")
-                // print("  ↳ filename: \(attachment.filename)")
-                // print("  ↳ size: \(attachment.size) bytes")
-                // print("  ↳ video URL: \(videoURL)")
-                // print("  ↳ headers: \(headers.keys.joined(separator: ", "))")
                 videoPlayer.configure(with: videoURL, filename: attachment.filename, fileSize: attachment.size, headers: headers)
                 videoPlayer.translatesAutoresizingMaskIntoConstraints = false
                 
@@ -1956,7 +1910,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 
                 fileView = videoPlayer
                 viewHeight = videoPlayerHeight
-                // print("🎬 Created video player for: \(attachment.filename)")
             } else {
                 // Create regular file view for non-audio/video files
                 fileView = createFileAttachmentView(for: attachment, viewState: viewState)
@@ -1988,7 +1941,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         
         fileAttachmentsContainer!.heightAnchor.constraint(equalToConstant: totalHeight).isActive = true
         
-        // print("📐 Set file container height to: \(totalHeight) with \(fileAttachmentViews.count) views")
     }
     
     private func createFileAttachmentView(for attachment: Types.File, viewState: ViewState) -> UIView {
@@ -2226,11 +2178,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         let downloadURL = viewState.formatUrl(fromId: attachment.id, withTag: "attachments")
         
         guard let url = URL(string: downloadURL) else {
-            // print("❌ Invalid download URL: \(downloadURL)")
             return
         }
         
-        // print("📁 Downloading file: \(attachment.filename) from \(downloadURL)")
         
         // Open the URL in Safari for download
         // In a real app, you might want to handle this differently
@@ -2241,56 +2191,40 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     
     // Method to highlight this cell as the target
     public func setAsTargetMessage() {
-        // print("🎨 MessageCell.setAsTargetMessage() CALLED")
-        // print("🎨 Current backgroundColor: \(contentView.backgroundColor?.description ?? "nil")")
-        // print("🎨 Current tag: \(tag)")
         
         // Save original background color if not already saved
         if originalBackgroundColorForHighlight == nil {
             originalBackgroundColorForHighlight = contentView.backgroundColor ?? .clear
-            // print("🎨 Saved original background color: \(originalBackgroundColorForHighlight?.description ?? "nil")")
         }
         
         isTargetMessageHighlighted = true
         tag = 9999 // Tag for identification
-        // print("🎨 Set isTargetMessageHighlighted = true, tag = 9999")
         
         // Apply highlight effect
         contentView.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.3)
         contentView.layer.borderWidth = 1.5
         contentView.layer.borderColor = UIColor.systemOrange.cgColor
         contentView.layer.cornerRadius = 8.0
-        // print("🎨 Applied orange background, border, and corner radius")
         
         // Apply a subtle scale effect
         contentView.transform = CGAffineTransform(scaleX: 1.01, y: 1.01)
-        // print("🎨 Applied scale transform")
         
-        // print("✅ MessageCell.setAsTargetMessage() COMPLETED")
     }
     
     // Method to clear highlight
     public func clearHighlight() {
-        // print("🧹 MessageCell.clearHighlight() CALLED")
-        // print("🧹 isTargetMessageHighlighted: \(isTargetMessageHighlighted)")
-        // print("🧹 Current tag: \(tag)")
         
         if isTargetMessageHighlighted {
-            // print("🧹 Starting clear highlight animation")
             UIView.animate(withDuration: 0.3) {
                 self.contentView.backgroundColor = self.originalBackgroundColorForHighlight
                 self.contentView.layer.borderWidth = 0.0
-                // print("🧹 Clear highlight animation properties applied")
             }
             
             isTargetMessageHighlighted = false
             tag = 0 // Reset tag
-            // print("🧹 Reset isTargetMessageHighlighted = false, tag = 0")
         } else {
-            // print("🧹 Cell was not highlighted, no action needed")
         }
         
-        // print("✅ MessageCell.clearHighlight() COMPLETED")
     }
     
     private func configureReplyView(message: Message, replies: [String], viewState: ViewState) {
@@ -2361,7 +2295,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 
                 // Don't automatically load reply messages - only load when user taps
                 // This prevents unnecessary nearby API calls when viewing messages with replies
-                // print("ℹ️ Reply message not loaded yet, will load when user taps")
                 
                 // ENHANCEMENT: Add timeout for loading indicator to prevent infinite loading
                 // If message is not loaded within 10 seconds, assume it's deleted
@@ -2377,7 +2310,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         Task { @MainActor in
                             let currentViewState = self.viewState
                             if currentViewState?.messages[firstReplyId] == nil {
-                                print("⏰ REPLY_TIMEOUT: Stopping loading indicator for reply \(firstReplyId) - likely deleted")
                                 self.replyLoadingIndicator.stopAnimating()
                                 
                                 // Show "message deleted" placeholder
@@ -2412,15 +2344,12 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     
     @objc private func handleReplyTap() {
         guard let replyId = currentReplyId else {
-            print("❌ REPLY_TAP_CELL: No currentReplyId found")
             return
         }
         
         // Cancel any pending reply loading timeout since user is actively interacting
         replyLoadingTimeoutWorkItem?.cancel()
         
-        print("🔗 REPLY_TAP_CELL: MessageCell reply tap detected!")
-        print("🔗 REPLY_TAP_CELL: replyId=\(replyId)")
         
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -2437,29 +2366,23 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         
         // Check if the reply message exists in viewState
         if let viewState = self.viewState, let replyMessage = viewState.messages[replyId] {
-            print("✅ REPLY_TAP_CELL: Found reply message in viewState")
-            print("🔗 REPLY_TAP_CELL: Reply message channel=\(replyMessage.channel)")
             
             // Check if the reply is in the same channel
             if let currentMessage = self.currentMessage, 
                replyMessage.channel == currentMessage.channel {
                 // Same channel - navigate to message
-                // print("📱 Reply is in same channel, navigating to message")
                 
                 // Find the parent MessageableChannelViewController
                 if let viewController = findParentViewController() as? MessageableChannelViewController {
                     // CRITICAL FIX: Activate target message protection to prevent jumping
-                    print("🛡️ REPLY_TAP_CELL: Activating target message protection")
                     viewController.activateTargetMessageProtection(reason: "reply tap")
                     
                     // Clear any existing target message first
                     let previousTarget = viewController.targetMessageId
-                    // print("📱 Clearing previous target: \(previousTarget ?? "none") -> setting new target: \(replyId)")
                     viewController.targetMessageId = nil
                     
                     // Use async task to refresh with target message
                     Task {
-                        // print("🔄 Starting refreshWithTargetMessage for reply: \(replyId)")
                         do {
                             await viewController.refreshWithTargetMessage(replyId)
                             // Hide loading indicator after completion
@@ -2471,12 +2394,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                                     // Message was not found or could not be loaded
                                     self.showReplyNotFoundMessage()
                                 } else {
-                                    // print("✅ Reply message \(replyId) successfully loaded and visible")
                                 }
                                 
                                 // FIXED: Don't clear protection with timer - let scroll detection handle it
                                 // The target message protection will be cleared when user actually scrolls away
-                                print("✅ REPLY_TAP_CELL: Message loaded successfully, protection will be maintained until user scrolls away")
                             }
                         } catch {
                             // Ensure loading indicator is hidden on error
@@ -2490,7 +2411,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                                 viewController.targetMessageId = nil
                                 viewController.viewModel.viewState.currentTargetMessageId = nil
                                 
-                                print("❌ REPLY_TAP_CELL: Error loading reply message, states reset")
                             }
                         }
                         
@@ -2499,7 +2419,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                             // Wait a bit then check if message was actually loaded
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                 if !viewController.viewModel.messages.contains(replyId) {
-                                    print("⚠️ REPLY_TAP_CELL: Fallback cleanup - message still not loaded after refresh")
                                     self.hideReplyLoadingIndicator()
                                     self.showReplyNotFoundMessage()
                                     
@@ -2515,26 +2434,21 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 } else {
                     hideReplyLoadingIndicator()
                     showReplyNotFoundMessage()
-                    // print("❌ Could not find MessageableChannelViewController")
                 }
             } else {
                 // Different channel - show info message
-                // print("📱 Reply is in different channel")
                 showCrossChannelReplyAlert(replyMessage: replyMessage)
             }
         } else {
             // Reply message not found in viewState, try to load it
-            // print("📱 Reply message not found in viewState, attempting to load")
             
             // Find the parent MessageableChannelViewController
             if let viewController = findParentViewController() as? MessageableChannelViewController {
                 // CRITICAL FIX: Activate target message protection to prevent jumping
-                print("🛡️ REPLY_TAP_CELL: Activating target message protection for loading")
                 viewController.activateTargetMessageProtection(reason: "reply tap loading")
                 
                 // Clear any existing target message first
                 let previousTarget = viewController.targetMessageId
-                // print("📱 Clearing previous target: \(previousTarget ?? "none") -> setting new target: \(replyId)")
                 viewController.targetMessageId = nil
                 
                 // Show loading indicator
@@ -2553,12 +2467,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                                 // Message was not found or could not be loaded
                                 self.showReplyNotFoundMessage()
                             } else {
-                                print("✅ REPLY_TAP_CELL: Message loaded successfully after refresh")
                             }
                             
                             // FIXED: Don't clear protection with timer - let scroll detection handle it
                             // The target message protection will be cleared when user actually scrolls away
-                            print("✅ REPLY_TAP_CELL: Loading completed, protection maintained until user scrolls away")
                         }
                     } catch {
                         // Ensure loading indicator is hidden on error
@@ -2572,7 +2484,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                             viewController.targetMessageId = nil
                             viewController.viewModel.viewState.currentTargetMessageId = nil
                             
-                            print("❌ REPLY_TAP_CELL: Error loading reply message (second path), states reset")
                         }
                     }
                     
@@ -2581,7 +2492,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         // Wait a bit then check if message was actually loaded
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                             if !viewController.viewModel.messages.contains(replyId) {
-                                print("⚠️ REPLY_TAP_CELL: Fallback cleanup (path 2) - message still not loaded after refresh")
                                 self.hideReplyLoadingIndicator()
                                 self.showReplyNotFoundMessage()
                                 
@@ -2597,7 +2507,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             } else {
                 hideReplyLoadingIndicator()
                 showReplyNotFoundMessage()
-                // print("❌ Could not find MessageableChannelViewController")
             }
         }
     }
@@ -2653,7 +2562,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 
                 // Set up automatic timeout to dismiss the alert after 8 seconds (reduced for better UX)
                 self.loadingAlertTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: false) { [weak self] _ in
-                    print("⏰ LOADING_ALERT_TIMEOUT: Auto-dismissing 'Finding message...' alert after 8 seconds")
                     self?.hideReplyLoadingIndicator()
                     
                     // Show the standard "message not found" alert
@@ -2760,7 +2668,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     DispatchQueue.main.async {
                         // CRITICAL FIX: Set target message BEFORE navigation
                         viewState.currentTargetMessageId = replyMessage.id
-                        print("🎯 MessageCell: Setting target message ID BEFORE cross-channel navigation: \(replyMessage.id)")
                         
                         if let serverId = channel.server {
                             // Server channel
@@ -2773,7 +2680,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         
                         viewState.path.append(NavigationDestination.maybeChannelView)
                         
-                        print("🎯 MessageCell: Cross-channel Navigation completed - new view controller will handle target message")
                     }
                 }
             }
@@ -2794,9 +2700,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     private func updateReactions(for message: Message, viewState: ViewState) {
         // CRITICAL FIX: Always get the latest message from ViewState instead of using the passed message
         let latestMessage = viewState.messages[message.id] ?? message
-        print("🔥 updateReactions called for message: \(message.id)")
-        print("🔥 Original message reactions: \(message.reactions?.keys.joined(separator: ", ") ?? "none")")
-        print("🔥 Latest message reactions: \(latestMessage.reactions?.keys.joined(separator: ", ") ?? "none")")
         
         // CRITICAL FIX: Ensure complete cleanup to prevent duplicate reactions
         reactionsContainerView.subviews.forEach { subview in
@@ -2811,12 +2714,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         
         // Check if latest message has reactions
         guard let reactions = latestMessage.reactions, !reactions.isEmpty else {
-            print("🔥 No reactions found, hiding container")
             reactionsContainerView.isHidden = true
             return
         }
         
-        print("🔥 Found \(reactions.count) reactions, showing container")
         reactionsContainerView.isHidden = false
         
         // Position spacer below images/content
@@ -2870,7 +2771,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             currentX += 68 // 60 + 8 spacing
         }
         
-        // print("🔥 Added spacer and reaction button to force cell expansion")
         
         // Force layout update to ensure proper rendering
         self.setNeedsLayout()
@@ -3087,7 +2987,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     case .success(_):
                         break
                     case .failure(let error):
-                        print("Error loading custom emoji in reaction: \(error.localizedDescription)")
                     }
                 }
             )
@@ -3204,7 +3103,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         // Image loaded successfully, no additional action needed
                         break
                     case .failure(let error):
-                        // print("Error loading custom emoji: \(error.localizedDescription)")
                         // Set fallback emoji on failure
                         emojiImageView?.image = UIImage(systemName: "face.smiling")
                     }
@@ -3288,22 +3186,18 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     }
     
     @objc private func reactionButtonTapped(_ gesture: UITapGestureRecognizer) {
-        print("🔥 REACTION BUTTON TAPPED!")
         guard let containerView = gesture.view,
               let emoji = containerView.accessibilityLabel else { 
-            print("🔥 ERROR: Missing containerView or emoji")
-            return 
+            return
         }
         
         // CRITICAL FIX: Get message from ViewState using stored tag instead of currentMessage
         guard let messageId = containerView.restorationIdentifier,
               let viewState = self.viewState,
               let message = viewState.messages[messageId] else {
-            print("🔥 ERROR: Cannot find message for reaction - messageId: \(containerView.restorationIdentifier ?? "nil")")
             return
         }
         
-        print("🔥 Reaction tap: emoji=\(emoji), message=\(message.id)")
         
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -3319,7 +3213,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         }
         
         // Call the message action handler with the reaction
-        print("🔥 CALLBACK CHECK: onMessageAction is \(onMessageAction == nil ? "NIL" : "SET")")
         onMessageAction?(.react(emoji), message)
     }
     
@@ -3376,63 +3269,48 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             
             return result
         } catch {
-            // print("Error processing markdown links: \(error)")
             return text // Return original text if regex fails
         }
     }
     
     // MARK: - Audio Duration Preloading
     private func preloadAudioDurations(for message: Message, viewState: ViewState) {
-        // print("🎯 PRELOAD FUNCTION CALLED for message \(message.id)")
         
         guard let attachments = message.attachments else { 
-            // print("🎵 PRELOAD: No attachments for message \(message.id)")
             return 
         }
         
-        // print("🎵 PRELOAD: Checking \(attachments.count) attachments for message \(message.id)")
         
         // Filter audio attachments
         let audioAttachments = attachments.filter { isAudioFile($0) }
         
         if audioAttachments.isEmpty {
-            // print("🎵 PRELOAD: No audio files found in \(attachments.count) attachments")
             for attachment in attachments {
-                // print("  📄 Non-audio: \(attachment.filename) (type: \(attachment.content_type))")
             }
             return
         }
         
-        // print("🎵 PRELOAD: Found \(audioAttachments.count) audio files in message \(message.id)")
         
         let audioManager = AudioPlayerManager.shared
         
         // Set session token in audio manager
         if let token = viewState.sessionToken {
             audioManager.setSessionToken(token)
-            // print("🔐 PRELOAD: Set session token in AudioManager")
         }
         
         // Preload duration for each audio file
         for (index, attachment) in audioAttachments.enumerated() {
             let audioURL = viewState.formatUrl(fromId: attachment.id, withTag: "attachments")
             
-            // print("🔍 PRELOAD [\(index + 1)/\(audioAttachments.count)]: Starting for \(attachment.filename)")
-            // print("  📋 URL: \(audioURL)")
-            // print("  📊 Size: \(attachment.size) bytes")
-            // print("  🏷️ Type: \(attachment.content_type)")
             
             // Pass file size for better estimation
             audioManager.preloadDuration(for: audioURL, fileSize: attachment.size) { duration in
                 if let duration = duration {
-                    // print("✅ PRELOAD SUCCESS [\(index + 1)/\(audioAttachments.count)]: \(attachment.filename) = \(String(format: "%.1f", duration))s")
                 } else {
-                    // print("❌ PRELOAD FAILED [\(index + 1)/\(audioAttachments.count)]: \(attachment.filename)")
                 }
             }
         }
         
-        // print("🎵 PRELOAD: Initiated for all \(audioAttachments.count) audio files in message \(message.id)")
     }
     
     // Store temp video URLs for cleanup
@@ -3498,15 +3376,12 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     }
 
     private func playVideo(at urlString: String) {
-        // print("🎬 playVideo called with URL: \(urlString)")
         
         guard let url = URL(string: urlString) else {
-            // print("❌ Failed to create URL from: \(urlString)")
             return
         }
         
         guard let viewController = findParentViewController() else {
-            // print("❌ Failed to find parent view controller")
             return
         }
         
@@ -3528,15 +3403,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         // Download video to temp file first
         Task {
             do {
-                // print("📥 Starting video download task...")
                 let videoData = try await downloadVideo(from: urlString)
-                // print("📥 Video data received: \(videoData.count) bytes")
                 
                 // Save to temp file
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_video_\(UUID().uuidString).mp4")
-                // print("📥 Saving to temp file: \(tempURL.path)")
                 try videoData.write(to: tempURL)
-                // print("✅ Video saved successfully")
                 
                 await MainActor.run {
                     // Store URL for cleanup
@@ -3549,7 +3420,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     self.playLocalVideo(at: tempURL, from: viewController)
                 }
             } catch {
-                // print("❌ Failed to download video: \(error)")
                 await MainActor.run {
                     // Remove loading view safely
                     self.removeLoadingView(from: viewController)
@@ -3569,7 +3439,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     }
     
     private func downloadVideo(from urlString: String) async throws -> Data {
-        // print("📥 Starting video download from: \(urlString)")
         
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)
@@ -3580,43 +3449,33 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         // Add auth header
         if let viewState = self.viewState, let token = viewState.sessionToken {
             request.setValue(token, forHTTPHeaderField: "x-session-token")
-            // print("📥 Added auth token to request")
         } else {
-            // print("⚠️ No auth token available")
         }
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            // print("❌ Invalid response type")
             throw URLError(.badServerResponse)
         }
         
-        // print("📥 Response status code: \(httpResponse.statusCode)")
-        // print("📥 Response headers: \(httpResponse.allHeaderFields)")
         
         // Check content type
         if let contentType = httpResponse.allHeaderFields["Content-Type"] as? String {
-            // print("📥 Content-Type: \(contentType)")
         }
         
         guard httpResponse.statusCode == 200 else {
-            // print("❌ Bad status code: \(httpResponse.statusCode)")
             
             // If we get a 401, it's likely an auth issue
             if httpResponse.statusCode == 401 {
-                // print("❌ Authentication failed - token might be invalid")
             }
             
             // Try to read error body
             if let errorString = String(data: data, encoding: .utf8) {
-                // print("❌ Error response: \(errorString)")
             }
             
             throw URLError(.badServerResponse)
         }
         
-        // print("✅ Downloaded \(data.count) bytes")
         return data
     }
     
@@ -3624,19 +3483,15 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     private static var videoWindow: UIWindow?
     
     private func playLocalVideo(at url: URL, from viewController: UIViewController) {
-        // print("🎬 Playing local video from: \(url)")
         
         // Verify file exists
         if FileManager.default.fileExists(atPath: url.path) {
-            // print("✅ Video file exists at path")
             
             // Check file size
             if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
                let fileSize = attributes[.size] as? NSNumber {
-                // print("📊 Video file size: \(fileSize.intValue) bytes")
             }
         } else {
-            // print("❌ Video file does NOT exist at path!")
             return
         }
         
@@ -3659,7 +3514,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         playerViewController.entersFullScreenWhenPlaybackBegins = true
         playerViewController.exitsFullScreenWhenPlaybackEnds = true
         
-        // print("🎬 Creating separate window for video player...")
         
         // Create a new window for the video player
         let window: UIWindow
@@ -3694,16 +3548,13 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         // Present player from the window's root view controller
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             rootVC.present(playerViewController, animated: true) {
-                // print("✅ Video player presented in separate window, starting playback...")
                 // Start playback
                 player.play()
                 
                 // Check player status after a delay
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     if let error = player.currentItem?.error {
-                        // print("❌ Player error: \(error)")
                     } else {
-                        // print("✅ Player seems to be working")
                     }
                 }
             }
@@ -3778,7 +3629,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 }
             }
         } catch {
-            print("Error processing custom emojis with IDs: \(error)")
         }
         
         // Process named emoji shortcodes like :smile:, :1234:, etc.
@@ -3794,7 +3644,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 if let shortcodeRange = Range(match.range(at: 1), in: text) {
                     let shortcode = String(text[shortcodeRange])
                     let fullMatchRange = match.range
-                    print("🔍 MessageCell: Processing shortcode: '\(shortcode)'")
                     
                     // Check if this is an emoji shortcode using EmojiParser
                     if let emoji = EmojiParser.findEmojiByShortcode(shortcode) {
@@ -3835,7 +3684,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 }
             }
         } catch {
-            print("Error processing named emoji shortcodes: \(error)")
         }
     }
     
@@ -3961,7 +3809,6 @@ extension MessageCell {
     }
     
     func playerViewControllerWillDismiss(_ playerViewController: AVPlayerViewController) {
-        // print("🎬 Player will dismiss")
         cleanupTempVideos()
         
         // Stop the player to free resources
@@ -3970,7 +3817,6 @@ extension MessageCell {
     }
     
     func playerViewControllerDidDismiss(_ playerViewController: AVPlayerViewController) {
-        // print("🎬 Player did dismiss")
         cleanupTempVideos()
         
         // Hide and remove the video window
@@ -3978,18 +3824,15 @@ extension MessageCell {
             MessageCell.videoWindow?.isHidden = true
             MessageCell.videoWindow?.resignKey()
             MessageCell.videoWindow = nil
-            // print("🎬 Video window removed")
             
             // Post notification to refresh navigation state
             NotificationCenter.default.post(name: NSNotification.Name("VideoPlayerDidDismiss"), object: nil)
             
             // Try to fix navigation bar directly
             if let viewController = self.findParentViewController() {
-                // print("🎬 Found parent controller: \(type(of: viewController))")
                 
                 // Check if it's MessageableChannelViewController
                 if viewController is MessageableChannelViewController {
-                    // print("🎬 It's MessageableChannelViewController, hiding navigation bar...")
                     viewController.navigationController?.setNavigationBarHidden(true, animated: false)
                     
                     // Force update the view
@@ -4019,7 +3862,6 @@ extension MessageCell {
                 MessageCell.videoWindow?.isHidden = true
                 MessageCell.videoWindow?.resignKey()
                 MessageCell.videoWindow = nil
-                // print("🎬 Video window removed after full screen ended")
             }
         }
     }
@@ -4033,7 +3875,6 @@ extension MessageCell {
             return true
         }
         
-        print("🔗 MessageCell: URL tapped: \(URL.absoluteString)")
         
         // Check if this is a mention URL
         if URL.scheme == "mention", let userId = URL.host {
@@ -4054,13 +3895,11 @@ extension MessageCell {
         if URL.scheme == "channel", let channelId = URL.host {
             // Handle channel mention tap - navigate to channel
             if let viewState = self.viewState, 
-               let channel = viewState.channels[channelId] ?? viewState.allEventChannels[channelId] {
+               let channel = viewState.channels[channelId] {
                 
-                // print("📱 Channel mention tapped: channel \(channelId)")
                 
                 // Get current user
                 guard let currentUser = viewState.currentUser else {
-                    // print("❌ Current user not found")
                     return false
                 }
                 
@@ -4071,7 +3910,6 @@ extension MessageCell {
                     
                     if userMember != nil {
                         // User is a member - navigate to the channel
-                        // print("✅ User is member of server, navigating to channel")
                         viewState.channelMessages[channelId] = []
                         
                         DispatchQueue.main.async {
@@ -4081,7 +3919,6 @@ extension MessageCell {
                         }
                     } else {
                         // User is not a member - navigate to Discover
-                        // print("🔍 User is not member of server \(serverId), navigating to Discover")
                         DispatchQueue.main.async {
                             // Clear path first to avoid navigation conflicts
                             viewState.path.removeAll()
@@ -4106,7 +3943,6 @@ extension MessageCell {
                     
                     if hasAccess {
                         // User has access - navigate to the channel
-                        // print("✅ User has access to channel, navigating")
                         viewState.channelMessages[channelId] = []
                         
                         DispatchQueue.main.async {
@@ -4115,7 +3951,6 @@ extension MessageCell {
                         }
                     } else {
                         // User doesn't have access - navigate to Discover
-                        // print("🔍 User doesn't have access to channel \(channelId), navigating to Discover")
                         DispatchQueue.main.async {
                             // Clear path first to avoid navigation conflicts
                             viewState.path.removeAll()
@@ -4125,7 +3960,6 @@ extension MessageCell {
                 }
             } else {
                 // Channel not found - navigate to Discover
-                // print("🔍 Channel \(channelId) not found, navigating to Discover")
                 if let viewState = self.viewState {
                     DispatchQueue.main.async {
                         // Clear path first to avoid navigation conflicts
@@ -4145,7 +3979,6 @@ extension MessageCell {
            URL.absoluteString.hasPrefix("https://app.revolt.chat/channel/") ||
            URL.absoluteString.hasPrefix("https://app.revolt.chat/invite/") {
             
-            print("🔗 MessageCell: Handling internal peptide.chat link")
             
             // Find the view controller to handle the URL
             if let viewController = findParentViewController() {
@@ -4156,7 +3989,6 @@ extension MessageCell {
         }
         
         // For all other URLs, open in Safari
-        // print("🔗 MessageCell: Opening external URL in Safari")
         
         // Temporarily suspend WebSocket to reduce network conflicts
         if let viewState = self.viewState {
@@ -4166,7 +3998,6 @@ extension MessageCell {
         // Explicitly open URL in Safari
         DispatchQueue.main.async {
             UIApplication.shared.open(URL, options: [:]) { success in
-                // print("🌐 Safari open result for \(URL.absoluteString): \(success)")
             }
         }
         return false // Prevent default behavior
@@ -4174,31 +4005,24 @@ extension MessageCell {
     
     private func handleInternalURL(_ url: URL, from viewController: UIViewController) {
         guard let viewState = self.viewState else { 
-            print("❌ MessageCell: ViewState is nil")
             return 
         }
         
-        print("🔗 MessageCell: Handling URL: \(url.absoluteString)")
         
         if url.absoluteString.hasPrefix("https://peptide.chat/server/") ||
            url.absoluteString.hasPrefix("https://app.revolt.chat/server/") {
             let components = url.pathComponents
-            print("🔗 MessageCell: URL components: \(components)")
             
             if components.count >= 6 {
                 let serverId = components[2]
                 let channelId = components[4]
                 let messageId = components.count >= 6 ? components[5] : nil
                 
-                print("🔗 MessageCell: Parsed - Server: \(serverId), Channel: \(channelId), Message: \(messageId ?? "nil")")
-                print("🔗 MessageCell: Server exists: \(viewState.servers[serverId] != nil)")
-                print("🔗 MessageCell: Channel exists: \(viewState.channels[channelId] != nil)")
                 
                 // Check if server and channel exist
-                if viewState.servers[serverId] != nil && (viewState.channels[channelId] != nil || viewState.allEventChannels[channelId] != nil) {
+                if viewState.servers[serverId] != nil && viewState.channels[channelId] != nil {
                     // Check if user is a member of the server
                     guard let currentUser = viewState.currentUser else {
-                        // print("❌ MessageCell: Current user not found")
                         return
                     }
                     
@@ -4206,21 +4030,18 @@ extension MessageCell {
                     
                     if userMember != nil {
                         // User is a member - navigate to the channel
-                        print("✅ MessageCell: User is member, navigating to channel")
                         
                         DispatchQueue.main.async {
                             // CRITICAL FIX: Set target message BEFORE navigation
                             // This ensures the new view controller will pick it up correctly
                             if let messageId = messageId {
                                 viewState.currentTargetMessageId = messageId
-                                print("🎯 MessageCell: Setting target message ID BEFORE navigation: \(messageId)")
                             } else {
                                 viewState.currentTargetMessageId = nil
                             }
                             
                             // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
                             // This ensures that when user presses back, they go to server list instead of previous channel
-                            print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel")
                             viewState.path = []
                             
                             // CRITICAL FIX: Clear existing messages for target channel to force reload
@@ -4235,63 +4056,52 @@ extension MessageCell {
                             // CRITICAL FIX: Use a small delay before adding to path to ensure state updates are processed
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 viewState.path.append(NavigationDestination.maybeChannelView)
-                                print("🎯 MessageCell: Navigation completed - new view controller will handle target message")
                             }
                         }
                     } else {
                         // User is not a member - navigate to Discover
-                        print("🔍 MessageCell: User is not member, navigating to Discover")
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             viewState.selectDiscover()
                         }
                     }
                 } else {
-                    // print("🔍 MessageCell: Server or channel not found, navigating to Discover")
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         viewState.selectDiscover()
                     }
                 }
             } else {
-                // print("❌ MessageCell: Invalid URL format - not enough components")
             }
         } else if url.absoluteString.hasPrefix("https://peptide.chat/channel/") ||
                   url.absoluteString.hasPrefix("https://app.revolt.chat/channel/") {
             let components = url.pathComponents
-            print("🔗 MessageCell: Channel URL components: \(components)")
             
                                                       if components.count >= 3 {
                 let channelId = components[2]
                 let messageId = components.count >= 4 ? components[3] : nil
                 
-                print("🔗 MessageCell: Parsed - Channel: \(channelId), Message: \(messageId ?? "nil")")
-                print("🔗 MessageCell: Channel exists: \(viewState.channels[channelId] != nil)")
                 
-                if let channel = viewState.channels[channelId] ?? viewState.allEventChannels[channelId] {
+                if let channel = viewState.channels[channelId] {
                     // For DM channels, check if user has access
                     switch channel {
                     case .dm_channel(let dmChannel):
                         // Check if current user is in the recipients list
                         guard let currentUser = viewState.currentUser else {
-                            // print("❌ MessageCell: Current user not found")
                             return
                         }
                         
                         if dmChannel.recipients.contains(currentUser.id) {
                             // User has access to this DM - navigate to it
-                            // print("✅ MessageCell: User has access to DM, navigating")
                             
                             DispatchQueue.main.async {
                                 // CRITICAL FIX: Set target message BEFORE navigation
                                 if let messageId = messageId {
                                     viewState.currentTargetMessageId = messageId
-                                    print("🎯 MessageCell: Setting target message ID BEFORE DM navigation: \(messageId)")
                                 } else {
                                     viewState.currentTargetMessageId = nil
                                 }
                                 
                                 // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
                                 // This ensures that when user presses back, they go to server list instead of previous channel
-                                print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel (DM)")
                                 viewState.path = []
                                 
                                 // CRITICAL FIX: Clear existing messages for target channel to force reload
@@ -4305,12 +4115,10 @@ extension MessageCell {
                                 // CRITICAL FIX: Use a small delay before adding to path to ensure state updates are processed
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     viewState.path.append(NavigationDestination.maybeChannelView)
-                                    print("🎯 MessageCell: DM Navigation completed - new view controller will handle target message")
                                 }
                             }
                         } else {
                             // User doesn't have access - navigate to Discover
-                            // print("🔍 MessageCell: User doesn't have access to DM, navigating to Discover")
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 viewState.selectDiscover()
                             }
@@ -4318,25 +4126,21 @@ extension MessageCell {
                     case .group_dm_channel(let groupDmChannel):
                         // Check if current user is in the recipients list
                         guard let currentUser = viewState.currentUser else {
-                            // print("❌ MessageCell: Current user not found")
                             return
                         }
                         
                         if groupDmChannel.recipients.contains(currentUser.id) {
                             // User has access to this group DM - navigate to it
-                            // print("✅ MessageCell: User has access to group DM, navigating")
                             
                             DispatchQueue.main.async {
                                 // CRITICAL FIX: Set target message BEFORE navigation
                                 if let messageId = messageId {
                                     viewState.currentTargetMessageId = messageId
-                                    print("🎯 MessageCell: Setting target message ID BEFORE Group DM navigation: \(messageId)")
                                 } else {
                                     viewState.currentTargetMessageId = nil
                                 }
                                 
                                 // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
-                                print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel (Group DM)")
                                 viewState.path = []
                                 
                                 // CRITICAL FIX: Clear existing messages for target channel to force reload
@@ -4350,28 +4154,23 @@ extension MessageCell {
                                 // CRITICAL FIX: Use a small delay before adding to path to ensure state updates are processed
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     viewState.path.append(NavigationDestination.maybeChannelView)
-                                    print("🎯 MessageCell: Group DM Navigation completed - new view controller will handle target message")
                                 }
                             }
                         } else {
                             // User doesn't have access - navigate to Discover
-                            // print("🔍 MessageCell: User doesn't have access to group DM, navigating to Discover")
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 viewState.selectDiscover()
                             }
                         }
                     default:
                         // For other channel types (text, voice, saved messages), check if it's a server channel
-                        // print("✅ MessageCell: Navigating to channel")
                         
                         // Check if this channel belongs to a server
                         if let serverId = channel.server {
                             // This is a server channel - navigate to server first, then channel
-                            print("🔗 MessageCell: Channel \(channelId) belongs to server \(serverId)")
                             
                             // Check if user has access to this server
                             guard let currentUser = viewState.currentUser else {
-                                print("❌ MessageCell: Current user not found")
                                 return
                             }
                             
@@ -4379,19 +4178,16 @@ extension MessageCell {
                             
                             if userMember != nil {
                                 // User is a member - navigate to the server and channel
-                                print("✅ MessageCell: User is member of server, navigating to server channel")
                                 
                                 DispatchQueue.main.async {
                                     // CRITICAL FIX: Set target message BEFORE navigation
                                     if let messageId = messageId {
                                         viewState.currentTargetMessageId = messageId
-                                        print("🎯 MessageCell: Setting target message ID BEFORE server channel navigation: \(messageId)")
                                     } else {
                                         viewState.currentTargetMessageId = nil
                                     }
                                     
                                     // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
-                                    print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel (Server Channel)")
                                     viewState.path = []
                                     
                                     // CRITICAL FIX: Clear existing messages for target channel to force reload
@@ -4406,31 +4202,26 @@ extension MessageCell {
                                     // CRITICAL FIX: Use a small delay before adding to path to ensure state updates are processed
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                         viewState.path.append(NavigationDestination.maybeChannelView)
-                                        print("🎯 MessageCell: Server Channel Navigation completed - new view controller will handle target message")
                                     }
                                 }
                             } else {
                                 // User is not a member - navigate to Discover
-                                print("🔍 MessageCell: User is not member of server \(serverId), navigating to Discover")
                                 DispatchQueue.main.async {
                                     viewState.selectDiscover()
                                 }
                             }
                         } else {
                             // This is not a server channel (saved messages, etc.) - navigate as DM
-                            print("🔗 MessageCell: Channel \(channelId) is not a server channel, treating as DM")
                             
                             DispatchQueue.main.async {
                                 // CRITICAL FIX: Set target message BEFORE navigation
                                 if let messageId = messageId {
                                     viewState.currentTargetMessageId = messageId
-                                    print("🎯 MessageCell: Setting target message ID BEFORE DM navigation: \(messageId)")
                                 } else {
                                     viewState.currentTargetMessageId = nil
                                 }
                                 
                                 // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
-                                print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel (Non-server Channel)")
                                 viewState.path = []
                                 
                                 // CRITICAL FIX: Clear existing messages for target channel to force reload
@@ -4445,24 +4236,20 @@ extension MessageCell {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     viewState.path.append(NavigationDestination.maybeChannelView)
                                 }
-                                print("🎯 MessageCell: DM Navigation completed - new view controller will handle target message")
                             }
                         }
                     }
                 } else {
-                    // print("🔍 MessageCell: Channel not found, navigating to Discover")
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         viewState.selectDiscover()
                     }
                 }
             } else {
-                // print("❌ MessageCell: Invalid channel URL format")
             }
         } else if url.absoluteString.hasPrefix("https://peptide.chat/invite/") ||
                   url.absoluteString.hasPrefix("https://app.revolt.chat/invite/") {
             let components = url.pathComponents
             if let inviteCode = components.last {
-                // print("🔗 MessageCell: Processing invite code: \(inviteCode)")
                 
                 // First, try to fetch invite info to check if user is already a member
                 Task {
@@ -4476,7 +4263,6 @@ extension MessageCell {
                                let currentUser = viewState.currentUser,
                                viewState.getMember(byServerId: serverId, userId: currentUser.id) != nil {
                                 // User is already a member - navigate directly to the server
-                                // print("✅ MessageCell: User is already a member of server \(serverId), navigating directly")
                                 
                                 // Clear existing messages for the default channel
                                 if let server = viewState.servers[serverId],
@@ -4504,24 +4290,20 @@ extension MessageCell {
                                    let currentUser = viewState.currentUser,
                                    groupDM.recipients.contains(currentUser.id) {
                                     // User is already in the group - navigate directly
-                                    // print("✅ MessageCell: User is already in group \(channelId), navigating directly")
                                     viewState.channelMessages[channelId] = []
                                     viewState.selectDm(withId: channelId)
                                     viewState.path.append(NavigationDestination.maybeChannelView)
                                 } else {
                                     // User is not in the group - show invite acceptance screen
-                                    // print("🔗 MessageCell: User is not in group, showing invite screen")
                                     viewState.path.append(NavigationDestination.invite(inviteCode))
                                 }
                             } else {
                                 // User is not a member - show invite acceptance screen
-                                // print("🔗 MessageCell: User is not a member, showing invite screen")
                                 viewState.path.append(NavigationDestination.invite(inviteCode))
                             }
                         }
                     } catch {
                         // If we can't fetch invite info, just go to invite screen
-                        // print("❌ MessageCell: Failed to fetch invite info: \(error)")
                         await MainActor.run {
                             viewState.path.append(NavigationDestination.invite(inviteCode))
                         }
@@ -4832,7 +4614,6 @@ class MessageOptionViewController: UIViewController {
         guard let emojiString = sender.accessibilityLabel else { return }
         dismiss(animated: true) {
             // Send the emoji reaction
-            // print("Selected emoji reaction: \(emojiString)")
             // Add handling for the emoji reaction (we'll need to add this action type)
             self.onOptionSelected(.react(emojiString))
         }
@@ -4841,7 +4622,6 @@ class MessageOptionViewController: UIViewController {
     @objc private func customEmojiButtonTapped() {
         dismiss(animated: true) {
             // Request custom emoji selector
-            // print("Open custom emoji selector")
             self.onOptionSelected(.react("-1")) // -1 is used to indicate custom emoji selection
         }
     }

@@ -108,12 +108,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     // Target message ID to scroll to
     var targetMessageId: String? {
         didSet {
-            print("🎯 MessageableChannelViewController: targetMessageId changed from \(oldValue ?? "nil") to \(targetMessageId ?? "nil")")
             
             // Reset the processed flag when targetMessageId changes
             if targetMessageId != oldValue {
                 targetMessageProcessed = false
-                print("🎯 Reset targetMessageProcessed to false")
                 
                 // CRITICAL FIX: Clear any existing timer to prevent multiple clearing
                 clearTargetMessageTimer?.invalidate()
@@ -144,7 +142,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // Method to safely activate target message protection to prevent jumping
     internal func activateTargetMessageProtection(reason: String) {
-        print("🛡️ ACTIVATE_PROTECTION: Activating target message protection - reason: \(reason)")
         isInTargetMessagePosition = true
         lastTargetMessageHighlightTime = Date()
         targetMessageProcessed = false
@@ -162,8 +159,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // Method to safely clear target message protection when user explicitly interacts
     internal func clearTargetMessageProtection(reason: String) {
-        print("🎯 CLEAR_PROTECTION: Clearing target message protection - reason: \(reason)")
-        print("🎯 CLEAR_PROTECTION: Previous state - targetMessageId: \(targetMessageId ?? "nil"), isInPosition: \(isInTargetMessagePosition), processed: \(targetMessageProcessed)")
         targetMessageId = nil
         isInTargetMessagePosition = false
         lastTargetMessageHighlightTime = nil
@@ -171,25 +166,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         clearTargetMessageTimer?.invalidate()
         clearTargetMessageTimer = nil
         viewModel.viewState.currentTargetMessageId = nil
-        print("🎯 CLEAR_PROTECTION: Protection successfully cleared")
     }
     
     // Debug function to check protection status
     internal func debugTargetMessageProtection() {
-        print("🔍 TARGET_MESSAGE_DEBUG:")
-        print("   - targetMessageId: \(targetMessageId ?? "nil")")
-        print("   - isInTargetMessagePosition: \(isInTargetMessagePosition)")
-        print("   - targetMessageProcessed: \(targetMessageProcessed)")
-        print("   - protectionActive: \(targetMessageProtectionActive)")
-        print("   - timer active: \(clearTargetMessageTimer != nil)")
         if let timer = clearTargetMessageTimer {
-            print("   - timer remaining: \(timer.fireDate.timeIntervalSinceNow)s")
         }
     }
     
     // ULTIMATE PROTECTION: Override scrollToRow to block ALL unwanted auto-scrolls
     internal func safeScrollToRow(at indexPath: IndexPath, at position: UITableView.ScrollPosition, animated: Bool, reason: String) {
-        print("🔍 SCROLL_ATTEMPT: \(reason) - target row: \(indexPath.row), position: \(position), animated: \(animated)")
+        // Prevent any auto-scrolls during pagination or data source updates
+        if suppressAutoScroll || isLoadingMore || isDataSourceUpdating || tableView.isDragging || tableView.isDecelerating {
+            return
+        }
         debugTargetMessageProtection()
         
         // Allow target message navigation and user-initiated scrolls
@@ -197,22 +187,17 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         let isAllowedReason = allowedReasons.contains { reason.lowercased().contains($0.lowercased()) }
         
         if targetMessageProtectionActive && !isAllowedReason {
-            print("🛡️ BLOCKED_SCROLL: scrollToRow blocked by protection - reason: \(reason)")
-            print("🛡️ BLOCKED_SCROLL: attempted scroll to row \(indexPath.row), position: \(position), animated: \(animated)")
             return
         }
         
         if isAllowedReason {
-            print("✅ ALLOWED_SCROLL: scrollToRow allowed (whitelisted reason) - \(reason)")
         } else {
-            print("✅ ALLOWED_SCROLL: scrollToRow allowed (no protection) - \(reason)")
         }
         tableView.scrollToRow(at: indexPath, at: position, animated: animated)
     }
     
     // Enhanced scrollToBottom with protection debugging  
     func logScrollToBottomAttempt(animated: Bool, reason: String) {
-        print("🔍 SCROLL_TO_BOTTOM_ATTEMPT: \(reason) - animated: \(animated)")
         debugTargetMessageProtection()
     }
     
@@ -263,6 +248,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     // Add this property to track the last before message id
     private var lastBeforeMessageId: String? = nil
     
+    // Scroll anchor for preserving position when loading more messages
+    private struct ScrollAnchor {
+        let messageId: String
+        let distanceFromTop: CGFloat
+        let contentOffset: CGFloat
+    }
+    
     // JUMPING FIX: Track inset adjustments to prevent excessive calls
     private var lastInsetAdjustmentTime: Date = .distantPast
     private var lastMessageCountForInsets: Int = 0
@@ -280,6 +272,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // Flag to prevent concurrent cleanup operations
     private var isCleaningUp = false
+    
+    // MARK: - Auto Scroll Suppression
+    private var suppressAutoScroll: Bool = false
     
     init(viewModel: MessageableChannelViewModel) {
         self.viewModel = viewModel
@@ -315,7 +310,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // 🚀 PERFORMANCE: Load data immediately in viewDidLoad
         loadInitialDataIfNeeded()
         
-        print("⚡ PERFORMANCE: viewDidLoad completed - basic UI + data loading")
     }
     
     // MARK: - Performance Optimized Setup Methods
@@ -357,7 +351,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // CRITICAL FIX: Reset empty response time for new channel
         lastEmptyResponseTime = nil
-        print("🔄 INIT: Reset lastEmptyResponseTime for new channel")
         
         // Check if the channel is NSFW
         if viewModel.channel.nsfw && !self.over18HasSeen {
@@ -371,7 +364,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         guard !hasSetupHeavyComponents else { return }
         hasSetupHeavyComponents = true
         
-        print("⚡ PERFORMANCE: Starting background setup")
         
         // Heavy UI components
         setupNewMessageButton()
@@ -400,7 +392,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             object: nil
         )
         
-        print("⚡ PERFORMANCE: Background setup completed")
     }
     
     /// Sets up only basic observers needed for immediate functionality
@@ -410,6 +401,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             self,
             selector: #selector(messagesDidChange),
             name: NSNotification.Name("MessagesDidChange"),
+            object: nil
+        )
+        
+        // DATABASE REACTIVE ARCHITECTURE: Listen for database updates
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(messagesDidChangeFromDatabase),
+            name: NSNotification.Name("DatabaseMessagesUpdated"),
             object: nil
         )
     }
@@ -474,12 +473,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // New: Only show new message button if a new message is received from socket and user is not at bottom
     @objc private func handleNewSocketMessage(_ notification: Notification) {
+        if suppressAutoScroll || isLoadingMore || isDataSourceUpdating { return }
         guard let userInfo = notification.object as? [String: Any],
               let channelId = userInfo["channelId"] as? String,
               channelId == viewModel.channel.id else { return }
         
         // print debug info for socket message
-        // print("🔔 SOCKET: Received socket message for channel \(channelId)")
         
         let hasManuallyScrolledUp = lastManualScrollUpTime != nil &&
                                     Date().timeIntervalSince(lastManualScrollUpTime!) < 10.0
@@ -488,17 +487,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         if !isUserNearBottom() || hasManuallyScrolledUp || targetMessageProtectionActive {
             // This is the ONLY place where showNewMessageButton should be called
             showNewMessageButton()
-            // print("🔔 SOCKET: Showing new message button because user is not at bottom or target highlighted")
         } else {
-            // print("🔔 SOCKET: User is at bottom, auto-scrolling instead of showing button")
             // Use proper scrolling method that considers keyboard state
             if isKeyboardVisible && !localMessages.isEmpty {
-                let lastIndex = localMessages.count - 1
-                if lastIndex >= 0 && lastIndex < tableView.numberOfRows(inSection: 0) {
-                    let indexPath = IndexPath(row: lastIndex, section: 0)
-                    safeScrollToRow(at: indexPath, at: .bottom, animated: true, reason: "socket message with keyboard")
+                if suppressAutoScroll || isLoadingMore || isDataSourceUpdating { return }
+                if tableView.numberOfRows(inSection: 0) > 0 {
+                    let indexPath = IndexPath(row: 0, section: 0)
+                    safeScrollToRow(at: indexPath, at: .top, animated: true, reason: "socket message with keyboard")
                 }
             } else {
+                if suppressAutoScroll || isLoadingMore || isDataSourceUpdating { return }
                 scrollToBottom(animated: true)
             }
         }
@@ -506,7 +504,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // Add new method to handle network errors
     @objc private func handleNetworkError(_ notification: Notification) {
-        // print("⚠️ Network error detected, preventing automatic scrolls for 5 seconds")
         
         // Temporarily increase the debounce time after network error
         let errorDebounceTime = Date().addingTimeInterval(5.0)
@@ -527,7 +524,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                  // Set flag to prevent unwanted scrolling when returning from search
          isReturningFromSearch = true
          wasInSearch = false
-         // print("🔍 SEARCH_CLOSED: Channel search closed for channel \(channelId), setting flag to prevent scroll")
          
          // Reset the flag after a short delay to ensure it doesn't interfere with future navigation
          DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -537,7 +533,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // Handle video player dismiss to ensure navigation bar is hidden
     @objc private func handleVideoPlayerDismiss(_ notification: Notification) {
-        // print("🎬 MessageableChannelViewController: Video player dismissed, ensuring navigation bar is hidden")
         
         // Force hide navigation bar
         navigationController?.setNavigationBarHidden(true, animated: false)
@@ -556,13 +551,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     @objc private func handleNewMessages(_ notification: Notification) {
         // CRITICAL FIX: Don't handle new messages during nearby loading
         if messageLoadingState == .loading {
-            print("📬 BLOCKED: handleNewMessages blocked - nearby loading in progress")
             return
         }
         
         // CRITICAL FIX: Don't handle if target message protection is active
         if targetMessageProtectionActive {
-            print("📬 BLOCKED: handleNewMessages blocked - target message protection active")
+            return
+        }
+        
+        // Prevent auto-scrolls during pagination or data source updates
+        if suppressAutoScroll || isLoadingMore || isDataSourceUpdating {
             return
         }
         
@@ -571,7 +569,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Only scroll if there are actual new messages
         if currentMessageCount > storedMessageCount {
-            // print("📬 Direct notification of new messages - found \(currentMessageCount - storedMessageCount) new messages")
             // Update stored count
             UserDefaults.standard.set(currentMessageCount, forKey: "LastMessageCount_\(viewModel.channel.id)")
             
@@ -582,30 +579,19 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             // COMPREHENSIVE TARGET MESSAGE PROTECTION
             // Only scroll if user is near bottom AND hasn't manually scrolled up recently AND no target message protection
             if isUserNearBottom() && !hasManuallyScrolledUp && !targetMessageProtectionActive {
-                // First scroll immediately
                 scrollToBottom(animated: true)
-                // Then schedule multiple scrolls with delays to ensure we catch the UI update
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    self.scrollToBottom(animated: true)
-                    // One more scroll after a bit longer delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        self.scrollToBottom(animated: false)
-                    }
-                }
             } else {
-                // print("👆 User is not near bottom or has manually scrolled up, not auto-scrolling")
                 // Do NOT show new message button here anymore
                 // showNewMessageButton() // <-- REMOVE THIS LINE
             }
         } else {
-            // print("📬 Message notification received but no new messages found. Ignoring scroll request.")
         }
     }
     
     @objc private func checkForScrollNeeded() {
         // Skip checks if tableView is nil or user is actively scrolling or we're loading more messages
         guard let tableView = tableView else { return }
-        if tableView.isDragging || tableView.isDecelerating || isLoadingMore {
+        if tableView.isDragging || tableView.isDecelerating || isLoadingMore || isDataSourceUpdating || suppressAutoScroll {
             return
         }
         
@@ -644,7 +630,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             }
             
             // Only scroll if we're already near bottom but not showing last message
-           // // print("⏱️ Timer check - auto-scrolling since user is near bottom but not showing last message")
+            if suppressAutoScroll || isLoadingMore || isDataSourceUpdating { return }
             scrollToBottom(animated: true)
         } else {
            // // print("👆 [Timer] User is not near bottom, skipping auto-scroll")
@@ -754,7 +740,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // 🚀 PERFORMANCE: Data already loaded in viewDidLoad, just handle viewDidAppear logic
         //handleViewDidAppearLogic()
         
-        print("⚡ PERFORMANCE: viewDidAppear completed - data already loaded")
     }
     
     // MARK: - Performance Optimized Data Loading
@@ -764,11 +749,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         guard !hasLoadedInitialData else { return }
         hasLoadedInitialData = true
         
-        print("⚡ PERFORMANCE: Starting immediate data loading in viewDidLoad")
         
         // CRITICAL FIX: Check if we have a target message from ViewState before loading
         if let targetFromViewState = viewModel.viewState.currentTargetMessageId {
-            print("🎯 PERFORMANCE: Target message found in ViewState: \(targetFromViewState), skipping regular load")
             targetMessageId = targetFromViewState
             targetMessageProcessed = false
         } else {
@@ -778,7 +761,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                                      viewModel.viewState.channelMessages[channelId]?.first(where: { viewModel.viewState.messages[$0] != nil }) != nil
             
             if hasExistingMessages {
-                print("⚡ PERFORMANCE: Database already has messages, showing them immediately")
                 // We have existing messages, just refresh the UI without loading
                 refreshMessages()
             } else {
@@ -789,12 +771,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             }
         }
     }
-    
     /// Handles existing viewDidAppear logic (search return, target messages, etc.)
     private func handleViewDidAppearLogic() {
         // CRITICAL FIX: Check if we have a target message from ViewState that we need to restore
         if targetMessageId == nil, let targetFromViewState = viewModel.viewState.currentTargetMessageId {
-            print("🎯 VIEW_DID_APPEAR: Restoring target message from ViewState: \(targetFromViewState)")
             targetMessageId = targetFromViewState
             targetMessageProcessed = false
             
@@ -803,7 +783,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             messageLoadingState = .loading
             DispatchQueue.main.async {
                 self.hideEmptyStateView()
-                print("🚫 VIEW_DID_APPEAR: Hidden empty state before target message loading")
             }
             
             // Show loading spinner and trigger target message loading (keep table visible)
@@ -815,7 +794,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // Trigger target message loading which will use nearby API
             Task {
-                print("🎯 VIEW_DID_APPEAR: Triggering target message loading")
                 await loadInitialMessages()
                 
                 // Adjust table insets after loading messages
@@ -825,7 +803,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     // CRITICAL FIX: Check for missing reply content after initial load with delay
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         Task {
-                            print("🔗 VIEW_APPEARED: Checking for missing replies after delay (first case)")
                             await self.checkAndFetchMissingReplies()
                         }
                     }
@@ -836,7 +813,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Check if we're returning from search - if so, just refresh UI without reloading from database
         if isReturningFromSearch {
-            print("🔍 VIEW_DID_APPEAR: Returning from search, refreshing UI only")
             
             // Re-register observer
             NotificationCenter.default.removeObserver(self, name: NSNotification.Name("MessagesDidChange"), object: nil)
@@ -857,7 +833,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // Reset the flag after processing
             isReturningFromSearch = false
-            print("🔍 VIEW_DID_APPEAR: Cleared isReturningFromSearch flag")
             
             return
         }
@@ -870,7 +845,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             // Update table view bouncing behavior when view appears
             updateTableViewBouncing()
         } else {
-            print("🎯 VIEW_DID_APPEAR: Skipping global fix - target message navigation in progress")
         }
         
        // // print("🔄 VIEW_DID_APPEAR: View appeared, checking notification observers")
@@ -890,8 +864,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // If we don't have a specific target message and table is hidden, show it properly positioned
         if targetMessageId == nil && !viewModel.messages.isEmpty && tableView.alpha == 0.0 {
-            print("📱 VIEW_DID_APPEAR: Positioning table at bottom and showing")
-            positionTableAtBottomBeforeShowing()
+            if !(suppressAutoScroll || isLoadingMore || isDataSourceUpdating) {
+                positionTableAtBottomBeforeShowing()
+            }
             
             // Adjust table insets after positioning
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -901,17 +876,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Note: Automatic preloading is controlled by ViewState.enableAutomaticPreloading
         // When disabled, messages are loaded only when user explicitly enters the channel
-        print("📵 PRELOAD_CONTROLLED: Automatic preloading controlled by ViewState setting for channel \(channelId)")
         
         // CRITICAL FIX: Check if user is in target message position to prevent reload
         if isInTargetMessagePosition {
-            print("🎯 VIEW_DID_APPEAR: User is in target message position, preserving current view")
             return
         }
         
         // CRITICAL FIX: Don't load from database in viewDidAppear - only refresh UI
         if targetMessageId != nil {
-            print("🎯 VIEW_DID_APPEAR: Target message found, just refreshing UI")
             
             // Just refresh the UI, don't load from database
             refreshMessages()
@@ -923,14 +895,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 // Check for missing reply content after delay
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     Task {
-                        print("🔗 VIEW_APPEARED: Checking for missing replies after delay")
                         await self.checkAndFetchMissingReplies()
                     }
                 }
             }
         } else {
             // Just refresh UI with existing messages, don't load from database in viewDidAppear
-            print("✅ VIEW_DID_APPEAR: Refreshing UI with existing messages")
             tableView.tableFooterView = nil
             refreshMessages()
             
@@ -993,7 +963,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Dismiss keyboard if visible
         view.endEditing(true)
         
-        print("🚀 IMMEDIATE_CLEANUP: Starting INSTANT memory cleanup for channel \(viewModel.channel.id)")
         let cleanupStartTime = CFAbsoluteTimeGetCurrent()
         
         // IMMEDIATE: Cancel all pending operations first
@@ -1012,17 +981,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             if let targetMessage = viewModel.viewState.messages[targetId] {
                 if targetMessage.channel == viewModel.channel.id {
                     // Target message is for THIS (old) channel - we can clear it safely
-                    print("🎯 IMMEDIATE_CLEANUP: Target message is for current channel \(viewModel.channel.id), clearing it")
                     viewModel.viewState.currentTargetMessageId = nil
                     targetMessageId = nil
                     targetMessageProcessed = false
                 } else {
                     // Target message is for DIFFERENT (new) channel - preserve it!
-                    print("🎯 IMMEDIATE_CLEANUP: Target message is for different channel \(targetMessage.channel), preserving it")
                 }
             } else {
                 // Target message not loaded yet - this means we're navigating to find it, so preserve it
-                print("🎯 IMMEDIATE_CLEANUP: Target message not loaded yet, preserving for navigation")
             }
         }
         
@@ -1031,7 +997,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // CRITICAL FIX: Don't cleanup if we're returning from search
         if isReturningFromSearch {
-            print("🔍 IMMEDIATE_CLEANUP: Returning from search, skipping ALL cleanup")
             return
         }
         
@@ -1040,7 +1005,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         let cleanupEndTime = CFAbsoluteTimeGetCurrent()
         let cleanupDuration = (cleanupEndTime - cleanupStartTime) * 1000
-        print("🚀 IMMEDIATE_CLEANUP: Total viewWillDisappear cleanup completed in \(String(format: "%.2f", cleanupDuration))ms")
     }
     
     // MARK: - Memory Management
@@ -1257,13 +1221,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     }
     
     @objc private func backButtonTapped() {
-        print("🔙 BACK_BUTTON: Tapped - Channel: \(viewModel.channel.id), Server: \(viewModel.channel.server ?? "nil")")
-        print("🔙 BACK_BUTTON: Channel type: \(type(of: viewModel.channel))")
-        print("🔙 BACK_BUTTON: Current path count: \(viewModel.viewState.path.count)")
-        print("🔙 BACK_BUTTON: Current path: \(viewModel.viewState.path)")
-        print("🔙 BACK_BUTTON: lastInviteServerContext: \(viewModel.viewState.lastInviteServerContext ?? "nil")")
-        print("🔙 BACK_BUTTON: currentSelection: \(viewModel.viewState.currentSelection)")
-        print("🔙 BACK_BUTTON: currentChannel: \(viewModel.viewState.currentChannel)")
         
         // CRITICAL FIX: For channels with navigation path containing only maybeChannelView(s) (likely from invite),
         // clear path to show appropriate sidebar/main view instead of previous screen
@@ -1274,15 +1231,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             return false
         }
         
-        print("🔙 BACK_BUTTON: isOnlyChannelViews: \(isOnlyChannelViews)")
-        print("🔙 BACK_BUTTON: path.isEmpty: \(viewModel.viewState.path.isEmpty)")
         
         if isOnlyChannelViews && !viewModel.viewState.path.isEmpty {
             if let serverId = viewModel.channel.server {
                 // Server channel case
-                print("🔙 BACK_BUTTON: Detected invite-style navigation (server channel with only maybeChannelViews)")
-                print("🔙 BACK_BUTTON: ServerId: \(serverId)")
-                print("🔙 BACK_BUTTON: Clearing path and selecting server \(serverId)")
                 
                 // Clear the navigation path completely
                 viewModel.viewState.path.removeAll()
@@ -1299,13 +1251,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     NotificationCenter.default.post(name: NSNotification.Name("ForceChannelListRefresh"), object: ["serverId": serverId])
                 }
                 
-                print("🔙 BACK_BUTTON: After selectServer - currentSelection: \(viewModel.viewState.currentSelection)")
-                print("🔙 BACK_BUTTON: After selectServer - currentChannel: \(viewModel.viewState.currentChannel)")
-                print("🔙 BACK_BUTTON: Completed invite-style back navigation for server channel")
             } else {
                 // DM or other non-server channel case
-                print("🔙 BACK_BUTTON: Detected invite-style navigation (non-server channel with only maybeChannelViews)")
-                print("🔙 BACK_BUTTON: Clearing path to return to DMs/main view")
                 
                 // Clear the navigation path completely
                 viewModel.viewState.path.removeAll()
@@ -1322,21 +1269,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     NotificationCenter.default.post(name: NSNotification.Name("ForceDMListRefresh"), object: nil)
                 }
                 
-                print("🔙 BACK_BUTTON: Set currentSelection to DMs")
-                print("🔙 BACK_BUTTON: Completed invite-style back navigation for non-server channel")
             }
             return
         }
         
-        print("🔙 BACK_BUTTON: Using normal navigation path.removeLast()")
         
         // For normal navigation with multiple path items, use path.removeLast()
         if !viewModel.viewState.path.isEmpty {
             viewModel.viewState.path.removeLast()
-            print("🔙 BACK_BUTTON: Removed last path item, new count: \(viewModel.viewState.path.count)")
         } else {
             // Fallback: If no navigation path, try UIKit navigation or toggle sidebar
-            print("🔙 BACK_BUTTON: No navigation path, using fallback")
             if let navigationController = navigationController {
                 navigationController.popViewController(animated: true)
             } else {
@@ -1361,7 +1303,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Only show server info if this channel belongs to a server
         guard let serverId = viewModel.channel.server,
               let server = viewModel.viewState.servers[serverId] else {
-            // print("Channel does not belong to a server or server not found")
             return
         }
         
@@ -1529,9 +1470,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         ])
         
         // print some setup information for debugging
-        // print("📋 Table view setup complete:")
-        // print("   • ViewModel has \(viewModel.messages.count) messages")
-        // print("   • ViewState has \(viewModel.viewState.channelMessages[viewModel.channel.id]?.count ?? 0) channel messages")
     }
     
     private func setupBindings() {
@@ -1564,7 +1502,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // If user is near bottom and scrolling is enabled, scroll to show new content
                 if isUserNearBottom() && !isLoadingMore && tableView.isScrollEnabled {
-                    // print("📏 TableView content size increased significantly while user near bottom - scrolling")
                     scrollToBottom(animated: true)
                 }
             }
@@ -1572,15 +1509,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
         }
     }
-    
     // Make sure to remove observers in deinit
     deinit {
-        // print("🗑️ DEINIT: MessageableChannelViewController is being deallocated")
         
         // CRITICAL: Clear target message ID and highlight time to prevent re-targeting
         lastTargetMessageHighlightTime = nil
         isInTargetMessagePosition = false
-        print("🎯 DEINIT: Clearing currentTargetMessageId to prevent re-targeting")
         
         NotificationCenter.default.removeObserver(self)
         
@@ -1624,7 +1558,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // CRITICAL: Clear target message ID in ViewState
             viewModel.viewState.currentTargetMessageId = nil
-            print("🎯 DEINIT TASK: Cleared currentTargetMessageId from ViewState")
             
             // Get message IDs before clearing
             let messageIds = viewModel.messages
@@ -1642,7 +1575,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             // Clear image cache
             ImageCache.default.clearMemoryCache()
             
-            // print("🗑️ DEINIT CLEANUP: Removed \(messageIds.count) message objects from viewState")
         }
         
         // Clear table view references
@@ -1656,7 +1588,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Clear managers that might hold references
         // (Note: These are lazy vars, so they'll be cleared automatically if not accessed)
         
-        // print("🗑️ DEINIT: Cleanup completed - freed \(messageCount) messages from memory")
     }
     
     // SUPER FAST: Simplified message change handler
@@ -1680,19 +1611,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // For reaction updates, handle them immediately without blocking conditions
         if isReactionUpdate {
-            print("🔥 CONTROLLER: Processing reaction update for channel \(reactionChannelId ?? "unknown"), message \(reactionMessageId ?? "unknown")")
             // Process reaction updates immediately since they don't interfere with loading states
             // and should always update the UI when received from the backend
         } else {
             // CRITICAL FIX: Don't process regular message changes during nearby loading
             if messageLoadingState == .loading {
-                print("🔄 BLOCKED: messagesDidChange blocked - nearby loading in progress")
                 return
             }
             
             // CRITICAL FIX: Don't process regular message changes if target message protection is active
             if targetMessageProtectionActive {
-                print("🔄 BLOCKED: messagesDidChange blocked - target message protection active")
                 return
             }
         }
@@ -1705,18 +1633,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                messageIndex < tableView.numberOfRows(inSection: 0) {
 
                 let indexPath = IndexPath(row: messageIndex, section: 0)
-                let isLastMessage = messageIndex == localMessages.count - 1
+                let isLastMessage = messageIndex == 0  // Index 0 is now the newest/last message
                 let wasNearBottom = isUserNearBottom(threshold: 80)
 
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
-                    print("🔥 RELOADING ROW: Reloading row \(indexPath.row) for message \(messageId)")
                     
                     // Force check if message has been updated in ViewState
                     if let updatedMessage = self.viewModel.viewState.messages[messageId] {
-                        print("🔥 FORCE CHECK: Message \(messageId) reactions in ViewState: \(updatedMessage.reactions?.keys.joined(separator: ", ") ?? "none")")
                     } else {
-                        print("🔥 FORCE CHECK: Message \(messageId) not found in ViewState!")
                     }
                     
                     self.tableView.reloadRows(at: [indexPath], with: .none)
@@ -1764,39 +1689,78 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // refreshMessages() // Removed - database loading should only happen in loadInitialDataIfNeeded()
     }
     
+    // DATABASE REACTIVE ARCHITECTURE: Handle messages loaded from database
+    @objc private func messagesDidChangeFromDatabase(_ notification: Notification) {
+        
+        // Load messages from database via ViewModel
+        Task {
+            await loadMessagesFromDatabase()
+        }
+    }
+    
+    // Helper to load messages from database and refresh UI
+    private func loadMessagesFromDatabase() async {
+        let channelId = viewModel.channel.id
+        
+        // Fetch messages from database through repository
+        let dbMessages = await MessageRepository.shared.fetchMessages(forChannel: channelId)
+        
+        guard !dbMessages.isEmpty else {
+            return
+        }
+        
+        
+        await MainActor.run {
+            // Update ViewState from database
+            for message in dbMessages {
+                viewModel.viewState.messages[message.id] = message
+            }
+            
+            // Sort messages by timestamp (newest first)
+            let sortedIds = dbMessages.map { $0.id }.sorted { id1, id2 in
+                let date1 = createdAt(id: id1)
+                let date2 = createdAt(id: id2)
+                return date1 > date2
+            }
+            
+            // Update all message arrays
+            viewModel.viewState.channelMessages[channelId] = sortedIds
+            viewModel.messages = sortedIds
+            localMessages = sortedIds
+            
+            
+            // Refresh the table view
+            refreshMessages()
+        }
+    }
+    
     // Legacy method for compatibility (can be removed after testing)
     private func scrollToBottomLegacy(animated: Bool) {
         // First check if we have messages
-        // print("🔽 SCROLL_TO_BOTTOM: Starting forced scroll to bottom (animated: \(animated))")
         
         // CRITICAL: Don't auto-scroll if user is manually scrolling or recently scrolled up
         if tableView.isDragging || tableView.isDecelerating {
-            // print("🔽 SCROLL_TO_BOTTOM: User is manually scrolling, cancelling auto-scroll")
             return
         }
         
         // Don't scroll if user manually scrolled up in the last 5 seconds
         if let lastScrollUpTime = lastManualScrollUpTime,
            Date().timeIntervalSince(lastScrollUpTime) < 5.0 {
-            // print("🔽 SCROLL_TO_BOTTOM: User scrolled up recently (\(Date().timeIntervalSince(lastScrollUpTime))s ago), cancelling auto-scroll")
             return
         }
         
         // Don't scroll if we're currently loading more messages
         if isLoadingMore {
-            // print("🔽 SCROLL_TO_BOTTOM: Currently loading more messages, cancelling auto-scroll")
             return
         }
         
         // CRITICAL FIX: Don't auto-position if target message was recently highlighted
         if let highlightTime = lastTargetMessageHighlightTime,
            Date().timeIntervalSince(highlightTime) < 10.0 {
-                print("🎯 SCROLL_TO_BOTTOM: Target message highlighted recently, skipping position")
 //                return
             
     
             
-            // print("🔽 SCROLL_TO_BOTTOM: Table is hidden, using positionTableAtBottomBeforeShowing")
             positionTableAtBottomBeforeShowing()
             return
         }
@@ -1804,7 +1768,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // If there are few messages, don't scroll
         let messageCount = tableView.numberOfRows(inSection: 0)
         if messageCount < 12 {
-            // print("📊 SCROLL_TO_BOTTOM: Few messages (\(messageCount)), automatic scrolling not performed")
             return
         }
         
@@ -1812,7 +1775,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         let now = Date()
         if let lastTime = lastScrollToBottomTime, 
            now.timeIntervalSince(lastTime) < scrollDebounceInterval {
-            // print("⏱️ SCROLL_TO_BOTTOM: Skipping due to debounce, last scroll was \(now.timeIntervalSince(lastTime)) seconds ago")
             return
         }
         
@@ -1832,7 +1794,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             UIView.animate(withDuration: 0.1) {
                 self.tableView.contentInset = UIEdgeInsets.zero
             }
-            // print("🔽 SCROLL_TO_BOTTOM: Reset contentInset to zero before scrolling (message count > 3)")
         }
         
         // Create a new work item
@@ -1851,7 +1812,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 // Remove excess contentInset that might cause empty space
                 if self.tableView.contentInset.top > 0 {
                     self.tableView.contentInset = .zero
-                    // print("📏 Removed excess contentInset.top in scrollToBottom")
                 }
                 
                 // Then also try setting contentOffset directly
@@ -1860,7 +1820,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     self.tableView.setContentOffset(CGPoint(x: 0, y: y), animated: animated)
                 }
                 
-                // print("🔽 SCROLL_TO_BOTTOM: Scrolled to last row at index \(lastRowIndex) using multiple approaches")
                 
                 // Force another scroll check after animation completes
                 DispatchQueue.main.asyncAfter(deadline: .now() + (animated ? 0.3 : 0.1)) { [weak self] in
@@ -1894,13 +1853,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                                     self.tableView.setContentOffset(CGPoint(x: 0, y: lastY), animated: false)
                                 }
                                 
-                                // print("🔽 SCROLL_TO_BOTTOM: Final scroll verification complete")
                             }
                         }
                     }
                 }
             } else {
-                // print("⚠️ SCROLL_TO_BOTTOM: No rows in table, can't scroll")
             }
         }
         
@@ -1915,7 +1872,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     func isUserNearBottom(threshold: CGFloat? = nil) -> Bool {
         // COMPREHENSIVE TARGET MESSAGE PROTECTION
         if targetMessageProtectionActive {
-            print("🎯 NEAR_BOTTOM_CHECK: Target message protection active, not considering user near bottom")
             return false
         }
         
@@ -2010,47 +1966,39 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // CRITICAL FIX: Check if we recently received an empty response (reached beginning)
         if let lastEmpty = lastEmptyResponseTime,
            Date().timeIntervalSince(lastEmpty) < 60.0 { // Don't retry for 1 minute
-            print("⏹️ LOAD_BLOCKED: Reached beginning of conversation recently, skipping load")
             return
         }
         
         // If message count is less than the specified threshold, don't send API request
         if messages.count < 12 {
-            // print("📊 Few messages (\(messages.count)), not sending request to load more messages")
             return
         }
         
-        // STRICT CONDITION: ONLY when we're at the very first message (row 0)
-        // No threshold - must be exactly at the top
-        if (indexPath.row == 0) && !isLoadingMore {
+        // STRICT CONDITION: ONLY when we're at the last message (oldest message at bottom)
+        // Since table is reversed, oldest messages are at the bottom
+        let lastRowIndex = messages.count - 1
+        if (indexPath.row == lastRowIndex) && !isLoadingMore {
             // Check loading state separately
             if case .loading = messageLoadingState {
                 // Already loading, no need to restart
-                // print("⏳ Already in loading state, skipping request")
                 return
             }
             
-            // Get the first message ID from whichever array has data
-            let firstMessageId = messages.first!
-            // print("🔄🔄 LOAD_TRIGGERED: At or near top row \(indexPath.row), loading more history, current first message: \(firstMessageId)")
+            // Get the oldest message ID (last in array) to request even older messages
+            // Since the table is reversed, messages.last is the oldest message at the bottom
+            let oldestMessageId = messages.last!
             
             // Show loading indicator
             DispatchQueue.main.async {
-                self.loadingHeaderView.isHidden = false
-                let headRect = self.tableView.rect(forSection: 0)
-                // Make sure loading indicator is visible
-                if headRect.origin.y < self.tableView.contentOffset.y {
-                    self.tableView.scrollRectToVisible(CGRect(x: 0, y: self.tableView.contentOffset.y - 60, width: 1, height: 1), animated: true)
+                if self.tableView.tableFooterView == nil {
+                    self.tableView.tableFooterView = self.loadingHeaderView
                 }
-                
-                // Show notification to user
-//                let banner = NotificationBanner(message: "Loading older messages...")
-//                banner.show(duration: 1.5)
+                self.loadingHeaderView.isHidden = false
             }
             
             // Only set loading state for indexPath.row == 0 to prioritize top-row loading
             isLoadingMore = true
-            loadMoreMessages(before: firstMessageId)
+            loadMoreMessages(before: oldestMessageId)
         }
     }
     
@@ -2078,7 +2026,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     /// Temporarily disable automatic acknowledgment after marking as unread
     func disableAutoAcknowledgment() {
-        print("🚫 Disabling auto-acknowledgment for \(autoAckDisableDuration) seconds")
         isAutoAckDisabled = true
         autoAckDisableTime = Date()
     }
@@ -2089,11 +2036,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         if let disableTime = autoAckDisableTime {
             let now = Date()
             if now.timeIntervalSince(disableTime) < autoAckDisableDuration {
-                print("🚫 Auto-acknowledgment disabled - skipping markLastMessageAsSeen")
                 return
             } else {
                 // Disable period has expired, re-enable auto-ack
-                print("✅ Auto-acknowledgment re-enabled after disable period")
                 isAutoAckDisabled = false
                 autoAckDisableTime = nil
             }
@@ -2142,11 +2087,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     self.viewModel.viewState.updateAppBadgeCount()
                 }
             } catch let error as HTTPError {
-                // print("Failed to mark message as seen: \(error)")
                 
                 // Check for rate limiting
                 if case .failure(429, let data) = error, let retryAfter = extractRetryAfter(from: data) {
-                    // print("Rate limited for \(retryAfter) seconds")
                     
                     // Adjust our throttle interval based on server response
                     self.messageSeenThrottleInterval = max(self.messageSeenThrottleInterval, min(Double(retryAfter), 60.0))
@@ -2163,7 +2106,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     self.isAcknowledgingMessage = false
                 }
             } catch {
-                // print("Failed to mark message as seen with unknown error: \(error)")
                 DispatchQueue.main.async {
                     self.isAcknowledgingMessage = false
                 }
@@ -2237,11 +2179,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             self.processRetryQueue() // Process the next task if any
                         }
                     } catch let error as HTTPError {
-                        // print("Retry failed to mark message as seen: \(error)")
                         
                         // Check for rate limiting
                         if case .failure(429, let data) = error, let retryAfter = extractRetryAfter(from: data) {
-                            // print("Rate limited for \(retryAfter) seconds during retry")
                             
                             // Adjust our throttle interval based on server response
                             self.messageSeenThrottleInterval = max(self.messageSeenThrottleInterval, min(Double(retryAfter), 60.0))
@@ -2258,7 +2198,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             self.isAcknowledgingMessage = false
                         }
                     } catch {
-                        // print("Retry failed with unknown error: \(error)")
                         DispatchQueue.main.async {
                             self.isAcknowledgingMessage = false
                         }
@@ -2271,7 +2210,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             }
         }
     }
-    
     // New method for loading older messages
     func loadMoreMessages(before messageId: String?, server: String? = nil, messages: [String] = []) {
         // Set the 'before' message ID
@@ -2280,49 +2218,25 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Check current loading state
         switch messageLoadingState {
         case .loading:
-            // print("⚠️ BEFORE_CALL: Message loading is already in progress, ignoring new request")
             return
             
         case .notLoading:
             // If less than 1.5 seconds since last load, ignore
             let timeSinceLastLoad = Date().timeIntervalSince(lastSuccessfulLoadTime)
             if timeSinceLastLoad < 0.5 {
-                // print("⏱️ BEFORE_CALL: Only \(String(format: "%.1f", timeSinceLastLoad)) seconds since last load, waiting")
                 return
             }
             
-            print("🌐 API CALL: loadMoreMessages (before) - Channel: \(viewModel.channel.id), Before: \(messageId ?? "nil")")
             
             // CRITICAL FIX: Set flag to prevent memory cleanup during older message loading
             isLoadingOlderMessages = true
             
-            // Save scroll position before API call
-            let oldContentOffset = self.tableView.contentOffset
-            let oldContentHeight = self.tableView.contentSize.height
-            
-            // Remember exact information about current scroll position for more precise adjustment
-            var firstVisibleIndexPath: IndexPath? = nil
-            var firstVisibleRowFrame: CGRect = .zero
-            var contentOffsetRelativeToRow: CGFloat = 0
-            
-            // Get the first completely visible row (not just partially visible)
-            if let visibleRows = self.tableView.indexPathsForVisibleRows, !visibleRows.isEmpty {
-                firstVisibleIndexPath = visibleRows.first
-                if let indexPath = firstVisibleIndexPath {
-                    firstVisibleRowFrame = self.tableView.rectForRow(at: indexPath)
-                    contentOffsetRelativeToRow = oldContentOffset.y - firstVisibleRowFrame.origin.y
-                    // print("🔍 BEFORE_CALL: Saving position - row \(indexPath.row) at y-offset \(firstVisibleRowFrame.origin.y), content offset \(oldContentOffset.y), relative offset \(contentOffsetRelativeToRow)")
-                }
-            }
-            
             // Show loading indicator
             DispatchQueue.main.async {
-                self.loadingHeaderView.isHidden = false
-                // Make sure the header view is visible
-                let headRect = self.tableView.rect(forSection: 0)
-                if headRect.origin.y < self.tableView.contentOffset.y {
-                    self.tableView.scrollRectToVisible(CGRect(x: 0, y: self.tableView.contentOffset.y - 60, width: 1, height: 1), animated: true)
+                if self.tableView.tableFooterView == nil {
+                    self.tableView.tableFooterView = self.loadingHeaderView
                 }
+                self.loadingHeaderView.isHidden = false
             }
             
             // Save count of messages before loading
@@ -2330,29 +2244,19 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // Create a new Task for loading messages
             let loadTask = Task<Void, Never>(priority: .userInitiated) {
-                do {
-                    // Display request information - ADD DETAILED LOGGING
-                    print("⏳ BEFORE_CALL: Waiting for API response for messageId=\(messageId ?? "nil"), channelId=\(self.viewModel.channel.id)")
+                    // DATABASE REACTIVE ARCHITECTURE: Trigger background sync via NetworkSyncService
                     
-                    // CRITICAL: Ensure we're using the right method for Before calls
-                    print("⏳ BEFORE_CALL: Calling viewModel.loadMoreMessages with before=\(messageId ?? "nil")")
-                    let loadResult = await self.viewModel.loadMoreMessages(
-                        before: messageId
+                    await NetworkSyncService.shared.syncMoreMessages(
+                        channelId: self.viewModel.channel.id,
+                        before: messageId ?? "",
+                        viewState: self.viewModel.viewState
                     )
                     
-                    print("✅ BEFORE_CALL: API call completed, result is nil? \(loadResult == nil)")
                     
-                    // If result is not nil, log more details
-                    if let result = loadResult {
-                        // print("✅ BEFORE_CALL: Received \(result.messages.count) messages from API")
-                        if !result.messages.isEmpty {
-                            let firstMsgId = result.messages.first?.id ?? "unknown"
-                            let lastMsgId = result.messages.last?.id ?? "unknown"
-                            // print("✅ BEFORE_CALL: First message ID: \(firstMsgId), Last message ID: \(lastMsgId)")
-                        }
-                    }
+                    // Wait a moment for database to update
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
                     
-                    // Check result on main thread
+                    // Update UI on main thread
                     await MainActor.run {
                         // Hide loading indicator
                         self.loadingHeaderView.isHidden = true
@@ -2360,147 +2264,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         // Always update lastSuccessfulLoadTime to prevent repeated calls
                         self.lastSuccessfulLoadTime = Date()
                         
-                        // If we got a response with messages
-                        if let result = loadResult {
-                            // Log message counts for debugging
-                            // print("🧮 BEFORE_CALL: Current message counts:")
-                            // print("   ViewModel: \(self.viewModel.messages.count) messages")
-                            // print("   ViewState: \(self.viewModel.viewState.channelMessages[self.viewModel.channel.id]?.count ?? 0) messages")
-                            // print("   TableView: \(self.tableView.numberOfRows(inSection: 0)) rows")
-                            
-                            // CRITICAL: If viewModel.messages is empty but viewState has messages, sync them
-                            if self.viewModel.messages.isEmpty && !(self.viewModel.viewState.channelMessages[self.viewModel.channel.id]?.isEmpty ?? true) {
-                                // print("⚠️ BEFORE_CALL: ViewModel messages is empty but viewState has \(self.viewModel.viewState.channelMessages[self.viewModel.channel.id]?.count ?? 0) messages - syncing")
-                                self.viewModel.messages = self.viewModel.viewState.channelMessages[self.viewModel.channel.id] ?? []
-                            }
-                            // CRITICAL: Also ensure localMessages is synced with viewModel.messages
-                            if self.localMessages.isEmpty && !self.viewModel.messages.isEmpty {
-                                // print("⚠️ BEFORE_CALL: LocalMessages is empty but viewModel has \(self.viewModel.messages.count) messages - syncing")
-                                self.localMessages = self.viewModel.messages
-                            }
-                            // CRITICAL: Always sync all three arrays after loading more
-                            if let synced = self.viewModel.viewState.channelMessages[self.viewModel.channel.id], !synced.isEmpty {
-                                self.viewModel.messages = synced
-                                self.localMessages = synced
-                                // print("🔄 BEFORE_CALL: Synced viewModel.messages and localMessages with viewState.channelMessages after loadMoreMessages")
-                            } else {
-                                // print("⚠️ BEFORE_CALL: Tried to sync but channelMessages was empty, skipping sync to avoid clearing arrays")
-                            }
-                            
-                            // CRITICAL: Make sure we're using the correct messages array
-                            let messagesForDataSource = !self.viewModel.messages.isEmpty ? 
-                                self.viewModel.messages : 
-                                (self.viewModel.viewState.channelMessages[self.viewModel.channel.id] ?? [])
-                            
-                            // Calculate how many messages were actually added
-                            let addedMessagesCount = self.viewModel.messages.count - initialMessagesCount
-                            // print("✅ BEFORE_CALL: Loaded \(result.messages.count) messages, added \(addedMessagesCount) new messages")
-                            
-                            // CRITICAL FIX: Restore any missing users after loading older messages
-                            self.viewModel.viewState.restoreMissingUsersForMessages()
-                            
-                            // CRITICAL FIX: Load users specifically for this channel's messages
-                            self.viewModel.viewState.loadUsersForVisibleMessages(channelId: self.viewModel.channel.id)
-                            
-                            // EMERGENCY FIX: Force restore all users for this channel
-                            self.viewModel.viewState.forceRestoreUsersForChannel(channelId: self.viewModel.channel.id)
-                            
-                            // FINAL CHECK: Ensure all loaded messages have their authors
-                            let finalMessageIds = self.viewModel.viewState.channelMessages[self.viewModel.channel.id] ?? []
-                            var missingAuthors = 0
-                            for messageId in finalMessageIds {
-                                if let message = self.viewModel.viewState.messages[messageId] {
-                                    if self.viewModel.viewState.users[message.author] == nil {
-                                        missingAuthors += 1
-                                        // Create emergency placeholder
-                                        let placeholder = Types.User(
-                                            id: message.author,
-                                            username: "User \(String(message.author.suffix(4)))",
-                                            discriminator: "0000",
-                                            relationship: .None
-                                        )
-                                        self.viewModel.viewState.users[message.author] = placeholder
-                                        // print("🚨 EMERGENCY_PLACEHOLDER: Created for author \(message.author)")
-                                    }
-                                }
-                            }
-                            
-                            if missingAuthors > 0 {
-                                // print("🚨 FINAL_CHECK: Created \(missingAuthors) emergency placeholders for missing authors")
-                            } else {
-                                // print("✅ FINAL_CHECK: All message authors are present in users dictionary")
-                            }
-                            
-                            if addedMessagesCount > 0 {
-                                // print("✅ BEFORE_CALL: Added \(addedMessagesCount) new messages, implementing precise reference scroll")
-                                
-                                // CRITICAL: Save the reference message ID before any updates
-                                let referenceMessageId = self.lastBeforeMessageId
-                                // print("🎯 REFERENCE_MSG: Saved reference ID '\(referenceMessageId ?? "nil")' before data updates")
-                                
-                                                            // CRITICAL: Mark data source as updating before changes
-                            self.isDataSourceUpdating = true
-                            print("📊 DATA_SOURCE: Marking as updating for loadMoreMessages")
-                            
-                            // Update data source
-                            self.dataSource = LocalMessagesDataSource(
-                                viewModel: self.viewModel,
-                                viewController: self,
-                                localMessages: messagesForDataSource
-                            )
-                            self.tableView.dataSource = self.dataSource
-                            
-                            // Force layout update first
-                            self.tableView.layoutIfNeeded()
-                            
-                            // Reload data
-                            self.tableView.reloadData()
-                            
-                            // CRITICAL: Reset flag after changes complete
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-                                self?.isDataSourceUpdating = false
-                                print("📊 DATA_SOURCE: Marking as stable after loadMoreMessages")
-                            }
-                                
-                                // Multiple attempts to ensure precise scrolling
-                                self.scrollToReferenceMessageWithRetry(
-                                    referenceId: referenceMessageId,
-                                    messagesArray: messagesForDataSource,
-                                    maxRetries: 3
-                                )
-                                
-                                // print("📢 BEFORE_CALL: Added \(addedMessagesCount) older messages, initiated reference scroll")
-                            } else {
-                                // If no messages were added, just update data source without reload
-                                self.dataSource = LocalMessagesDataSource(
-                                    viewModel: self.viewModel,
-                                    viewController: self,
-                                    localMessages: messagesForDataSource
-                                )
-                                self.tableView.dataSource = self.dataSource
-                                
-                                // If no new messages were loaded, show a notification to the user
-                                // if result.messages.isEmpty {
-                                //     // CRITICAL FIX: Update lastEmptyResponseTime when API returns empty messages
-                                //     self.lastEmptyResponseTime = Date()
-                                //     DispatchQueue.main.async {
-                                //         let banner = NotificationBanner(message: "You have reached the beginning of the conversation.")
-                                //         banner.show(duration: 2.0)
-                                //     }
-                                // }
-                            }
-                        } else {
-                            // print("❌ BEFORE_CALL: API response was empty")
-                            
-                            // CRITICAL FIX: Update lastEmptyResponseTime when API returns empty response
-                            self.lastEmptyResponseTime = Date()
-                            
-                            // // Show notification that there are no more messages
-                            // DispatchQueue.main.async {
-                            //     let banner = NotificationBanner(message: "You have reached the beginning of the conversation.")
-                            //     banner.show(duration: 2.0)
-                            // }
-                        }
+                        // DATABASE REACTIVE: No need to process API response manually
+                        // DatabaseObserver automatically updates ViewState when messages are saved
+                        
+                        // Just clean up loading states (DatabaseObserver handles UI updates)
                         
                         // Change state to not loading
                         self.messageLoadingState = .notLoading
@@ -2511,34 +2278,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         
                         // CRITICAL FIX: Reset the older messages loading flag
                         self.isLoadingOlderMessages = false
-                    }
-                } catch {
-                    // Handle errors
-                    // print("❗️ BEFORE_CALL: Error loading messages: \(error)")
-                    
-                    // Change state to not loading on main thread
-                    await MainActor.run {
-                        // Hide loading indicator
-                        self.loadingHeaderView.isHidden = true
-                        
-                        // Always update lastSuccessfulLoadTime to prevent repeated calls
-                        self.lastSuccessfulLoadTime = Date()
-                        
-                        self.messageLoadingState = .notLoading
-                        self.isLoadingMore = false
-                        
-                        // Update table view bouncing behavior after loading error
-                        self.updateTableViewBouncing()
-                        
-                        // CRITICAL FIX: Reset the older messages loading flag
-                        self.isLoadingOlderMessages = false
-                        
-                        // Show error to user
-                        DispatchQueue.main.async {
-//                            let banner = NotificationBanner(message: "Error loading messages")
-//                            banner.show(duration: 2.0)
-                        }
-                    }
+                        // Also clear suppression in case no batch occurred
+                        self.suppressAutoScroll = false
                 }
             }
             
@@ -2546,6 +2287,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             messageLoadingState = .loading
             loadingTask = loadTask
             isLoadingMore = true
+            // Suppress auto-scroll during pagination
+            suppressAutoScroll = true
             
             // Safety timer to prevent state lock
             DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
@@ -2555,7 +2298,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 self.loadingHeaderView.isHidden = true
                 
                 if self.messageLoadingState == .loading {
-                    // print("⚠️ BEFORE_CALL: Loading time exceeded maximum duration - cancelling task")
                     self.loadingTask?.cancel()
                     self.loadingTask = nil
                     self.messageLoadingState = .notLoading
@@ -2567,6 +2309,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     
                     // CRITICAL FIX: Reset the older messages loading flag
                     self.isLoadingOlderMessages = false
+                    // Ensure suppression is cleared on timeout
+                    self.suppressAutoScroll = false
                     
                     // Show timeout message
 //                    let banner = NotificationBanner(message: "Loading time exceeded. Please try again.")
@@ -2581,7 +2325,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         objc_sync_enter(self)
         defer { objc_sync_exit(self) }
         isLoadingMore = value
-        // print("📱 isLoadingMore set to \(value)")
     }
     
     // Public method to reset the nearby loading flag when navigating to a new channel (moved to extension)
@@ -2641,7 +2384,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // CRITICAL: Configure textView delegate BEFORE setting up mention functionality
         let textView = messageInputView.textView
         textView.delegate = self
-        // print("DEBUG: Set textView.delegate to self (MessageableChannelViewController)")
         
         // Setup mention functionality AFTER setting delegate
         messageInputView.setupMentionFunctionality(viewState: viewModel.viewState, channel: viewModel.channel, server: viewModel.server)
@@ -2657,25 +2399,187 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // This will be implemented when handling unreads
     }
     
+    // MARK: - Intelligent Batch Update Methods
+    
+    /// Determines whether to use batch updates or full reload based on the changes
+    private func shouldUseBatchUpdates(oldMessages: [String], newMessages: [String], forceUpdate: Bool) -> Bool {
+        // Always use full reload for force updates (reactions, etc.)
+        if forceUpdate {
+            return false
+        }
+        
+        // If either array is empty, use full reload for clarity
+        if oldMessages.isEmpty || newMessages.isEmpty {
+            return false
+        }
+        
+        // If change is more than 50%, use full reload for safety
+        let changePercentage = abs(Double(newMessages.count - oldMessages.count)) / Double(oldMessages.count)
+        if changePercentage > 0.5 {
+            return false
+        }
+        
+        // Check if this is a simple append or prepend operation
+        let oldSet = Set(oldMessages)
+        let newSet = Set(newMessages)
+        
+        let added = newSet.subtracting(oldSet)
+        let removed = oldSet.subtracting(newSet)
+        
+        // If we have both additions and deletions, use full reload for safety
+        if !added.isEmpty && !removed.isEmpty {
+            return false
+        }
+        
+        // If we only have additions at the beginning or end, use batch updates
+        if !added.isEmpty && removed.isEmpty {
+            // Check if additions are at the beginning (new messages)
+            let newMessagePrefix = Array(newMessages.prefix(added.count))
+            let isAtBeginning = Set(newMessagePrefix) == added
+            
+            // Check if additions are at the end (older messages)
+            let newMessageSuffix = Array(newMessages.suffix(added.count))
+            let isAtEnd = Set(newMessageSuffix) == added
+            
+            return isAtBeginning || isAtEnd
+        }
+        
+        // For deletions only, use batch updates if they're at edges
+        if added.isEmpty && !removed.isEmpty {
+            return true
+        }
+        
+        return false
+    }
+    
+    /// Updates the table view with intelligent diff calculation and batch updates
+    private func updateTableViewWithDiff(oldMessages: [String], newMessages: [String]) {
+        
+        // Safety check: Verify table is in valid state
+        let currentRowCount = tableView.numberOfRows(inSection: 0)
+        if currentRowCount != oldMessages.count {
+            fallbackToFullReload(newMessages: newMessages)
+            return
+        }
+        
+        // Calculate the diff
+        let oldSet = Set(oldMessages)
+        let newSet = Set(newMessages)
+        
+        let added = newSet.subtracting(oldSet)
+        let removed = oldSet.subtracting(newSet)
+        
+        
+        // Determine insertion/deletion index paths
+        var insertions: [IndexPath] = []
+        var deletions: [IndexPath] = []
+        
+        // Handle additions
+        if !added.isEmpty {
+            // Check if additions are at the beginning (new messages at top)
+            let addedCount = added.count
+            let newMessagePrefix = Array(newMessages.prefix(addedCount))
+            let isAtBeginning = Set(newMessagePrefix) == added
+            
+            if isAtBeginning {
+                insertions = (0..<addedCount).map { IndexPath(row: $0, section: 0) }
+            } else {
+                // Check if additions are at the end (older messages at bottom)
+                let newMessageSuffix = Array(newMessages.suffix(addedCount))
+                let isAtEnd = Set(newMessageSuffix) == added
+                
+                if isAtEnd {
+                    let startIndex = newMessages.count - addedCount
+                    insertions = (startIndex..<newMessages.count).map { IndexPath(row: $0, section: 0) }
+                } else {
+                    fallbackToFullReload(newMessages: newMessages)
+                    return
+                }
+            }
+        }
+        
+        // Handle deletions
+        if !removed.isEmpty {
+            for (index, messageId) in oldMessages.enumerated() {
+                if removed.contains(messageId) {
+                    deletions.append(IndexPath(row: index, section: 0))
+                }
+            }
+        }
+        
+        // Capture scroll position before updates
+        let scrollAnchor = captureScrollAnchor(referenceId: nil)
+        
+        // Update localMessages BEFORE batch updates
+        localMessages = newMessages
+        
+        // Update data source
+        if let existingDataSource = dataSource as? LocalMessagesDataSource {
+            existingDataSource.updateMessages(newMessages)
+        } else {
+            dataSource = LocalMessagesDataSource(viewModel: viewModel, viewController: self, localMessages: newMessages)
+            tableView.dataSource = dataSource
+        }
+        
+        // Perform batch updates with error handling
+        tableView.performBatchUpdates({
+            if !deletions.isEmpty {
+                self.tableView.deleteRows(at: deletions, with: .none)
+            }
+            if !insertions.isEmpty {
+                self.tableView.insertRows(at: insertions, with: .none)
+            }
+        }, completion: { [weak self] finished in
+            guard let self = self else { return }
+            
+            if finished {
+                
+                // Verify row count after update
+                let finalRowCount = self.tableView.numberOfRows(inSection: 0)
+                if finalRowCount != newMessages.count {
+                    self.fallbackToFullReload(newMessages: newMessages)
+                    return
+                }
+                
+                // Restore scroll position
+                self.restoreScrollPosition(anchor: scrollAnchor, messagesArray: newMessages)
+            } else {
+                self.fallbackToFullReload(newMessages: newMessages)
+            }
+        })
+    }
+    
+    /// Fallback method to perform full table reload when batch updates can't be used
+    private func fallbackToFullReload(newMessages: [String]) {
+        
+        localMessages = newMessages
+        
+        // Update data source
+        if let existingDataSource = dataSource as? LocalMessagesDataSource {
+            existingDataSource.updateMessages(newMessages)
+        } else {
+            dataSource = LocalMessagesDataSource(viewModel: viewModel, viewController: self, localMessages: newMessages)
+            tableView.dataSource = dataSource
+        }
+        
+        tableView.reloadData()
+    }
+    
     // FAST: Lightweight refresh method with minimal overhead
     func refreshMessages(forceUpdate: Bool = false) {
-        print("🔄 targetMessageProtectionActive: \(targetMessageProtectionActive)")
         
         // CRITICAL FIX: Don't refresh if we're in the middle of nearby loading (unless forced for reactions)
         if messageLoadingState == .loading && !forceUpdate {
-            print("🔄 BLOCKED: refreshMessages blocked - nearby loading in progress")
             return
         }
         
         // CRITICAL FIX: Only block if protection is active AND we don't have a new target message to process (unless forced for reactions)
         if targetMessageProtectionActive && (targetMessageId == nil || targetMessageProcessed) && !forceUpdate {
-            print("🔄 BLOCKED: refreshMessages blocked - target message protection active and no new target")
             return
         }
         
         // Skip if user is interacting with table
         guard !tableView.isDragging, !tableView.isDecelerating else { 
-            // print("🔄 Skipping refreshMessages - user is interacting with table")
             return 
         }
         
@@ -2683,10 +2587,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         if let lastScrollUpTime = lastManualScrollUpTime,
            Date().timeIntervalSince(lastScrollUpTime) < 10.0,
            targetMessageId == nil { 
-            // print("🔄 Skipping refreshMessages - user recently scrolled up (no target message)")
             return 
         } else if targetMessageId != nil {
-            // print("🔄 Continuing refreshMessages despite recent scroll - have target message")
         }
         
         // Get new messages directly - no async overhead
@@ -2697,42 +2599,48 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // CRITICAL: Check if actual message objects exist before refreshing
         let hasActualMessages = channelMessages.first(where: { viewModel.viewState.messages[$0] != nil }) != nil
         if !hasActualMessages {
-            // print("⚠️ refreshMessages: Only message IDs found, no actual messages - need to load messages")
             
             // CRITICAL FIX: Don't force reload if target message protection is active (unless forced for reactions)
             if targetMessageProtectionActive && !forceUpdate {
-                print("🔄 BLOCKED: Force reload blocked - target message protection active")
                 return
             }
             
             // CRITICAL FIX: Don't load from database in refreshMessages - this should only happen in initial setup
-            print("🔄 BLOCKED: refreshMessages called without actual messages - skipping database load")
             return
         }
         
         let wasNearBottom = isUserNearBottom()
-        localMessages = channelMessages
+        
+        // Capture old messages for diff calculation
+        let oldMessages = localMessages
+        let newMessages = channelMessages
         
         // CRITICAL: Mark data source as updating to protect scroll events
         isDataSourceUpdating = true
-        print("📊 DATA_SOURCE: Marking as updating before table reload")
         
-        // FAST: Update existing data source if possible
-        if let existingDataSource = dataSource as? LocalMessagesDataSource {
-            existingDataSource.updateMessages(localMessages)
-                } else {
-            // Only create new data source if needed
-            dataSource = LocalMessagesDataSource(viewModel: viewModel, viewController: self, localMessages: localMessages)
-            tableView.dataSource = dataSource
+        // Decide whether to use batch updates or full reload
+        if shouldUseBatchUpdates(oldMessages: oldMessages, newMessages: newMessages, forceUpdate: forceUpdate) {
+            updateTableViewWithDiff(oldMessages: oldMessages, newMessages: newMessages)
+        } else {
+            
+            localMessages = newMessages
+            
+            // FAST: Update existing data source if possible
+            if let existingDataSource = dataSource as? LocalMessagesDataSource {
+                existingDataSource.updateMessages(localMessages)
+            } else {
+                // Only create new data source if needed
+                dataSource = LocalMessagesDataSource(viewModel: viewModel, viewController: self, localMessages: localMessages)
+                tableView.dataSource = dataSource
+            }
+            
+            // FAST: Single reload operation
+            tableView.reloadData()
         }
-        
-        // FAST: Single reload operation
-        tableView.reloadData()
         
         // CRITICAL: Reset flag after reload with slight delay to prevent immediate scroll conflicts
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.isDataSourceUpdating = false
-            print("📊 DATA_SOURCE: Marking as stable after table reload")
         }
         
         // Update table view bouncing behavior after refresh
@@ -2749,36 +2657,39 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // CRITICAL FIX: Check for target message after reload - ONLY call scrollToTargetMessage ONCE
         if let targetId = targetMessageId, !targetMessageProcessed {
-            print("🎯 Found unprocessed targetMessageId in refreshMessages: \(targetId)")
-            print("🎯 localMessages count: \(localMessages.count)")
             
             // Check if target message is actually loaded
             let targetInLocalMessages = localMessages.contains(targetId)
             let targetInViewState = viewModel.viewState.messages[targetId] != nil
             
             if targetInLocalMessages && targetInViewState {
-                print("✅ Target message is loaded in refreshMessages, calling scrollToTargetMessage ONCE")
                 // Mark as processed BEFORE calling scrollToTargetMessage to prevent multiple calls
                 targetMessageProcessed = true
                 scrollToTargetMessage()
             } else {
-                print("❌ Target message NOT loaded in refreshMessages, skipping scroll")
             }
         } else if let targetId = targetMessageId, targetMessageProcessed {
-            print("🎯 Found targetMessageId but already processed: \(targetId) - preserving target position")
             // CRITICAL FIX: Do NOT auto-scroll when we have a target message
             // The target message should remain visible regardless of bottom position
         } else if wasNearBottom {
+            // CRITICAL FIX: Don't auto-scroll if we're loading more messages (maintaining position at bottom)
+            if isLoadingMore {
+                return
+            }
+            
+            // Prevent auto-scroll while data source updates or suppression is active
+            if isDataSourceUpdating || suppressAutoScroll {
+                return
+            }
+            
             // CRITICAL FIX: Don't auto-scroll if user was positioned on a target message recently
             if targetMessageProtectionActive || isInTargetMessagePosition {
-                print("🎯 REFRESH_MESSAGES: Target message protection or position active, skipping auto-scroll")
                 return
             }
             
             // CRITICAL FIX: Don't auto-scroll if target message was highlighted recently (within 30 seconds)
             if let highlightTime = lastTargetMessageHighlightTime,
                Date().timeIntervalSince(highlightTime) < 30.0 {
-                print("🎯 REFRESH_MESSAGES: Target message highlighted recently (\(Date().timeIntervalSince(highlightTime))s ago), skipping auto-scroll")
                 return
             }
             
@@ -2786,14 +2697,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 
-                print("🎯 REFRESH_MESSAGES: Auto-scrolling because user was near bottom and no target protection")
                 
                 // Use proper scrolling method that considers keyboard state
                 if self.isKeyboardVisible && !self.localMessages.isEmpty {
-                    let lastIndex = self.localMessages.count - 1
-                    if lastIndex >= 0 && lastIndex < self.tableView.numberOfRows(inSection: 0) {
-                        let indexPath = IndexPath(row: lastIndex, section: 0)
-                        self.safeScrollToRow(at: indexPath, at: .bottom, animated: false, reason: "refresh messages with keyboard")
+                    if self.tableView.numberOfRows(inSection: 0) > 0 {
+                        let indexPath = IndexPath(row: 0, section: 0)
+                        self.safeScrollToRow(at: indexPath, at: .top, animated: false, reason: "refresh messages with keyboard")
                     }
                 } else {
                     self.scrollToBottom(animated: false)
@@ -2834,23 +2743,19 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 // Also cache it for future use
                 self.cachedMessages = Array(channelMessages)
                 self.lastReturnedRowCount = channelMessages.count
-                // print("🔒 LocalMessagesDataSource init: Using \(channelMessages.count) messages from viewState")
             } else if !localMessages.isEmpty {
                 // Only if viewState has no messages, use passed localMessages
                 self.localMessages = localMessages
                 // Also cache it for future use
                 self.cachedMessages = Array(localMessages)
                 self.lastReturnedRowCount = localMessages.count
-                // print("🔒 LocalMessagesDataSource init: Using \(localMessages.count) passed messages")
             } else if !viewModel.messages.isEmpty {
                 // As last resort, use viewModel.messages
                 self.localMessages = viewModel.messages
                 // Also cache it for future use
                 self.cachedMessages = Array(viewModel.messages)
                 self.lastReturnedRowCount = viewModel.messages.count
-                // print("🔒 LocalMessagesDataSource init: Using \(viewModel.messages.count) messages from viewModel")
             } else {
-                // print("⚠️ LocalMessagesDataSource init: No messages available!")
             }
             
             super.init()
@@ -2862,7 +2767,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 self.localMessages = Array(messages)
                 self.cachedMessages = Array(messages)
                 self.lastReturnedRowCount = messages.count
-                print("🔄 FORCE_UPDATE: Data source updated with \(messages.count) messages")
             }
         }
         
@@ -2870,7 +2774,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             return cacheQueue.sync {
                 let count = localMessages.count
                 lastReturnedRowCount = count
-                print("📊 LOCAL DATA SOURCE: Returning \(count) rows (localMessages: \(localMessages.count))")
                 return count
             }
         }
@@ -2880,7 +2783,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             return cacheQueue.sync {
                 // Double check bounds against both local messages and last returned count
                 guard indexPath.row < localMessages.count && indexPath.row < lastReturnedRowCount else {
-                    print("⚠️ BOUNDS_ERROR: indexPath.row=\(indexPath.row), localMessages.count=\(localMessages.count), lastReturnedRowCount=\(lastReturnedRowCount)")
                     return createFallbackCell(tableView: tableView, indexPath: indexPath, reason: "Index out of bounds")
                 }
                 
@@ -2894,14 +2796,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     message = viewStateMessage
                     messageCache[messageId] = viewStateMessage // Cache for future use
                 } else {
-                    print("⚠️ MESSAGE_NOT_FOUND: messageId=\(messageId) at index=\(indexPath.row)")
                     return createFallbackCell(tableView: tableView, indexPath: indexPath, reason: "Message not found: \(messageId)")
                 }
                 
                 // Handle system messages
                 if message.system != nil {
                     guard let systemCell = tableView.dequeueReusableCell(withIdentifier: "SystemMessageCell", for: indexPath) as? SystemMessageCell else {
-                        print("⚠️ SYSTEM_CELL_ERROR: Failed to dequeue SystemMessageCell")
                         return createFallbackCell(tableView: tableView, indexPath: indexPath, reason: "System cell dequeue failed")
                     }
                     
@@ -2911,7 +2811,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Handle regular messages with better safety
                 guard let messageCell = tableView.dequeueReusableCell(withIdentifier: "MessageCell", for: indexPath) as? MessageCell else {
-                    print("⚠️ MESSAGE_CELL_ERROR: Failed to dequeue MessageCell")
                     return createFallbackCell(tableView: tableView, indexPath: indexPath, reason: "Message cell dequeue failed")
                 }
                 
@@ -2923,7 +2822,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     author = foundAuthor
                     userCache[message.author] = foundAuthor // Cache for future use
                 } else {
-                    print("⚠️ AUTHOR_NOT_FOUND: Creating fallback author for messageId=\(messageId)")
                     let fallbackAuthor = User(
                         id: message.author,
                         username: "Loading...",
@@ -2990,7 +2888,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 activityIndicator.trailingAnchor.constraint(equalTo: fallbackCell.contentView.trailingAnchor, constant: -16)
             ])
             
-            print("🔄 FALLBACK_CELL: Created for index=\(indexPath.row), reason=\(reason)")
             return fallbackCell
         }
         
@@ -3003,7 +2900,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // OPTIMIZATION: Clean up cache for messages no longer visible
                 self.cleanupCache(currentMessages: messages)
-                // print("🔄 LocalMessagesDataSource: Updated with \(messages.count) messages")
             }
         }
         
@@ -3023,7 +2919,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 }
             }
             
-            print("🧹 CACHE_CLEANUP: messageCache=\(messageCache.count), userCache=\(userCache.count)")
         }
     }
     
@@ -3049,7 +2944,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 }
             }
             
-            // print("👥 LOAD: Need to load \(neededUserIds.count) users for visible messages")
             
             // Load only missing users
             var usersToLoad = [String]()
@@ -3060,44 +2954,36 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             }
             
             if !usersToLoad.isEmpty {
-                // print("👥 LOAD: Loading \(usersToLoad.count) missing users")
                 // Here you would call API to load specific users
                 // For now, we'll just log it
             }
         }
     }
-    
     private func loadInitialMessages() async {
         let channelId = viewModel.channel.id
         
         // CRITICAL FIX: Reset empty response time when loading initial messages
         lastEmptyResponseTime = nil
-        print("🔄 LOAD_INITIAL: Reset lastEmptyResponseTime for initial load")
         
         // CRITICAL FIX: Don't reload if user is in target message position
         if isInTargetMessagePosition && targetMessageId == nil {
-            print("🎯 LOAD_INITIAL: User is in target message position, skipping reload to preserve position")
             return
         }
         
         // Check if already loading to prevent duplicate calls
         MessageableChannelViewController.loadingMutex.lock()
         if MessageableChannelViewController.loadingChannels.contains(channelId) {
-            print("⚠️ Channel \(channelId) is already being loaded, skipping duplicate request")
             MessageableChannelViewController.loadingMutex.unlock()
             return
         } else {
-            print("🚀 LOAD_INITIAL: Starting API call for channel \(channelId)")
             MessageableChannelViewController.loadingChannels.insert(channelId)
             messageLoadingState = .loading
-            print("🎯 Set messageLoadingState to .loading for initial load")
             MessageableChannelViewController.loadingMutex.unlock()
         }
         
         // CRITICAL FIX: Hide empty state immediately when loading starts (especially for cross-channel)
         DispatchQueue.main.async {
             self.hideEmptyStateView()
-            print("🚫 LOAD_INITIAL: Hidden empty state at start of loading")
         }
         
         // Ensure cleanup when done
@@ -3108,7 +2994,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // CRITICAL FIX: Reset loading state when done
             messageLoadingState = .notLoading
-            print("🎯 Reset messageLoadingState to .notLoading - loadInitialMessages complete")
             
             // Remove loading indicator
             DispatchQueue.main.async {
@@ -3123,7 +3008,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         let hasExistingMessages = viewModel.viewState.channelMessages[channelId]?.isEmpty == false
         
         if hasExistingMessages {
-            // print("📊 Found existing messages for channel: \(channelId), keeping them visible while loading new ones")
             
             // Keep existing messages visible, just show loading indicator
             DispatchQueue.main.async { [weak self] in
@@ -3136,7 +3020,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 self.tableView.tableFooterView = spinner
             }
         } else {
-            // print("🧹 No existing messages for channel: \(channelId), starting fresh")
             
             // Only clear if there are no existing messages
         viewModel.viewState.channelMessages[channelId] = []
@@ -3160,38 +3043,30 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
         
         // Log loading states
-        // print("📱 Current ViewState: channelMessages entries = \(viewModel.viewState.channelMessages.count)")
-        // print("📱 Current LocalMessages: count = \(self.localMessages.count)")
         
         // 🎯 REACTIVE ARCHITECTURE: Use ViewModel for data loading
         // ViewModel handles Database read + Network sync in background
-        print("💾 REACTIVE: Delegating to ViewModel for data loading")
         
         await viewModel.loadChannelMessages()
         
-        print("✅ REACTIVE: ViewModel loaded data - UI will update via DatabaseObserver")
         
         if let targetId = self.targetMessageId {
             // 🎯 REACTIVE: Use ViewModel to load target message
-            print("🎯 REACTIVE: Delegating target message \(targetId) to ViewModel")
             
             // Set protection flags
     messageLoadingState = .loading
     isInTargetMessagePosition = true
     lastTargetMessageHighlightTime = Date()
-            print("🎯 REACTIVE: Protection flags set")
             
             // Let ViewModel handle loading
             let foundInDB = await viewModel.loadTargetMessage(targetId)
             
             if foundInDB {
-                print("💾 REACTIVE: Target message loaded from Database")
                 await MainActor.run {
                     self.refreshMessages()
                                     self.scrollToTargetMessage()
                                     }
                                 } else {
-                print("🔄 REACTIVE: ViewModel triggered network sync for target message")
             }
         }
     }
@@ -3200,7 +3075,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     private func loadRegularMessages() async {
         // COMPREHENSIVE TARGET MESSAGE PROTECTION
         if targetMessageProtectionActive {
-            print("🎯 LOAD_REGULAR: Target message protection active, skipping regular load")
             return
         }
         
@@ -3208,28 +3082,23 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         messageLoadingState = .loading
         DispatchQueue.main.async {
             self.hideEmptyStateView()
-            print("🚫 LOAD_REGULAR: Hidden empty state for regular loading")
         }
         
         // Ensure cleanup when done
         defer {
             messageLoadingState = .notLoading
-            print("🎯 LOAD_REGULAR: Reset loading state - complete")
         }
         
-        // print("📜 Loading regular messages")
         let channelId = viewModel.channel.id
         
         // Check if we already have messages in memory
         if let existingMessages = viewModel.viewState.channelMessages[channelId], !existingMessages.isEmpty {
-            // print("📊 Found \(existingMessages.count) existing messages in memory - using cached data")
             
             // CRITICAL FIX: Create an explicit copy to avoid reference issues
             let messagesCopy = Array(existingMessages)
             
             // Update our local messages array directly
             self.localMessages = messagesCopy
-            // print("🔄 Updated localMessages with \(messagesCopy.count) messages from viewState")
             
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
@@ -3243,7 +3112,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Reload table data
                 self.tableView.reloadData()
-                // print("📊 TABLE_VIEW reloaded with \(self.localMessages.count) messages")
                 
                 // Check if user has manually scrolled up recently
                 let hasManuallyScrolledUp = self.lastManualScrollUpTime != nil && 
@@ -3276,104 +3144,29 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 }
             }
         } else {
-            // No messages in memory, fetch from server
-            // print("🔄 No existing messages, fetching from server")
+            // No messages in memory, load from database first
             
             // Show skeleton loading view
             DispatchQueue.main.async {
                 self.showSkeletonView()
             }
             
-            // TIMING: Start measuring API call duration
-            let apiStartTime = Date()
-            // print("⏱️ API_CALL_START: \(apiStartTime.timeIntervalSince1970)")
+            // DATABASE REACTIVE ARCHITECTURE: Load from database first
+            await viewModel.loadChannelMessages()
             
-            do {
-                // Call API with proper error handling
-                print("🌐 API CALL: loadMoreMessages (initial) - Channel: \(viewModel.channel.id)")
-                let result = await viewModel.loadMoreMessages(before: nil)
-                print("✅ API RESPONSE: loadMoreMessages (initial) - Result: \(result != nil ? "Success with \(result!.messages.count) messages" : "Nil")")
-                
-                // DEBUG: Check if any messages have replies
-                if let fetchResult = result {
-                    let messagesWithReplies = fetchResult.messages.filter { $0.replies?.isEmpty == false }
-                    print("🔗 API_DEBUG: Out of \(fetchResult.messages.count) messages, \(messagesWithReplies.count) have replies")
-                    for message in messagesWithReplies {
-                        print("🔗 API_DEBUG: Message \(message.id) has replies: \(message.replies ?? [])")
-                    }
-                }
-                
-                // TIMING: Calculate API call duration
-                let apiEndTime = Date()
-                let apiDuration = apiEndTime.timeIntervalSince(apiStartTime)
-                // print("⏱️ API_CALL_END: \(apiEndTime.timeIntervalSince1970)")
-                // print("⏱️ API_CALL_DURATION: \(String(format: "%.2f", apiDuration)) seconds")
-                
-                // Process the result
-            if let fetchResult = result, !fetchResult.messages.isEmpty {
-                    // print("✅ Successfully loaded \(fetchResult.messages.count) messages from API in \(String(format: "%.2f", apiDuration))s")
-                    
-                    // TIMING: Start processing time
-                    let processingStartTime = Date()
-                    // print("⏱️ PROCESSING_START: \(processingStartTime.timeIntervalSince1970)")
-                
-                // Process users from the response
-                for user in fetchResult.users {
-                    viewModel.viewState.users[user.id] = user
-                }
-                
-                // Process members if present
-                if let members = fetchResult.members {
-                    for member in members {
-                        viewModel.viewState.members[member.id.server, default: [:]][member.id.user] = member
-                    }
-                }
-                
-                // Process messages - save to both viewState
-                for message in fetchResult.messages {
-                    viewModel.viewState.messages[message.id] = message
-                }
-                        
-                        // Fetch reply message content for messages that have replies
-                        print("🔗 CALLING fetchReplyMessagesContentAndRefreshUI with \(fetchResult.messages.count) messages")
-                        await fetchReplyMessagesContentAndRefreshUI(for: fetchResult.messages)
-                        
-                        // CRITICAL FIX: Also check for any preloaded messages that might have replies
+            // Check if we got messages from database
+            let dbMessageCount = viewModel.messages.count
+            
+            // Sync local messages with viewModel
+            await MainActor.run {
+                self.localMessages = viewModel.messages
+            }
+            
+            // Fetch reply content for messages that have replies
                         let allCurrentMessages = localMessages.compactMap { messageId in
                             viewModel.viewState.messages[messageId]
                         }
-                        print("🔗 PRELOAD_CHECK: Checking \(allCurrentMessages.count) total messages for missing replies after regular load")
                         await fetchReplyMessagesContentAndRefreshUI(for: allCurrentMessages)
-                
-                // Sort messages by creation timestamp to ensure reverse chronological order (newest first)
-                let sortedMessages = fetchResult.messages.sorted { msg1, msg2 in
-                    let date1 = createdAt(id: msg1.id)
-                    let date2 = createdAt(id: msg2.id)
-                    return date1 > date2
-                }
-                
-                // Create the list of sorted message IDs
-                let sortedIds = sortedMessages.map { $0.id }
-                
-                // CRITICAL: Update our local messages array directly
-                await MainActor.run {
-                    // Update our local copy
-                    self.localMessages = sortedIds
-                    // Also update the channel messages in viewState for consistency
-                    self.viewModel.viewState.channelMessages[channelId] = sortedIds
-                    // CRITICAL: Ensure viewModel.messages is also synced
-                    self.viewModel.messages = sortedIds
-                    }
-                    
-                    // TIMING: Calculate processing duration
-                    let processingEndTime = Date()
-                    let processingDuration = processingEndTime.timeIntervalSince(processingStartTime)
-                    // print("⏱️ PROCESSING_END: \(processingEndTime.timeIntervalSince1970)")
-                    // print("⏱️ PROCESSING_DURATION: \(String(format: "%.2f", processingDuration)) seconds")
-                    
-                    // TIMING: Start UI update time
-                    let uiStartTime = Date()
-                    // print("⏱️ UI_UPDATE_START: \(uiStartTime.timeIntervalSince1970)")
             
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
@@ -3381,11 +3174,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 // Hide skeleton and show messages
                 self.hideSkeletonView()
                 
-                    // print("📊 localMessages now has \(self.localMessages.count) messages")
                     
                     // CRITICAL: Mark data source as updating before changes
                     self.isDataSourceUpdating = true
-                    print("📊 DATA_SOURCE: Marking as updating for loadInitialMessages")
                     
                     // Create data source with local messages
                     self.dataSource = LocalMessagesDataSource(viewModel: self.viewModel,
@@ -3399,9 +3190,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     // CRITICAL: Reset flag after changes complete
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                         self?.isDataSourceUpdating = false
-                        print("📊 DATA_SOURCE: Marking as stable after loadInitialMessages")
                     }
-                    // print("📊 TABLE_VIEW reloaded with \(self.localMessages.count) messages")
                     
                     // Check if user has manually scrolled up recently
                     let hasManuallyScrolledUp = self.lastManualScrollUpTime != nil && 
@@ -3432,48 +3221,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         }
                         }
                         
-                        // TIMING: Calculate UI update duration
-                        let uiEndTime = Date()
-                        let uiDuration = uiEndTime.timeIntervalSince(uiStartTime)
-                        // print("⏱️ UI_UPDATE_END: \(uiEndTime.timeIntervalSince1970)")
-                        // print("⏱️ UI_UPDATE_DURATION: \(String(format: "%.2f", uiDuration)) seconds")
-                        
-                        // TIMING: Calculate total duration
-                        let totalDuration = uiEndTime.timeIntervalSince(apiStartTime)
-                        // print("⏱️ TOTAL_LOAD_DURATION: \(String(format: "%.2f", totalDuration)) seconds")
-                        // print("⏱️ BREAKDOWN: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s, UI=\(String(format: "%.2f", uiDuration))s")
-                    }
-                } else {
-                    // TIMING: Calculate failed API call duration
-                    let apiEndTime = Date()
-                    let apiDuration = apiEndTime.timeIntervalSince(apiStartTime)
-                    // print("⏱️ API_CALL_FAILED_DURATION: \(String(format: "%.2f", apiDuration)) seconds")
-                    // print("⚠️ No messages returned from API after \(String(format: "%.2f", apiDuration))s")
-                    
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self = self else { return }
-                        
-                        // Hide skeleton and show empty state
-                        self.hideSkeletonView()
-                        
-                        // Show empty state
-                        self.updateEmptyStateVisibility()
-                    }
-                }
-            } catch {
-                // TIMING: Calculate error duration
-                let apiEndTime = Date()
-                let apiDuration = apiEndTime.timeIntervalSince(apiStartTime)
-                // print("⏱️ API_CALL_ERROR_DURATION: \(String(format: "%.2f", apiDuration)) seconds")
-                // print("❌ Error loading messages after \(String(format: "%.2f", apiDuration))s: \(error)")
-                
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
-                    
-                    // Remove loading spinner
-                    self.tableView.tableFooterView = nil
-                    
-                    // Show empty state
+                // Check if no messages were loaded - show empty state
+                if self.localMessages.isEmpty {
                     self.updateEmptyStateVisibility()
                 }
             }
@@ -3530,26 +3279,21 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     /// Fetch a specific message from the server if it's not in cache
     /// This is used when replying to old messages that aren't currently loaded
     func fetchMessageForReply(messageId: String, channelId: String) async -> Types.Message? {
-        print("🔍 FETCH_REPLY: Delegating to ViewModel for message \(messageId)")
         
         // Delegate to ViewModel
         let message = await viewModel.loadSingleMessage(messageId)
         
         if let message = message {
-            print("✅ FETCH_REPLY: ViewModel returned message")
             return message
         } else {
-            print("🔄 FETCH_REPLY: Message not found in Database/ViewState - network sync triggered")
             
             // Wait a bit for network sync to complete and check again
             try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
             
             // Check if message was loaded by network sync
             if let syncedMessage = viewModel.viewState.messages[messageId] {
-                print("✅ FETCH_REPLY: Message loaded after network sync")
                 return syncedMessage
             } else {
-                print("❌ FETCH_REPLY: Message still not available after sync - possibly deleted or 404")
                 
                 // Message couldn't be loaded - might be deleted (404) or access denied
                 // Return nil and let the UI handle it gracefully
@@ -3560,20 +3304,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     /// Fetch user data if not in cache
     func fetchUserForMessage(userId: String) async {
-        print("👤 FETCH_USER: Delegating to ViewModel for user \(userId)")
         
         // Delegate to ViewModel
         let user = await viewModel.loadUser(userId)
         
         if let user = user {
-            print("✅ FETCH_USER: ViewModel returned user \(user.username)")
         } else {
-            print("🔄 FETCH_USER: ViewModel triggered network sync")
         }
         
         // Old HTTP fetch code removed - network sync happens in background
         if false {
-            print("❌ FETCH_USER: Failed to fetch user (code removed)")
         }
     }
     
@@ -3586,7 +3326,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // CRITICAL FIX: Throttle reply checks to avoid excessive API calls
         let now = Date()
         if let lastCheck = lastReplyCheckTime, now.timeIntervalSince(lastCheck) < replyCheckCooldown {
-            print("🔗 CHECK_THROTTLED: Skipping reply check (last check was \(now.timeIntervalSince(lastCheck))s ago)")
             return
         }
         lastReplyCheckTime = now
@@ -3596,7 +3335,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             viewModel.viewState.messages[messageId]
         }
         
-        print("🔗 CHECK_MISSING: Checking \(currentMessages.count) messages for missing replies")
         
         // Find messages with replies that aren't loaded yet
         var messagesNeedingReplies: [Types.Message] = []
@@ -3618,29 +3356,23 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             if !unloadedReplies.isEmpty {
                 messagesNeedingReplies.append(message)
                 missingReplyIds += unloadedReplies.count
-                print("🔗 CHECK_MISSING: Message \(message.id) has \(unloadedReplies.count) missing replies: \(unloadedReplies)")
             }
         }
         
-        print("🔗 CHECK_MISSING: Summary - Total messages with replies: \(totalMessagesWithReplies), Total reply IDs: \(totalReplyIds), Missing reply IDs: \(missingReplyIds)")
         
         if !messagesNeedingReplies.isEmpty {
-            print("🔗 CHECK_MISSING: Found \(messagesNeedingReplies.count) messages with missing reply content, fetching now...")
             await fetchReplyMessagesContent(for: messagesNeedingReplies)
             
             // Refresh UI after fetching missing replies
             await MainActor.run {
-                print("🔗 CHECK_MISSING: Refreshing UI after loading missing replies")
                 self.refreshMessages()
             }
         } else {
-            print("🔗 CHECK_MISSING: All reply content is already loaded!")
         }
     }
     
     /// Fetch reply message content for messages that have replies and immediately refresh UI
     private func fetchReplyMessagesContentAndRefreshUI(for messages: [Types.Message]) async {
-        print("🔗 FETCH_AND_REFRESH: Starting fetch and refresh for \(messages.count) messages")
         
         // Track which reply IDs we're about to fetch
         var replyIdsBeingFetched: Set<String> = []
@@ -3655,19 +3387,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             }
         }
         
-        print("🔗 FETCH_AND_REFRESH: Will fetch \(replyIdsBeingFetched.count) reply messages")
         
         await fetchReplyMessagesContent(for: messages)
         
         // CRITICAL: Always refresh UI after fetching replies for initial load
         await MainActor.run {
-            print("🔗 FETCH_AND_REFRESH: Refreshing UI after initial reply loading")
             
             // Force a complete refresh if we fetched any replies
             if !replyIdsBeingFetched.isEmpty {
                 // Use reloadData instead of refreshMessages for more complete refresh
                 if let tableView = self.tableView {
-                    print("🔗 FETCH_AND_REFRESH: Forcing complete table reload after fetching \(replyIdsBeingFetched.count) replies")
                     tableView.reloadData()
                 } else {
                     self.refreshMessages()
@@ -3683,7 +3412,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     /// Fetch reply message content for messages that have replies
     private func fetchReplyMessagesContent(for messages: [Types.Message]) async {
-        print("🔗 FETCH_REPLIES: Processing \(messages.count) messages for reply content")
         
         // DEBUG: Check what messages we have and their replies
         var messagesWithReplies = 0
@@ -3693,11 +3421,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             if let replies = message.replies, !replies.isEmpty {
                 messagesWithReplies += 1
                 totalReplyIds += replies.count
-                print("🔗 DEBUG: Message \(message.id) has \(replies.count) replies: \(replies)")
             }
         }
         
-        print("🔗 DEBUG: Found \(messagesWithReplies) messages with replies, total \(totalReplyIds) reply IDs")
         
         // Collect all unique reply message IDs that need to be fetched
         var replyIdsToFetch = Set<String>()
@@ -3710,65 +3436,50 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 // Check if already in cache or being fetched
                 let isInCache = viewModel.viewState.messages[replyId] != nil
                 let isBeingFetched = ongoingReplyFetches.contains(replyId)
-                print("🔗 DEBUG: Reply \(replyId) - In cache: \(isInCache), Being fetched: \(isBeingFetched)")
                 
                 // Only fetch if not already in cache and not being fetched
                 if !isInCache && !isBeingFetched {
                     replyIdsToFetch.insert(replyId)
                     replyChannelMap[replyId] = message.channel
                     ongoingReplyFetches.insert(replyId) // Mark as being fetched
-                    print("🔗 DEBUG: Added \(replyId) to fetch list for channel \(message.channel)")
                 }
             }
         }
         
-        print("🔗 DEBUG: Total unique reply IDs to fetch: \(replyIdsToFetch.count)")
         if !replyIdsToFetch.isEmpty {
-            print("🔗 DEBUG: Reply IDs to fetch: \(Array(replyIdsToFetch))")
         }
         
         guard !replyIdsToFetch.isEmpty else {
-            print("✅ FETCH_REPLIES: All reply messages already cached or no replies found")
             return
         }
         
-        print("🔗 FETCH_REPLIES: Need to fetch \(replyIdsToFetch.count) reply messages")
-        print("🌐 FETCH_REPLIES: About to start API calls for replies!")
         
         // Fetch reply messages concurrently for better performance
-        print("🌐 FETCH_REPLIES: Starting concurrent fetch of \(replyIdsToFetch.count) reply messages")
         await withTaskGroup(of: Void.self) { group in
             for replyId in replyIdsToFetch {
                 group.addTask { [weak self] in
                     guard let self = self,
                           let channelId = replyChannelMap[replyId] else { 
-                        print("❌ FETCH_REPLIES: Missing self or channelId for reply \(replyId)")
                         return 
                     }
                     
-                    print("🔍 FETCH_REPLIES: Starting fetch for reply \(replyId) in channel \(channelId)")
                     if let replyMessage = await self.fetchMessageForReply(messageId: replyId, channelId: channelId) {
-                        print("✅ FETCH_REPLIES: Successfully fetched reply \(replyId)")
                         
                         // Also fetch the author if needed
                         await MainActor.run {
                             if self.viewModel.viewState.users[replyMessage.author] == nil {
-                                print("👥 FETCH_REPLIES: Fetching author \(replyMessage.author) for reply \(replyId)")
                                 Task {
                                     await self.fetchUserForMessage(userId: replyMessage.author)
                                 }
                             } else {
-                                print("👥 FETCH_REPLIES: Author \(replyMessage.author) already cached for reply \(replyId)")
                             }
                         }
                     } else {
-                        print("❌ FETCH_REPLIES: Failed to fetch reply \(replyId)")
                     }
                 }
             }
         }
         
-        print("🔗 FETCH_REPLIES: Completed fetching reply messages")
         
         // CRITICAL FIX: Force UI refresh after fetching replies
         await MainActor.run {
@@ -3779,7 +3490,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // FORCE refresh UI to show newly loaded reply content
             if !replyIdsToFetch.isEmpty {
-                print("🔗 FORCE_REFRESH: Forcing UI refresh after loading \(replyIdsToFetch.count) reply messages")
                 
                 // Force table view to reload data for messages with replies
                 if let tableView = self.tableView {
@@ -3804,7 +3514,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     }
                     
                     if !indexPathsToReload.isEmpty {
-                        print("🔗 FORCE_REFRESH: Reloading \(indexPathsToReload.count) cells with newly fetched replies")
                         tableView.reloadRows(at: indexPathsToReload, with: .none)
                     }
                 }
@@ -3846,7 +3555,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             }
         }
     }
-    
     private func clearRepliesLegacy() {
         let wasEmpty = replies.isEmpty
         
@@ -3890,7 +3598,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         switch action {
         case .edit:
             // Implement editing message functionality
-            print("Edit message: \(message.id)")
             
             // Set the message being edited
             Task {
@@ -3942,17 +3649,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             }
         case .delete:
             // Handle deleting message
-            print("Delete message: \(message.id)")
         case .report:
             // Handle reporting message
-            print("Report message: \(message.id)")
         case .copy:
             // Copy message content to clipboard
             UIPasteboard.general.string = message.content
-            print("Copied message content")
         case .reply:
             // Handle replying to message with proper async handling
-            print("Reply to message: \(message.id)")
             
             // First check if we have the message and its author in cache
             if viewModel.viewState.messages[message.id] != nil,
@@ -3971,7 +3674,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         } else {
                             // Failed to fetch message
                             DispatchQueue.main.async {
-                                print("❌ REPLY_START: Failed to load message for reply")
                             }
                             return
                         }
@@ -3995,10 +3697,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 messageInputView.insertText(mention + " ")
                 messageInputView.focusTextField()
             }
-            // print("Mention user from message: \(message.id)")
         case .markUnread:
             // Handle marking message as unread
-             print("Mark message as unread: \(message.id)")
         case .copyLink:
             // Copy message link to clipboard
             let channelId = message.channel
@@ -4027,10 +3727,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             // Handle emoji reaction
             if emoji == "-1" {
                 // Open emoji picker
-                // print("Open custom emoji picker for message: \(message.id)")
             } else {
                 // Add reaction with the given emoji
-                // print("React with emoji \(emoji) to message: \(message.id)")
                 // Here you would call your API to add the reaction
                 // For example: api.addReaction(messageId: message.id, emoji: emoji)
             }
@@ -4039,7 +3737,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // Add an explicit function to handle sending new messages
     func handleNewMessageSent() {
-        // print("📤 HANDLE_NEW_MESSAGE_SENT: New message sent by user")
         
         // COMPREHENSIVE CLEAR: When user sends a message, clear all target message protection
         clearTargetMessageProtection(reason: "user sent new message")
@@ -4059,23 +3756,21 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // If keyboard is visible, ensure proper scrolling with content inset consideration
             if self.isKeyboardVisible && !self.localMessages.isEmpty {
-                let lastIndex = self.localMessages.count - 1
-                if lastIndex >= 0 && lastIndex < self.tableView.numberOfRows(inSection: 0) {
-                    let indexPath = IndexPath(row: lastIndex, section: 0)
+                // Scroll to first message (index 0) since new messages are now at the top
+                if self.tableView.numberOfRows(inSection: 0) > 0 {
+                    let indexPath = IndexPath(row: 0, section: 0)
                     
-                    // First scroll to bottom
-                    self.safeScrollToRow(at: indexPath, at: .bottom, animated: false, reason: "new message sent - first scroll")
+                    // First scroll to top
+                    self.safeScrollToRow(at: indexPath, at: .top, animated: false, reason: "new message sent - first scroll")
                     
                     // Then do an animated scroll to ensure visibility
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        self.safeScrollToRow(at: indexPath, at: .bottom, animated: true, reason: "new message sent - second scroll")
-                        // print("📜 HANDLE_NEW_MESSAGE_SENT: Double scrolled to ensure visibility")
+                        self.safeScrollToRow(at: indexPath, at: .top, animated: true, reason: "new message sent - second scroll")
                     }
                 }
             } else {
-                // Normal scroll when keyboard is not visible
-                self.scrollToBottom(animated: true)
-                // print("📜 HANDLE_NEW_MESSAGE_SENT: Scrolled to bottom normally")
+                // Normal scroll when keyboard is not visible - scroll to top
+                self.scrollToTop(animated: true)
             }
         }
     }
@@ -4085,8 +3780,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     // Load messages near a specific message ID
     private func loadMessagesNearby(messageId: String) async -> Bool {
         do {
-            print("🔍 NEARBY_API: Fetching messages nearby \(messageId) using nearby API")
-            print("🌐 NEARBY_API: Channel: \(viewModel.channel.id), Target: \(messageId)")
             
             // DB-FIRST: try database before making grouped API calls
             if let _ = await MessageRepository.shared.fetchMessage(id: messageId) {
@@ -4097,7 +3790,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         viewModel.viewState.channelMessages[viewModel.channel.id] = dbMessages.map { $0.id }.sorted { createdAt(id: $0) < createdAt(id: $1) }
                         self.refreshMessages()
                     }
-                    print("💾 NEARBY_GROUP: Served from database, skipping grouped API")
                     return true
                 }
             }
@@ -4125,58 +3817,46 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 return result
             }
             
-            print("✅ NEARBY_API: Response received with \(result.messages.count) messages, \(result.users.count) users")
             
             // DEBUG: Check if any messages have replies
             let messagesWithReplies = result.messages.filter { $0.replies?.isEmpty == false }
-            print("🔗 NEARBY_DEBUG: Out of \(result.messages.count) messages, \(messagesWithReplies.count) have replies")
             for message in messagesWithReplies {
-                print("🔗 NEARBY_DEBUG: Message \(message.id) has replies: \(message.replies ?? [])")
             }
             
             // Check if we got messages and the target message is included
             if !result.messages.isEmpty {
                 let targetFound = result.messages.contains { $0.id == messageId }
-                print("🎯 NEARBY_API: Target message \(messageId) found in nearby results: \(targetFound)")
                 
                 // Debug: Print all message IDs we got
                 let messageIds = result.messages.map { $0.id }
-                print("🔍 NEARBY_API: Returned message IDs: \(messageIds.prefix(5))...\(messageIds.suffix(5))")
                 
                 if !targetFound {
-                    print("⚠️ NEARBY_API: Target message not found in nearby results, trying direct fetch")
                     // Try to fetch the target message from DB first
                     if let dbTarget = await MessageRepository.shared.fetchMessage(id: messageId) {
                         await MainActor.run { viewModel.viewState.messages[dbTarget.id] = dbTarget }
-                        print("💾 DIRECT_FETCH: Target message served from DB")
                     } else {
                         // Fallback to network
                     do {
-                        print("🌐 DIRECT_FETCH: Attempting to fetch target message directly")
                         let targetMessage = try await viewModel.viewState.http.fetchMessage(
                             channel: viewModel.channel.id,
                             message: messageId
                         ).get()
                         
-                        print("✅ DIRECT_FETCH: Successfully fetched target message directly: \(targetMessage.id)")
                         // Store it in viewState
                         viewModel.viewState.messages[targetMessage.id] = targetMessage
                     } catch {
-                        print("❌ DIRECT_FETCH: Could not fetch target message directly: \(error)")
                         // Return false since we couldn't get the target message
                         return false
                         }
                     }
                 }
             } else {
-                print("❌ NEARBY_API: No messages returned from nearby API")
                 return false
             }
             
             // Process and update the view model with new messages
             return await MainActor.run {
                 if !result.messages.isEmpty {
-                    // print("📊 Processing \(result.messages.count) messages from nearby API")
                     
                     // Process all users
                     for user in result.users {
@@ -4212,7 +3892,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     
                     // CRITICAL FIX: Explicitly check for target message ID
                     if !sortedIds.contains(messageId) {
-                        // print("⚠️ Target message missing from nearby results! This should not happen with nearby API.")
                         // If target message is missing, the API call probably failed
                         return false
                     } else {
@@ -4247,13 +3926,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     // CRITICAL: Force synchronization to ensure that viewModel.messages and viewState are in sync
                     viewModel.forceMessagesSynchronization()
                     
-                    // print("✅ Successfully processed messages - ViewModel now has \(viewModel.messages.count) messages")
                     
                     // Verify the target message is included
                     if viewModel.messages.contains(messageId) {
-                        // print("✅ Target message \(messageId) is in the messages array at index: \(viewModel.messages.firstIndex(of: messageId) ?? -1)")
                     } else {
-                        // print("⚠️ Target message \(messageId) is missing from the messages array!")
                     }
                     
                     // CRITICAL FIX: Reset loading states to ensure we can load more messages when scrolling
@@ -4288,7 +3964,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             self.positionTableAtBottomBeforeShowing()
                         }
                         
-                        // print("📊 TABLE_VIEW after nearby reload: \(self.tableView.numberOfRows(inSection: 0)) rows")
                         
                         // Update localMessages to ensure consistency with the view model
                         self.localMessages = self.viewModel.messages
@@ -4296,7 +3971,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     
                     return true
                 } else {
-                    // print("⚠️ No messages found nearby target ID")
                     
                     // Even if no messages were found, reset loading states
                     self.messageLoadingState = .notLoading
@@ -4307,15 +3981,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 }
             }
         } catch {
-            print("❌ NEARBY_API: Error loading messages nearby target: \(error)")
             
             // Check if it's a specific error type
             if let revoltError = error as? RevoltError {
-                print("❌ NEARBY_API: Revolt error details: \(revoltError)")
             } else if let httpError = error as? HTTPError {
-                print("❌ NEARBY_API: HTTP error details: \(httpError)")
             } else {
-                print("❌ NEARBY_API: Unknown error type: \(type(of: error))")
             }
             
             // Reset loading states in case of error
@@ -4333,37 +4003,29 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     private func scrollToTargetMessage() {
         // CRITICAL FIX: Reset processed flag when we have a target message to scroll to
         if let targetId = self.targetMessageId {
-            print("🎯 scrollToTargetMessage called for target: \(targetId), resetting processed flag")
             targetMessageProcessed = false
         }
         
         // CRITICAL FIX: Check if already processed to prevent multiple highlighting
         if targetMessageProcessed {
-            print("🎯 Target message already processed, skipping to prevent multiple highlights")
             return
         }
         
         // CRITICAL FIX: Reset processed flag for new target message
         if let targetId = self.targetMessageId {
-            print("🎯 scrollToTargetMessage called for target: \(targetId)")
         }
         
         guard let targetId = self.targetMessageId else {
             // If no target message, scroll to bottom
-            print("🚫 No target message ID, scrolling to bottom")
             scrollToBottom(animated: false)
             return
         }
         
-        print("🎯 Attempting to scroll to target message: \(targetId)")
-        print("📊 Current message count in localMessages: \(localMessages.count)")
         
         // Debug - print some message IDs to help diagnose
         if !localMessages.isEmpty {
             let firstMsg = localMessages[0]
             let lastMsg = localMessages[localMessages.count - 1]
-            print("📑 First message ID: \(firstMsg)")
-            print("📑 Last message ID: \(lastMsg)")
         }
         
         // Debug: Check current state
@@ -4373,25 +4035,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         let channelMessages = self.viewModel.viewState.channelMessages[self.viewModel.channel.id]
         let isInChannelMessages = channelMessages?.contains(targetId) ?? false
         
-        print("🔍 Target message \(targetId) status:")
-        print("   - In viewState.messages: \(isInViewState)")
-        print("   - In localMessages: \(isInLocalMessages)")
-        print("   - In viewModel.messages: \(isInViewModelMessages)")
-        print("   - In channelMessages: \(isInChannelMessages)")
-        print("   - LocalMessages count: \(localMessages.count)")
-        print("   - ViewModelMessages count: \(viewModel.messages.count)")
-        print("   - ChannelMessages count: \(channelMessages?.count ?? 0)")
         
         // Check if target message exists in localMessages but not in viewState.messages
         if isInLocalMessages && !isInViewState {
-            // print("🔄 Target message exists in localMessages but not in viewState.messages")
             // This shouldn't happen, but let's handle it by syncing localMessages with current messages
             self.syncLocalMessagesWithViewState()
         }
         
         // First, make sure we have the target message in our arrays
         guard self.viewModel.viewState.messages[targetId] != nil else {
-            // print("⚠️ Target message not in viewState.messages, fetching it first")
             
             // Fetch the message and nearby messages
             Task {
@@ -4399,10 +4051,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 DispatchQueue.main.async {
                     if success {
-                        // print("✅ Successfully loaded target message, trying to scroll again")
                         self.scrollToTargetMessage() // Recursive call after loading
                     } else {
-                        // print("❌ Failed to load target message")
                         self.scrollToBottom(animated: false) // Fallback
                     }
                 }
@@ -4412,26 +4062,21 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
         
         // CRITICAL FIX: Force sync before finding index to prevent wrong scroll position
-        print("🔄 SYNC_CHECK: Ensuring all message arrays are synced before scrolling")
         self.syncLocalMessagesWithViewState()
         
         // CRITICAL FIX: Use the most reliable source for finding index
         let referenceMessages: [String]
         if let channelMessages = self.viewModel.viewState.channelMessages[self.viewModel.channel.id], !channelMessages.isEmpty {
             referenceMessages = channelMessages
-            print("🔍 Using viewState.channelMessages as reference (\(channelMessages.count) messages)")
         } else if !self.localMessages.isEmpty {
             referenceMessages = self.localMessages
-            print("🔍 Using localMessages as reference (\(self.localMessages.count) messages)")
         } else {
-            print("❌ No reference messages available for scrolling")
             self.scrollToBottom(animated: false)
             return
         }
         
         // CRITICAL FIX: Ensure localMessages matches reference for table view
         if self.localMessages != referenceMessages {
-            print("⚠️ SYNC_FIX: localMessages was out of sync, updating from reference")
             self.localMessages = referenceMessages
             
             // Update data source to match
@@ -4442,20 +4087,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
             // Find the target message in reference messages
     if let index = referenceMessages.firstIndex(of: targetId) {
-        print("✅ Found target message at index \(index) in reference messages (total: \(referenceMessages.count))")
-        print("🎯 Target message ID: \(targetId)")
         
         // VALIDATION: Verify the message at this index is actually our target
         if index < referenceMessages.count && referenceMessages[index] == targetId {
-            print("✅ VALIDATION: Confirmed message at index \(index) is target \(targetId)")
         } else {
-            print("❌ VALIDATION: Message at index \(index) is NOT target \(targetId)")
             // Try to find it again or fallback
             if let correctIndex = referenceMessages.firstIndex(of: targetId) {
-                print("🔄 CORRECTION: Found target at correct index \(correctIndex)")
                 // Update index variable (but can't reassign let, so we'll use correctIndex below)
             } else {
-                print("❌ CORRECTION: Could not find target message, falling back to bottom")
                 self.scrollToBottom(animated: false)
                 return
             }
@@ -4469,7 +4108,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             guard let self = self else { return }
             
             // CRITICAL FIX: Force complete data source recreation with correct messages
-            print("🔄 DATASOURCE_FIX: Recreating data source with \(referenceMessages.count) messages")
             self.dataSource = LocalMessagesDataSource(viewModel: self.viewModel, 
                                                      viewController: self,
                                                      localMessages: referenceMessages)
@@ -4486,10 +4124,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // CRITICAL FIX: Check row count immediately and retry if mismatch
             let initialRowCount = self.tableView.numberOfRows(inSection: 0)
-            print("📊 Initial table row count: \(initialRowCount), expected: \(referenceMessages.count)")
             
             if initialRowCount != referenceMessages.count {
-                print("⚠️ MISMATCH: Table rows (\(initialRowCount)) don't match messages (\(referenceMessages.count)), forcing fix")
                 
                 // Force another complete reload
                 self.tableView.reloadData()
@@ -4497,10 +4133,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Check again
                 let secondRowCount = self.tableView.numberOfRows(inSection: 0)
-                print("📊 Second attempt row count: \(secondRowCount)")
                 
                 if secondRowCount != referenceMessages.count {
-                    print("⚠️ STILL_MISMATCH: Forcing data source update")
                     if let localDataSource = self.dataSource as? LocalMessagesDataSource {
                         localDataSource.forceUpdateMessages(referenceMessages)
                     }
@@ -4517,12 +4151,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Get current row count - IMPORTANT for avoiding index out of bounds
                 let rowCount = self.tableView.numberOfRows(inSection: 0)
-                print("📊 Final table row count: \(rowCount), trying to scroll to index \(validatedIndex)")
                 
                 // CRITICAL FIX: If still mismatched, retry with delay
                 if rowCount != referenceMessages.count {
-                    print("❌ CRITICAL_MISMATCH: Table rows (\(rowCount)) still don't match messages (\(referenceMessages.count))")
-                    print("🔄 RETRY: Will retry scroll after fixing data source")
                     
                     // Force sync again
                     self.localMessages = referenceMessages
@@ -4540,7 +4171,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Make sure the index is valid
                 if rowCount > 0 && validatedIndex < rowCount {
-                    print("🔍 Scrolling to validated row \(validatedIndex)")
                     // Create an index path and scroll to it
                     let indexPath = IndexPath(row: validatedIndex, section: 0)
                     
@@ -4552,9 +4182,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         }
                         
                         // Scroll to the message WITHOUT animation for instant positioning - this is TARGET MESSAGE scroll, should not be blocked
-                        print("🎯 SCROLL_TO_TARGET: Scrolling to target message at index \(validatedIndex)")
                         self.tableView.scrollToRow(at: indexPath, at: .middle, animated: false)
-                        // print("📍 scrollToRow completed")
                         
                         // CRITICAL FIX: Force immediate layout update to prevent any delay
                         self.tableView.layoutIfNeeded()
@@ -4562,24 +4190,19 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         // Remove excess contentInset that might cause empty space
                         if self.tableView.contentInset.top > 0 {
                             self.tableView.contentInset = .zero
-                            // print("📏 Removed excess contentInset.top in scrollToTargetMessage")
                         }
                         
                         // CRITICAL FIX: Small delay to ensure scroll position is stable
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                            // print("📍 Scroll completed, highlighting immediately")
                             // Highlight immediately without delay for instant feedback
                             self.highlightTargetMessage(at: indexPath)
                         }
                         
-                        // print("✅ Successfully scrolled to target message")
                     } catch {
-                        // print("❌ Error scrolling to target message: \(error)")
                         // Fall back to just scrolling to the bottom as a last resort
                         self.scrollToBottom(animated: false)
                     }
                 } else {
-                    print("⚠️ Index \(validatedIndex) is out of bounds or table is empty (rowCount: \(rowCount))")
                     if !self.localMessages.isEmpty {
                         // If we have messages but table is not ready, try again in a moment
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -4593,52 +4216,42 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             }
         }
             } else {
-            print("⚠️ Target message ID not found in reference messages array")
-            print("🔍 Debugging: reference messages contains \(referenceMessages.count) messages")
             
             // Debug: Check if target message is in any of the loaded messages
-            print("🔍 Target message ID: \(targetId)")
-            print("🔍 Reference messages: \(referenceMessages)")
             
             // Check if the target message exists in viewState.messages but not in reference messages
             if viewModel.viewState.messages[targetId] != nil {
-                print("✅ Target message found in viewState.messages but missing from reference messages")
             } else {
-                print("❌ Target message not found in viewState.messages either")
             }
             // Debug: Print first and last 3 message IDs to help diagnose ordering issues
             if referenceMessages.count > 0 {
                 let firstMessages = Array(referenceMessages.prefix(3))
                 let lastMessages = Array(referenceMessages.suffix(3))
-                print("🔍 First 3 messages: \(firstMessages)")
-                print("🔍 Last 3 messages: \(lastMessages)")
-                print("🔍 Target message ID: \(targetId)")
             }
             
             // If not in localMessages but in viewState.messages, add it to localMessages
             if self.viewModel.viewState.messages[targetId] != nil {
-                // print("🔄 Adding target message to localMessages array")
                 
                 // Add to beginning or end based on timestamp
                 let targetMessage = self.viewModel.viewState.messages[targetId]!
                 let targetDate = createdAt(id: targetId)
                 
                 if !localMessages.isEmpty {
-                    let firstMsgDate = createdAt(id: localMessages[0])
-                    let lastMsgDate = createdAt(id: localMessages[localMessages.count - 1])
+                    let firstMsgDate = createdAt(id: localMessages[0])  // Newest message (most recent)
+                    let lastMsgDate = createdAt(id: localMessages[localMessages.count - 1])  // Oldest message (least recent)
                     
-                    if targetDate < firstMsgDate {
-                        // Add to beginning
+                    if targetDate > firstMsgDate {
+                        // Newer than newest - add to beginning
                         self.localMessages.insert(targetId, at: 0)
-                    } else if targetDate > lastMsgDate {
-                        // Add to end
+                    } else if targetDate < lastMsgDate {
+                        // Older than oldest - add to end
                         self.localMessages.append(targetId)
                     } else {
-                        // Insert in sorted position
+                        // Insert in sorted position (newest-first order)
                         var insertIndex = 0
                         for (i, msgId) in self.localMessages.enumerated() {
                             let msgDate = createdAt(id: msgId)
-                            if targetDate < msgDate {
+                            if targetDate > msgDate {
                                 insertIndex = i
                                 break
                             }
@@ -4672,7 +4285,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             if !self.targetMessageProcessed {
                         self.scrollToTargetMessage()
                             } else {
-                                print("🎯 Skipping duplicate scrollToTargetMessage call - already processed")
                             }
                         }
                     }
@@ -4684,10 +4296,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     
                     DispatchQueue.main.async {
                         if success {
-                            // print("✅ Successfully loaded messages nearby target")
                             self.scrollToTargetMessage() // Try again after loading
                         } else {
-                            // print("❌ Unable to load messages near target")
                             self.scrollToBottom(animated: false) // Fallback
                         }
                     }
@@ -4704,10 +4314,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Update localMessages to match current viewModel.messages or channelMessages
         if !channelMessages.isEmpty && localMessages != channelMessages {
             localMessages = Array(channelMessages)
-            // print("🔄 Synced localMessages with channelMessages: \(localMessages.count) messages")
         } else if !viewModel.messages.isEmpty && localMessages != viewModel.messages {
             localMessages = viewModel.messages
-            // print("🔄 Synced localMessages with viewModel.messages: \(localMessages.count) messages")
         }
         
         // Also ensure viewModel.messages is in sync - but ONLY if they're actually different
@@ -4718,7 +4326,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         if needsViewModelSync || needsChannelMessagesSync {
             viewModel.messages = localMessages
             viewModel.viewState.channelMessages[viewModel.channel.id] = localMessages
-            // print("🔄 Synced viewModel.messages and channelMessages with localMessages (only because they differed)")
         }
     }
     
@@ -4737,100 +4344,76 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // Highlight the target message with animation (with retry mechanism)
     private func highlightTargetMessage(at indexPath: IndexPath, retryCount: Int = 0) {
-        print("🎯 highlightTargetMessage CALLED - indexPath: \(indexPath.row), retryCount: \(retryCount)")
-        print("🎯 Table view visible cells count: \(tableView.visibleCells.count)")
-        print("🎯 Table view total rows: \(tableView.numberOfRows(inSection: 0))")
         
         guard let cell = tableView.cellForRow(at: indexPath) as? MessageCell else {
-            // print("⚠️ Could not find MessageCell at index path \(indexPath.row), retry: \(retryCount)")
-            // print("⚠️ Available cell types at this index: \(type(of: tableView.cellForRow(at: indexPath)))")
             
             // Retry up to 3 times with increasing delays
             if retryCount < 3 {
                 let delay = 0.2 + (Double(retryCount) * 0.2) // 0.2s, 0.4s, 0.6s
-                // print("🔄 Will retry highlightTargetMessage in \(delay) seconds")
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                     self?.highlightTargetMessage(at: indexPath, retryCount: retryCount + 1)
                 }
             } else {
-                // print("❌ Failed to highlight message after 3 retries - cell not available")
             }
             return
         }
         
-        // print("✅ Found MessageCell at index \(indexPath.row)!")
         
         // First clear any existing highlights
-        // print("🧹 Clearing all existing highlights")
         clearAllHighlights()
         
         // print the message ID to debug
         if indexPath.row < localMessages.count {
             let messageId = localMessages[indexPath.row]
-            // print("🎯 Highlighting message with ID: \(messageId), target ID is: \(targetMessageId ?? "nil")")
         }
         
-        // print("🎨 Starting highlight animation")
         // Apply highlight to the cell with faster animation
         UIView.animate(withDuration: 0.1) {
             cell.setAsTargetMessage()
-            // print("🎨 setAsTargetMessage() called on cell")
         }
         
-        // print("📳 Triggering haptic feedback")
         // Provide stronger haptic feedback to indicate the message was found
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.prepare()
         generator.impactOccurred()
         
         // Start pulse effect immediately
-        // print("✨ Starting pulse effect immediately")
         self.pulseHighlight(cell: cell)
         
         // Keep the highlight for 10 seconds, but also allow manual clearing
-        // print("⏰ Scheduling highlight clear in 10 seconds")
         DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak cell] in
             guard let cell = cell, cell.tag == 9999 else { 
-                // print("⏰ 10-second clear: cell is nil or tag changed")
                 return 
             }
-            // print("🧹 Clearing highlight after 10 seconds")
             cell.clearHighlight()
         }
         
-        // print("✅ Successfully highlighted target message at index \(indexPath.row)")
         
         // CRITICAL FIX: Mark as processed immediately to prevent duplicate highlights
         targetMessageProcessed = true
-        // print("🎯 Marked target message as processed to prevent duplicates")
         
         // CRITICAL FIX: Set flag to prevent auto-scroll after target message highlighting
         lastTargetMessageHighlightTime = Date()
         
         // CRITICAL FIX: Mark that user is now in target message position
         isInTargetMessagePosition = true
-        print("🎯 Set isInTargetMessagePosition = true to prevent auto-reload")
         
         // CRITICAL FIX: Reset loading state after successful highlight to allow future loads
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             if self.messageLoadingState == .loading {
                 self.messageLoadingState = .notLoading
-                print("🎯 HIGHLIGHT_COMPLETE: Reset messageLoadingState after successful highlight")
             }
         }
         
         // Clear the target message ID in ViewState after successful highlighting
         // Wait longer to ensure highlighting is visible to user
-        // print("⏰ Scheduling targetMessageId clear in 3 seconds")
         
         // CRITICAL FIX: Don't clear target message immediately - keep it for user experience
         clearTargetMessageTimer?.invalidate()
         clearTargetMessageTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
             guard let self = self else { 
-                print("❌ Could not clear targetMessageId - self is nil")
                 return 
             }
-            print("🎯 Timer fired - clearing targetMessageId after 5 seconds")
             self.viewModel.viewState.currentTargetMessageId = nil
             self.targetMessageId = nil
             self.clearTargetMessageTimer = nil
@@ -4838,32 +4421,26 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             // CRITICAL FIX: Also clear position flag to prevent protection
                     self.isInTargetMessagePosition = false
             self.lastTargetMessageHighlightTime = nil
-            print("🎯 Cleared targetMessageId and position flags after successful highlighting")
         }
     }
     
     // Helper method to create a pulsing highlight effect
     private func pulseHighlight(cell: MessageCell, pulseCount: Int = 1, currentPulse: Int = 0) {
-        // print("✨ pulseHighlight called - pulse \(currentPulse + 1) of \(pulseCount)")
         
         // If we've reached the desired number of pulses, restore original state but keep highlighted
         if currentPulse >= pulseCount {
-            // print("✨ Pulse effect completed after \(currentPulse) pulses")
             return
         }
         
-        // print("✨ Starting pulse animation - fade out")
         // Create pulse effect by changing opacity with faster animation
         UIView.animate(withDuration: 0.2, animations: {
             // Fade out
             cell.contentView.alpha = 0.7
         }) { _ in
-            // print("✨ Fade out completed - starting fade in")
             UIView.animate(withDuration: 0.2, animations: {
                 // Fade in
                 cell.contentView.alpha = 1.0
             }) { _ in
-                // print("✨ Fade in completed - scheduling next pulse")
                 // Continue with next pulse
                 self.pulseHighlight(cell: cell, pulseCount: pulseCount, currentPulse: currentPulse + 1)
             }
@@ -4874,7 +4451,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     func loadNewerMessages(after messageId: String) {
         // Only if we have messages and not already loading
         guard !localMessages.isEmpty && !isLoadingMore else { 
-            // print("🛑 AFTER: Skipping - no messages or already loading")
             return 
         }
         
@@ -4882,12 +4458,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         isLoadingMore = true
         messageLoadingState = .loading
         
-        // print("📥📥 AFTER_CALL: Starting to load newer messages after ID: \(messageId)")
         
         // Show loading indicator at bottom
         DispatchQueue.main.async {
             // You can add a loading indicator at the bottom if needed
-            // print("⏳ AFTER: Loading newer messages...")
         }
         
         // Create task to load messages
@@ -4895,7 +4469,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             do {
                 // Save count of messages before loading
                 let initialCount = localMessages.count
-                // print("📥📥 AFTER_CALL: Initial message count: \(initialCount)")
                 
                 // Call the API through the viewModel with after parameter
                 let result = await viewModel.loadMoreMessages(
@@ -4903,7 +4476,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     after: messageId
                 )
                 
-                // print("📥📥 AFTER_CALL: API call completed. Result is nil? \(result == nil)")
                 
                 // Process results on main thread
                 await MainActor.run {
@@ -4913,7 +4485,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     
                     // Process the new messages
                     if let fetchResult = result, !fetchResult.messages.isEmpty {
-                        // print("📥📥 AFTER_CALL: Processing \(fetchResult.messages.count) new messages")
                         
                         // Process all messages
                         for message in fetchResult.messages {
@@ -4928,7 +4499,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         
                         // Add new messages if there are any to add
                         if !messagesToAdd.isEmpty {
-                            // print("📥📥 AFTER_CALL: Adding \(messagesToAdd.count) new messages to arrays")
                             
                             // Create new arrays to avoid reference issues
                             var updatedMessages = localMessages
@@ -4940,22 +4510,17 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             viewModel.viewState.channelMessages[viewModel.channel.id] = updatedMessages
                             
                             // Final verification
-                            // print("📥📥 AFTER_CALL: Arrays updated: viewModel.messages=\(viewModel.messages.count), localMessages=\(localMessages.count)")
                             
                             // Update UI
                             refreshMessages()
                             
                             // Show success notification
-                            // print("✅ AFTER_CALL: Successfully loaded \(messagesToAdd.count) newer messages")
                         } else {
-                            // print("📥📥 AFTER_CALL: No new unique messages to add (duplicates)")
                         }
                     } else {
-                        // print("📥📥 AFTER_CALL: API returned empty result or no new messages")
                     }
                 }
             } catch {
-                // print("❌ AFTER_CALL: Error loading newer messages: \(error)")
                 
                 // Reset loading state on main thread
                 await MainActor.run {
@@ -4976,33 +4541,22 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             // Try to parse the error data as JSON
             if let dataObj = try JSONSerialization.jsonObject(with: Data(data.utf8), options: []) as? [String: Any],
                let retryAfter = dataObj["retry_after"] as? Int {
-                // print("📊 Extracted retry_after: \(retryAfter)")
                 return retryAfter
             }
         } catch {
-            // print("❌ Error parsing JSON from error data: \(error)")
         }
         
         return nil
     }
-    
     // Public method to refresh messages with a specific target message ID
     func refreshWithTargetMessage(_ messageId: String) async {
-        print("🚀 ========== refreshWithTargetMessage CALLED ==========")
-        print("🎯 refreshWithTargetMessage called with messageId: \(messageId)")
-        print("🎯 Current channel: \(viewModel.channel.id)")
-        print("🎯 Current targetMessageId: \(targetMessageId ?? "nil")")
-        print("🎯 ViewState currentTargetMessageId: \(viewModel.viewState.currentTargetMessageId ?? "nil")")
-        print("🔍 This is where API calls should happen for fetching the target message!")
         
         // CRITICAL FIX: Set loading state to prevent premature cleanup
         messageLoadingState = .loading
-        print("🎯 Set messageLoadingState to .loading for target message")
         
         // CRITICAL FIX: Add timeout protection to prevent infinite loading
         let timeoutTask = Task {
             try await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds (reduced for better UX)
-            print("⏰ TIMEOUT: refreshWithTargetMessage took too long, forcing cleanup")
             await MainActor.run {
                 self.messageLoadingState = .notLoading
                 self.hideEmptyStateView()
@@ -5012,7 +4566,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 self.viewModel.viewState.currentTargetMessageId = nil
                 
                 // Show user-friendly error message
-                print("⏰ TIMEOUT: Could not load the message. It may have been deleted.")
             }
         }
         
@@ -5030,39 +4583,32 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     self.viewModel.viewState.currentTargetMessageId = nil
                 }
                 
-                print("🎯 Reset all loading states - refreshWithTargetMessage complete")
             }
         }
         
         // CRITICAL FIX: Check if this message ID is already being processed
         if targetMessageProcessed && targetMessageId == messageId {
-            print("🎯 Target message \(messageId) already processed, skipping to prevent duplicate highlights")
             return
         }
         
         // Validate that the message belongs to current channel (if already loaded)
         if let existingMessage = viewModel.viewState.messages[messageId] {
             if existingMessage.channel != viewModel.channel.id {
-                print("❌ Target message \(messageId) belongs to channel \(existingMessage.channel), but current channel is \(viewModel.channel.id)")
                 await MainActor.run {
                     self.viewModel.viewState.currentTargetMessageId = nil
                     self.targetMessageId = nil
                 }
                 return
             }
-            print("✅ Message \(messageId) exists and belongs to current channel")
         } else {
-            print("⚠️ Message \(messageId) not found in loaded messages - will try to fetch")
         }
         
         // Set the target message ID
         self.targetMessageId = messageId
-        // print("🎯 Set targetMessageId to: \(messageId)")
         
         // Show loading indicator
         DispatchQueue.main.async {
             self.loadingHeaderView.isHidden = false
-            // print("📱 Loading indicator shown")
         }
         
         // Check if the message ID is already loaded in any of our stores
@@ -5071,10 +4617,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         let channelMessages = viewModel.viewState.channelMessages[viewModel.channel.id]
         let isInChannelMessages = channelMessages?.contains(messageId) ?? false
         
-        print("🔍 refreshWithTargetMessage - checking for message \(messageId):")
-        print("   - In viewModel.messages: \(isInViewModelMessages)")
-        print("   - In viewState.messages: \(isInViewStateMessages)")
-        print("   - In channelMessages: \(isInChannelMessages)")
         
         // CRITICAL FIX: Check if message is in localMessages (actually visible) not just in viewState
         let isInLocalMessages = localMessages.contains(messageId)
@@ -5083,7 +4625,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         if (isInViewModelMessages || isInChannelMessages) && isInLocalMessages {
             // Message is already loaded AND visible, just scroll to it
             DispatchQueue.main.async {
-                print("✅ Target message \(messageId) already exists and is visible, scrolling to it")
                 
                 // Ensure all arrays are in sync
                 self.syncLocalMessagesWithViewState()
@@ -5102,18 +4643,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // CRITICAL FIX: If message exists in viewState but NOT in localMessages, we need nearby API
         if isInViewStateMessages && !isInLocalMessages {
-            print("⚠️ Target message exists in viewState but not in localMessages - need nearby API")
         }
         
         // Message not loaded, load it using nearby API
-        print("🔄 REPLY_TARGET: Target message not found in loaded messages, loading nearby messages")
-        print("🌐 REPLY_TARGET: About to call loadMessagesNearby API for messageId: \(messageId)")
         let result = await loadMessagesNearby(messageId: messageId)
         
         if result {
             // Message successfully loaded, scroll to it
             DispatchQueue.main.async {
-                print("✅ REPLY_TARGET: Successfully loaded messages nearby target, scrolling to it")
                 // After loading messages, hide the loading indicator
                 self.loadingHeaderView.isHidden = true
                 
@@ -5125,7 +4662,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             }
         } else {
             // Failed to load target message, try a direct fetch
-            print("⚠️ REPLY_TARGET: Failed to load messages around target, attempting direct fetch")
             
             // Show loading indicator
             DispatchQueue.main.async {
@@ -5157,7 +4693,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             if let message = fetchResult {
                 // Validate that the fetched message belongs to current channel
                 if message.channel != viewModel.channel.id {
-                    print("❌ DIRECT_TARGET: Fetched message \(messageId) belongs to channel \(message.channel), but current channel is \(viewModel.channel.id)")
                     await MainActor.run {
                         self.viewModel.viewState.currentTargetMessageId = nil
                         self.targetMessageId = nil
@@ -5168,7 +4703,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     return
                 }
                 
-                print("✅ DIRECT_TARGET: Successfully fetched target message directly: \(message.id)")
                 
                 await MainActor.run {
                     // Add the fetched message to the view model
@@ -5176,7 +4710,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     
                     // CRITICAL FIX: Always load surrounding context when we get a single message
                     // This ensures the user sees more than just one message
-                    print("🔄 DIRECT_TARGET: Loading surrounding context for better user experience")
                     
                     // Check for existing messages and insert in correct position
                     // If we can't determine proper order, just add it
@@ -5200,11 +4733,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         
                         // Insert at the determined position
                         viewModel.messages.insert(messageId, at: insertIndex)
-                        print("📍 DIRECT_TARGET: Inserted message at index \(insertIndex) of \(viewModel.messages.count)")
                     } else {
                         // If no messages yet, just add it
                         viewModel.messages = [messageId]
-                        print("📍 DIRECT_TARGET: Added as first message")
                     }
                     
                     // Update channel messages in viewState
@@ -5214,7 +4745,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     self.localMessages = viewModel.messages
                     
                     // Refresh UI and scroll to message
-                    print("🔄 DIRECT_TARGET: Refreshing UI with \(self.localMessages.count) messages")
                     self.refreshMessages()
                     
                     // After loading messages, hide the loading indicator
@@ -5227,24 +4757,19 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     
                     // After a short delay, scroll to the target message and load surrounding context
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        print("🎯 DIRECT_TARGET: Scrolling to target message")
                         self.scrollToTargetMessage()
                         
                         // IMPORTANT: Load more context around this message for better UX
-                        print("🔄 DIRECT_TARGET: Loading surrounding context")
                         Task {
                             let contextResult = await self.loadMessagesNearby(messageId: messageId)
                             if contextResult {
-                                print("✅ DIRECT_TARGET: Successfully loaded surrounding context")
                             } else {
-                                print("⚠️ DIRECT_TARGET: Could not load surrounding context")
                             }
                         }
                     }
                 }
             } else {
                 // Failed to fetch target message directly - message likely deleted
-                print("❌ DIRECT_TARGET: Failed to fetch target message directly - likely deleted or inaccessible")
                 
                 await MainActor.run {
                     // Clean up loading states immediately
@@ -5254,7 +4779,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     self.viewModel.viewState.currentTargetMessageId = nil
                     
                     // Show user-friendly error message
-                    print("❌ DIRECT_TARGET: Showing error message to user - message likely deleted")
                 }
                 
                 // Exit early since message couldn't be loaded
@@ -5268,10 +4792,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         (viewModel.viewState.channelMessages[viewModel.channel.id]?.contains(messageId) ?? false)
                         
         if !finalCheck {
-            // print("⚠️ Target message was not found even after loading nearby messages")
             DispatchQueue.main.async {
                 // Display a message with more detail
-                print("❌ FINAL_CHECK: Message not found or may have been deleted")
                 
                 // Clear target message ID since we failed to find it
                 self.targetMessageId = nil
@@ -5282,7 +4804,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 self.lastSuccessfulLoadTime = Date()
             }
         } else {
-            // print("✅ Final check passed - target message \(messageId) was found")
         }
     }
     
@@ -5314,7 +4835,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // CRITICAL FIX: Messages with attachments should NEVER be grouped to ensure username is always visible
         if let attachments = currentMessage.attachments, !attachments.isEmpty {
-            // print("🖼️ Message with attachments at row \(indexPath.row) - NEVER group to ensure username visibility")
             return false
         }
         
@@ -5322,7 +4842,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         let currentDate = createdAt(id: currentMessage.id)
         let previousDate = createdAt(id: previousMessage.id)
-        let timeInterval = currentDate.timeIntervalSince(previousDate)
+        // Since messages are now newest-first, previous message is newer than current
+        // So we need to reverse the time interval calculation
+        let timeInterval = abs(currentDate.timeIntervalSince(previousDate))
         let closeEnough = timeInterval < 5 * 60
         
         let shouldGroup = sameAuthor && closeEnough
@@ -5353,7 +4875,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // Add new property for the loading view
     var loadingHeaderView: UIView = {
-        let view = UIView(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 80))
+        let view = UIView(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 40))
         
         // Add background with shadow
         view.backgroundColor = UIColor.bgDefaultPurple13.withAlphaComponent(0.9)
@@ -5369,20 +4891,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         spinner.color = .white
         view.addSubview(spinner)
         
-        let label = UILabel()
-        label.text = "Loading ..."
-        label.textColor = .white
-        label.font = UIFont.systemFont(ofSize: 14)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(label)
-        
-        // Center the spinner and position the label
+        // Center the spinner
         NSLayoutConstraint.activate([
             spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -10),
-            
-            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            label.topAnchor.constraint(equalTo: spinner.bottomAnchor, constant: 8)
+            spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
         
         // Hide by default
@@ -5390,9 +4902,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         return view
     }()
-    
-
-
 //    // MARK: - Show Full Screen Image
 //    internal func showFullScreenImage(_ image: UIImage) {
 //        let imageViewController = FullScreenImageViewController(image: image)
@@ -5404,30 +4913,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     /// Handle clicking on a reply to jump to the original message
     func handleReplyClick(messageId: String, channelId: String) {
-        print("🔗 REPLY_CLICK: User clicked on reply to message \(messageId) in channel \(channelId)")
-        print("🔍 REPLY_CLICK: This is the main handleReplyClick method in MessageableChannelViewController!")
         
         // CRITICAL FIX: Clear target message protection first to allow new reply click
-        print("🎯 REPLY_CLICK: Clearing target message protection to allow new reply click")
         clearTargetMessageProtection(reason: "user clicked on reply")
         
         // Check if it's the same channel
         if channelId == viewModel.channel.id {
             // Same channel - scroll to the message
-            print("📍 REPLY_CLICK: Same channel, attempting to scroll to message")
             
             // Check if message is already loaded
             if localMessages.contains(messageId) {
                 // Message is loaded, scroll directly
-                print("✅ REPLY_CLICK: Message is already loaded, scrolling directly")
                 scrollToMessage(messageId: messageId)
             } else {
                 // Message not loaded, use target message functionality
-                print("🎯 REPLY_CLICK: Message not loaded, using target message functionality")
-                print("🌐 REPLY_CLICK: About to call refreshWithTargetMessage - this should trigger API calls!")
-                print("🔍 REPLY_CLICK: Current localMessages count: \(localMessages.count)")
-                print("🔍 REPLY_CLICK: Current viewState messages count: \(viewModel.viewState.messages.count)")
-                print("🔍 REPLY_CLICK: Current channel messages count: \(viewModel.viewState.channelMessages[viewModel.channel.id]?.count ?? 0)")
                 
                 // Set target message and trigger load
                 targetMessageId = messageId
@@ -5435,21 +4934,17 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Show loading indicator with more specific message
                 DispatchQueue.main.async {
-                    print("🔄 REPLY_CLICK: Loading original message...")
                 }
                 
                 // Trigger target message refresh with enhanced error handling
                 Task {
                     do {
-                        print("🚀 REPLY_CLICK: Starting refreshWithTargetMessage for \(messageId)")
                         await refreshWithTargetMessage(messageId)
                         
                         // Check if the message was successfully loaded
                         await MainActor.run {
                             if self.localMessages.contains(messageId) {
-                                print("✅ REPLY_CLICK: Message successfully loaded and should be visible")
                             } else {
-                                print("❌ REPLY_CLICK: Message was not loaded successfully")
                                 // Ensure loading state is reset
                                 self.messageLoadingState = .notLoading
                                 self.loadingHeaderView.isHidden = true
@@ -5457,11 +4952,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                                 self.viewModel.viewState.currentTargetMessageId = nil
                                 
                                 // Show error message to user
-                                print("❌ REPLY_CLICK: Could not load the original message. It may have been deleted.")
                             }
                         }
                     } catch {
-                        print("❌ REPLY_CLICK: Error in refreshWithTargetMessage: \(error)")
                         // Ensure all loading states are reset on error
                         await MainActor.run {
                             self.messageLoadingState = .notLoading
@@ -5470,14 +4963,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             self.viewModel.viewState.currentTargetMessageId = nil
                             self.tableView.tableFooterView = nil
                             
-                            print("❌ REPLY_CLICK_ERROR: Failed to load message. Please try again.")
                         }
                     }
                 }
             }
         } else {
             // Different channel - navigate to that channel with target message
-            print("🔄 REPLY_CLICK: Different channel, navigating to channel \(channelId)")
             
             // Set target message in ViewState for cross-channel navigation
             viewModel.viewState.currentTargetMessageId = messageId
@@ -5486,7 +4977,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             if let channel = viewModel.viewState.channels[channelId] {
                 // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
                 // This ensures that when user presses back, they go to server list instead of previous channel
-                print("🔄 REPLY_CLICK: Clearing navigation path to prevent back to previous channel")
                 viewModel.viewState.path = []
                 
                 // Clear any existing channel messages for the target channel
@@ -5507,12 +4997,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Show loading message
                 DispatchQueue.main.async {
-                    print("🔄 NAVIGATE: Navigating to message...")
                 }
             } else {
                 // Channel not found, show error
                 DispatchQueue.main.async {
-                    print("❌ NAVIGATE: Channel not found")
                 }
             }
         }
@@ -5521,7 +5009,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     /// Scroll to a specific message that's already loaded
     private func scrollToMessage(messageId: String) {
         guard let index = localMessages.firstIndex(of: messageId) else {
-            print("❌ SCROLL_TO_MESSAGE: Message \(messageId) not found in local messages")
             return
         }
         
@@ -5529,11 +5016,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Make sure the index is valid
         guard index < tableView.numberOfRows(inSection: 0) else {
-            print("❌ SCROLL_TO_MESSAGE: Index \(index) out of bounds")
             return
         }
         
-        print("🎯 SCROLL_TO_MESSAGE: Scrolling to message at index \(index)")
         
         // Scroll to the message
         safeScrollToRow(at: indexPath, at: .middle, animated: true, reason: "scroll to specific message")
@@ -5575,7 +5060,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // Add a method to display replies when editing a message
     func showReplies(_ replies: [ReplyMessage]) {
-        // print("📄 Showing \(replies.count) replies")
         
         // If repliesView has not been initialized, create it
         if repliesView == nil {
@@ -5648,7 +5132,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         let errorPatterns = ["Connection reset by peer", "tcp_input", "nw_read_request_report"]
         for pattern in errorPatterns {
             if logMessage.contains(pattern) {
-                // print("⚠️ Detected network error: \(pattern)")
                 lastNetworkErrorTime = Date()
                 
                 // Post notification about network error
@@ -5665,13 +5148,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     func adjustTableInsetsForMessageCount() {
         // Safety check - make sure table view is loaded
         guard tableView != nil, tableView.window != nil else {
-            // print("⚠️ Table view not ready for inset adjustment")
             return
         }
         
         // CRITICAL FIX: Don't adjust insets during target message operations
         if targetMessageProtectionActive {
-            print("📏 BLOCKED: Inset adjustment blocked - target message protection active")
             return
         }
         
@@ -5680,13 +5161,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // If no messages, don't adjust insets
         guard messageCount > 0 else {
-            // print("📏 No messages to adjust insets for")
             // Disable bouncing for empty state
             tableView.alwaysBounceVertical = false
             tableView.bounces = false
-            // Remove header to prevent scrolling
-            if tableView.tableHeaderView != nil {
-                tableView.tableHeaderView = nil
+            // Remove footer to prevent scrolling
+            if tableView.tableFooterView != nil {
+                tableView.tableFooterView = nil
             }
             return
         }
@@ -5698,7 +5178,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Skip if called too recently AND message count hasn't changed significantly
         if timeSinceLastAdjustment < insetAdjustmentCooldown && 
            abs(messageCount - lastMessageCountForInsets) <= 1 {
-            // print("📏 COOLDOWN: Skipping inset adjustment (called \(timeSinceLastAdjustment)s ago, count change: \(abs(messageCount - lastMessageCountForInsets)))")
             return
         }
         
@@ -5711,7 +5190,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         if messageCount <= 10 {
             // Just update bouncing behavior
             updateTableViewBouncing()
-            // print("📏 Updated bouncing for \(messageCount) messages")
             return
         }
         
@@ -5722,7 +5200,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 UIView.animate(withDuration: 0.2) {
                     self.tableView.contentInset = UIEdgeInsets.zero
                 }
-                // print("📏 Reset insets to zero (message count > 15)")
             }
             // Enable bouncing for many messages
             tableView.alwaysBounceVertical = true
@@ -5742,19 +5219,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             let indexPath = IndexPath(row: i, section: 0)
             // Add safety check for rect calculation
             guard indexPath.row < tableView.numberOfRows(inSection: 0) else {
-                // print("⚠️ Index path out of bounds: \(indexPath)")
                 break
             }
             let rowHeight = tableView.rectForRow(at: indexPath).height
             totalCellHeight += rowHeight
         }
         
-        // print("📏 ADJUST_TABLE_INSETS: visibleHeight=\(visibleHeight), totalCellHeight=\(totalCellHeight), messageCount=\(messageCount)")
         
         // Just update bouncing behavior for medium message counts
         updateTableViewBouncing()
         
-        // print("📊 Medium message count (\(messageCount)), inset adjustment complete")
     }
     
     // MARK: - Helper method to update table view bouncing behavior
@@ -5764,7 +5238,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // CRITICAL FIX: Don't update bouncing during target message operations
         if targetMessageProtectionActive {
-            print("📏 BOUNCE_BLOCKED: Bouncing update blocked - target message protection active")
             return
         }
         
@@ -5778,11 +5251,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             tableView.showsVerticalScrollIndicator = false
             tableView.contentInset = .zero
             tableView.scrollIndicatorInsets = .zero
-            // Remove header to prevent scrolling
-            if tableView.tableHeaderView != nil {
-                tableView.tableHeaderView = nil
+            // Remove footer to prevent scrolling
+            if tableView.tableFooterView != nil {
+                tableView.tableFooterView = nil
             }
-            print("📏 Disabled scrolling - no messages")
             return
         }
         
@@ -5814,9 +5286,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             tableView.bounces = true
             tableView.showsVerticalScrollIndicator = true
             
-            // Re-add header only if it was removed AND we are loading
-            if tableView.tableHeaderView == nil && isLoadingMore {
-                tableView.tableHeaderView = loadingHeaderView
+            // Re-add footer only if it was removed AND we are loading
+            if tableView.tableFooterView == nil && isLoadingMore {
+                tableView.tableFooterView = loadingHeaderView
             }
             
         } else {
@@ -5829,9 +5301,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             tableView.contentInset = .zero
             tableView.scrollIndicatorInsets = .zero
             
-            // Remove header to prevent any scrolling
-            if tableView.tableHeaderView != nil {
-                tableView.tableHeaderView = nil
+            // Remove footer to prevent any scrolling
+            if tableView.tableFooterView != nil {
+                tableView.tableFooterView = nil
             }
             
             // CRITICAL FIX: Don't reset scroll position during target message operations
@@ -5840,7 +5312,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 tableView.contentOffset = .zero
             }
             
-            print("📏 Disabled scrolling completely - actual content: \(actualContentHeight), visible: \(visibleHeight), rows: \(rowCount)")
         }
     }
     
@@ -5848,7 +5319,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     private func positionTableAtBottomBeforeShowing() {
         // COMPREHENSIVE TARGET MESSAGE PROTECTION
         if targetMessageProtectionActive {
-            print("🎯 [POSITION] Target message protection active, just showing table without positioning")
             showTableViewWithFade()
             return
         }
@@ -5859,11 +5329,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         let rowCount = tableView.numberOfRows(inSection: 0)
         let messagesCount = localMessages.count
         
-        // print("📊 [POSITION] Positioning table: rows=\(rowCount), messages=\(messagesCount)")
         
         // If no messages, just show the table
         guard rowCount > 0, messagesCount > 0 else {
-            // print("📊 [POSITION] No messages, showing empty table")
             showTableViewWithFade()
             return
         }
@@ -5875,7 +5343,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         let lastRowIndex = rowCount - 1
         let indexPath = IndexPath(row: lastRowIndex, section: 0)
         tableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
-        // print("🔽 [POSITION] Positioned at bottom (newest messages)")
         
         // Show the table view now that it's properly positioned
         showTableViewWithFade()
@@ -5890,7 +5357,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     // Helper method to show table view (no-op since table is always visible)
     private func showTableViewWithFade() {
         // Table view is always visible now, no fade needed
-        // print("✨ [POSITION] Table view already visible")
     }
     
     // MARK: - Skeleton Loading Methods (DISABLED FOR PERFORMANCE)
@@ -5899,7 +5365,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     private func showSkeletonView() {
         // DISABLED: Skeleton loading temporarily disabled for performance optimization
-        print("💀 SKELETON: DISABLED - Skeleton loading temporarily disabled for performance")
         return
         
         // Original skeleton code commented out:
@@ -5923,13 +5388,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Hide table view while showing skeleton
         tableView.alpha = 0.0
         
-        print("💀 SKELETON: Showing skeleton loading view")
         */
     }
     
     private func hideSkeletonView() {
         // DISABLED: Skeleton loading temporarily disabled for performance optimization
-        print("💀 SKELETON: DISABLED - Skeleton hiding temporarily disabled for performance")
         return
         
         // Original skeleton code commented out:
@@ -5948,17 +5411,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             self.tableView.alpha = 1.0
         }
         
-        print("💀 SKELETON: Hiding skeleton loading view")
         */
     }
     
     // MARK: - Global Fix for Black Screen
     private func applyGlobalFix() {
-        // print("🔧 [FIX] Applying global fix for black screen...")
         
         // CRITICAL FIX: Don't apply global fix if target message protection is active
         if targetMessageProtectionActive {
-            print("🔧 [FIX] BLOCKED: Global fix blocked - target message protection active")
             return
         }
         
@@ -5974,9 +5434,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             if hasActualMessages {
                 self.localMessages = channelMessages
                 self.viewModel.messages = self.localMessages
-                // print("🔄 [FIX] Synced all message arrays with \(self.localMessages.count) messages")
             } else {
-                // print("⚠️ [FIX] Found message IDs but no actual messages - need to load from API")
                 // Clear the arrays and load fresh
                 self.localMessages = []
                 self.viewModel.messages = []
@@ -5991,11 +5449,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         } else if !self.localMessages.isEmpty {
             viewModel.viewState.channelMessages[viewModel.channel.id] = self.localMessages
             self.viewModel.messages = self.localMessages
-            // print("🔄 [FIX] Populated viewState from localMessages with \(self.localMessages.count) messages")
         } else if !self.viewModel.messages.isEmpty {
             self.localMessages = self.viewModel.messages
             viewModel.viewState.channelMessages[viewModel.channel.id] = self.localMessages
-            // print("🔄 [FIX] Populated from viewModel.messages with \(self.viewModel.messages.count) messages")
         }
         
         // Remove any excess contentInset
@@ -6003,7 +5459,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             UIView.animate(withDuration: 0.2) {
                 self.tableView.contentInset = .zero
             }
-            // print("📏 [FIX] Reset content insets to zero")
         }
         
         // Ensure DataSource is up-to-date
@@ -6018,25 +5473,21 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         DispatchQueue.main.async {
             // Reload table
             self.tableView.reloadData()
-            // print("🔄 [FIX] Reloaded tableView")
             
             // Update table view bouncing behavior
             self.updateTableViewBouncing()
             
             // COMPREHENSIVE TARGET MESSAGE PROTECTION
             if self.targetMessageProtectionActive {
-                print("🎯 [FIX] Target message protection active, maintaining current position")
                 self.tableView.contentOffset = CGPoint(x: 0, y: currentOffset)
                 return
             }
             
             // ONLY scroll to bottom if user was near bottom OR if table was empty before
             if wasNearBottom || currentOffset <= 0 {
-                // print("🔽 [FIX] User was near bottom or at top, positioning at bottom")
                 self.positionTableAtBottomBeforeShowing()
             } else {
                 // Try to maintain scroll position if user was somewhere in the middle
-                // print("📏 [FIX] User was not near bottom, attempting to maintain scroll position")
                 self.tableView.contentOffset = CGPoint(x: 0, y: currentOffset)
             }
         }
@@ -6049,7 +5500,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         guard let targetId = targetMessageId,
               let targetIndex = viewModel.messages.firstIndex(of: targetId) else {
-            // print("⚠️ Target message not found for scrolling")
             // Apply global fix if table is empty but we have messages
             if tableView.numberOfRows(inSection: 0) == 0, 
                let channelMessages = viewModel.viewState.channelMessages[viewModel.channel.id], 
@@ -6066,7 +5516,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             UIView.animate(withDuration: 0.2) {
                 self.tableView.contentInset = .zero
             }
-            // print("📏 Reset content insets before scrolling to target message")
         }
         
         // Calculate a safety target index within bounds of table view
@@ -6074,7 +5523,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // If tableView has no rows but we have messages, apply global fix
         if tableRows == 0 && !viewModel.messages.isEmpty {
-            // print("⚠️ Table has 0 rows but viewModel has \(viewModel.messages.count) messages - applying fix")
             applyGlobalFix()
             // Try scrolling again after a delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
@@ -6089,7 +5537,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             // Scroll to the target message
             let indexPath = IndexPath(row: safeTargetIndex, section: 0)
             tableView.scrollToRow(at: indexPath, at: .middle, animated: animated)
-            // print("🎯 Scrolled to target message at index \(safeTargetIndex)")
             
             // For emphasis, highlight the message temporarily
             if let cell = tableView.cellForRow(at: indexPath) as? MessageCell {
@@ -6102,7 +5549,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 }
             }
         } else {
-            // print("⚠️ Target index \(safeTargetIndex) is out of bounds (0..\(tableRows-1))")
             scrollToBottom(animated: false)
         }
     }
@@ -6117,7 +5563,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // If loading state is stuck for more than 10 seconds, reset it
         if isLoadingMore && timeSinceLastLoad > 10.0 {
-            // print("⚠️ Loading state appears to be stuck for \(Int(timeSinceLastLoad)) seconds - resetting")
             isLoadingMore = false
             messageLoadingState = .notLoading
             lastSuccessfulLoadTime = now
@@ -6125,7 +5570,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Also check for inconsistency between isLoadingMore and messageLoadingState
         if isLoadingMore && messageLoadingState == .notLoading {
-            // print("⚠️ Loading state inconsistency detected - isLoadingMore is true but messageLoadingState is notLoading")
             isLoadingMore = false
         }
     }
@@ -6174,7 +5618,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
         } else {
             // Enough time has passed, make the call immediately
-            // print("🔄 THROTTLE: Making immediate API call, \(String(format: "%.1f", timeSinceLastCall))s since last call")
             makeDirectAPICall(for: lastMessageId)
         }
     }
@@ -6186,7 +5629,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Don't proceed if already loading
         if isLoadingMore {
-            // print("⚠️ Already loading, skipping API call")
             return
         }
         
@@ -6202,14 +5644,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
         
         // Make the API call directly using a new approach with completion handler
-        // print("⬇️⬇️⬇️ Starting API call with lastMessageId: \(lastMessageId)")
         
         // Create a new task with strong self reference to ensure it completes
         let task = Task { [self] in
             do {
                 // Force synchronization first
                 if viewModel.messages.isEmpty {
-                    // print("⬇️⬇️⬇️ Syncing viewModel.messages with localMessages")
                     viewModel.messages = localMessages
                     viewModel.viewState.channelMessages[viewModel.channel.id] = localMessages
                 }
@@ -6218,7 +5658,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 let initialCount = localMessages.count
                 
                 // Call API directly with strong error handling
-                // print("⬇️⬇️⬇️ Making direct API call to fetch messages after \(lastMessageId)")
                 let result = try await viewModel.viewState.http.fetchHistory(
                     channel: viewModel.channel.id,
                     limit: 100,
@@ -6228,10 +5667,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     server: viewModel.channel.server
                 ).get()
                 
-                // print("⬇️⬇️⬇️ API call completed successfully, got \(result.messages.count) messages")
                 
                 // Fetch reply messages BEFORE MainActor.run
-                print("🔗 CALLING fetchReplyMessagesContent (makeDirectAPICall) with \(result.messages.count) messages")
                 await self.fetchReplyMessagesContent(for: result.messages)
                 
                 // Process results on main thread
@@ -6242,7 +5679,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     
                     // Process the new messages
                     if !result.messages.isEmpty {
-                        // print("⬇️⬇️⬇️ Processing \(result.messages.count) new messages")
                         
                         // Process all messages
                         for message in result.messages {
@@ -6257,7 +5693,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         
                         // Add new messages if there are any to add
                         if !messagesToAdd.isEmpty {
-                            // print("⬇️⬇️⬇️ Adding \(messagesToAdd.count) new messages to local arrays")
                             
                             // Create new arrays to avoid reference issues
                             var updatedMessages = localMessages
@@ -6269,7 +5704,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             viewModel.viewState.channelMessages[viewModel.channel.id] = updatedMessages
                             
                             // Final verification
-                            // print("⬇️⬇️⬇️ Arrays updated: viewModel.messages=\(viewModel.messages.count), localMessages=\(localMessages.count)")
                             
                             // Update UI
                             refreshMessages()
@@ -6287,12 +5721,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
 //                            banner.show(duration: 2.0)
                         }
                     } else {
-                        // print("⬇️⬇️⬇️ API returned empty result")
-                        print("ℹ️ LOAD_NEWER: You've reached the end of this conversation")
                     }
                 }
             } catch let error as RevoltError {
-                // print("⬇️⬇️⬇️ ERROR: API call failed with error: \(error)")
                 
                 // Reset loading state on main thread
                 await MainActor.run {
@@ -6301,7 +5732,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     
                     // Handle rate limit errors specifically
                     if case .HTTPError(let data, let code) = error, code == 429 {
-                        // print("⏱️ Rate limited: \(data ?? "No additional info")")
                         
                         // Extract retry_after from the error response
                         if let retryAfter = extractRetryAfterValue(from: data) {
@@ -6312,13 +5742,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             minimumAPICallInterval = max(minimumAPICallInterval, min(Double(retryAfter)/1000.0, 30.0))
                             
                             // Show user-friendly message with the retry time
-                            print("⏳ RATE_LIMIT: Please wait \(formattedTime) seconds before loading more messages.")
                             
                             // Update the last API call time to enforce the retry_after delay
                             lastAPICallTime = Date().addingTimeInterval(-minimumAPICallInterval + Double(retryAfter)/1000.0)
                         } else {
                             // Fallback message if we couldn't extract the retry time
-                            print("⏳ RATE_LIMIT: Please wait a few seconds before loading more messages.")
                             
                             // Set a default delay
                             minimumAPICallInterval = max(minimumAPICallInterval, 5.0)
@@ -6331,7 +5759,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     }
                 }
             } catch {
-                // print("⬇️⬇️⬇️ ERROR: Unknown error in API call: \(error)")
                 
                 // Reset loading state on main thread
                 await MainActor.run {
@@ -6351,7 +5778,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // If we're still loading after 15 seconds
             if self.isLoadingMore && Date().timeIntervalSince(loadStartTime) >= 15.0 {
-                // print("⬇️⬇️⬇️ TIMEOUT: API call didn't complete in 15 seconds, resetting loading state")
                 self.isLoadingMore = false
                 self.messageLoadingState = .notLoading
                 task.cancel() // Try to cancel the task
@@ -6471,7 +5897,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Ensure the new index path is valid
         guard newIndexPath.row < tableView.numberOfRows(inSection: 0) else {
-            // print("⚠️ Anchor cell index out of bounds after insertion")
             return
         }
         
@@ -6484,7 +5909,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Apply the new content offset without animation to avoid visual jumps
         tableView.setContentOffset(CGPoint(x: 0, y: newContentOffsetY), animated: false)
         
-        // print("📌 Maintained scroll position: anchor cell \(anchor.indexPath.row) → \(newIndexPath.row), offset: \(newContentOffsetY)")
     }
     
     /// Alternative implementation using a message ID as anchor instead of index path
@@ -6500,7 +5924,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Get visible index paths before the change
         guard let visibleIndexPaths = tableView.indexPathsForVisibleRows,
               !visibleIndexPaths.isEmpty else {
-            // print("⚠️ No visible cells to use as anchor")
             return
         }
         
@@ -6510,7 +5933,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         let contentOffset = tableView.contentOffset
         
-        // print("📍 Looking for anchor cell among \(visibleIndexPaths.count) visible cells")
         
         // Look for a good anchor message (preferably the second or third visible)
         // IMPORTANT: At this point, localMessages already contains the new messages
@@ -6528,7 +5950,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             if index >= 1 || visibleIndexPaths.count == 1 {
                 anchorMessageId = messageId
                 anchorDistanceFromTop = cellFrame.origin.y - contentOffset.y
-                // print("📍 Selected anchor: message at index \(indexPath.row), ID: \(messageId), distance from top: \(anchorDistanceFromTop)")
                 break
             }
         }
@@ -6539,7 +5960,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 anchorMessageId = localMessages[firstVisible.row]
                 let cellFrame = tableView.rectForRow(at: firstVisible)
                 anchorDistanceFromTop = cellFrame.origin.y - contentOffset.y
-                // print("📍 Fallback anchor: message at index \(firstVisible.row)")
             }
         }
         
@@ -6557,123 +5977,93 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     let newCellFrame = tableView.rectForRow(at: newIndexPath)
                     let newContentOffsetY = newCellFrame.origin.y - anchorDistanceFromTop
                     
-                    // print("📍 Restoring position: anchor now at index \(newIndex), new offset: \(newContentOffsetY)")
                     
                     // Apply the new content offset without animation
                     tableView.setContentOffset(CGPoint(x: 0, y: newContentOffsetY), animated: false)
                 } else {
-                    // print("⚠️ New index \(newIndex) is out of bounds")
                 }
             } else {
-                // print("⚠️ Could not find anchor message in updated array")
             }
         } else {
-            // print("⚠️ No anchor message selected")
         }
     }
     
-    // Precise scroll to reference message with retry mechanism
-    private func scrollToReferenceMessageWithRetry(referenceId: String?, messagesArray: [String], maxRetries: Int) {
+    // MARK: - Scroll Position Preservation for Load More
+    
+    /// Captures the current scroll position relative to a reference message BEFORE table reload
+    /// 
+    /// Note: The loading footer (40px) is hidden BEFORE calling this function to ensure
+    /// content size is stable when capturing position. This guarantees pixel-perfect
+    /// restoration since capture and restore work with identical content sizes.
+    private func captureScrollAnchor(referenceId: String?) -> ScrollAnchor? {
         guard let referenceId = referenceId else {
-            // print("⚠️ REFERENCE_SCROLL: No reference ID provided")
-            return
+            return nil
         }
         
-        // print("🎯 REFERENCE_SCROLL: Starting scroll to reference message '\(referenceId)'")
+        guard let currentIndex = localMessages.firstIndex(of: referenceId) else {
+            return nil
+        }
         
-        // Attempt to scroll with retry logic
-        attemptScrollToReference(referenceId: referenceId, messagesArray: messagesArray, attempt: 1, maxRetries: maxRetries)
+        guard currentIndex < tableView.numberOfRows(inSection: 0) else {
+            return nil
+        }
+        
+        let indexPath = IndexPath(row: currentIndex, section: 0)
+        let cellFrame = tableView.rectForRow(at: indexPath)
+        let currentOffset = tableView.contentOffset.y
+        let distanceFromTop = cellFrame.origin.y - currentOffset
+
+        
+        return ScrollAnchor(
+            messageId: referenceId,
+            distanceFromTop: distanceFromTop,
+            contentOffset: currentOffset
+        )
     }
     
-    private func attemptScrollToReference(referenceId: String, messagesArray: [String], attempt: Int, maxRetries: Int) {
-        guard attempt <= maxRetries else {
-            // print("❌ REFERENCE_SCROLL: Failed to scroll after \(maxRetries) attempts")
-            // Clear the reference ID since we've exhausted retries
-            self.lastBeforeMessageId = nil
+    /// Restores the exact scroll position AFTER table reload using the captured anchor
+    private func restoreScrollPosition(anchor: ScrollAnchor?, messagesArray: [String]) {
+        guard let anchor = anchor else {
             return
         }
         
-        // print("🎯 REFERENCE_SCROLL: Attempt \(attempt)/\(maxRetries) to find and scroll to '\(referenceId)'")
         
-        // Find the reference message in the array
-        if let targetIndex = messagesArray.firstIndex(of: referenceId) {
-            // print("✅ REFERENCE_SCROLL: Found reference message at index \(targetIndex)")
-            
-            // Verify table view has the expected number of rows
-            let tableRowCount = self.tableView.numberOfRows(inSection: 0)
-            // print("📊 REFERENCE_SCROLL: Table has \(tableRowCount) rows, array has \(messagesArray.count) items")
-            
-            // Make sure the index is valid for the table
-            if targetIndex < tableRowCount {
-                let indexPath = IndexPath(row: targetIndex, section: 0)
-                
-                // Calculate delay based on attempt number
-                let delay = Double(attempt - 1) * 0.2 // 0s, 0.2s, 0.4s
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    // Double-check the table state before scrolling
-                    let currentRowCount = self.tableView.numberOfRows(inSection: 0)
-                    if targetIndex < currentRowCount {
-                        // Force layout before scrolling
-                        self.tableView.layoutIfNeeded()
-                        
-                                                 // Perform the scroll
-                         self.tableView.scrollToRow(at: indexPath, at: .top, animated: false)
-                        
-                        // print("🎯 REFERENCE_SCROLL: Successfully scrolled to reference message at index \(targetIndex) (attempt \(attempt))")
-                        
-                        // Verify scroll position after a brief delay
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            let visibleIndexPaths = self.tableView.indexPathsForVisibleRows ?? []
-                            let isVisible = visibleIndexPaths.contains(indexPath)
-                            
-                            if isVisible {
-                                // print("✅ REFERENCE_SCROLL: Reference message is now visible, clearing reference ID")
-                                self.lastBeforeMessageId = nil
-                            } else {
-                                // print("⚠️ REFERENCE_SCROLL: Reference message not visible after scroll, retrying...")
-                                // Retry with next attempt
-                                self.attemptScrollToReference(referenceId: referenceId, messagesArray: messagesArray, attempt: attempt + 1, maxRetries: maxRetries)
-                            }
-                        }
-                    } else {
-                        // print("⚠️ REFERENCE_SCROLL: Index \(targetIndex) out of bounds (table has \(currentRowCount) rows), retrying...")
-                        // Retry with next attempt
-                        self.attemptScrollToReference(referenceId: referenceId, messagesArray: messagesArray, attempt: attempt + 1, maxRetries: maxRetries)
-                    }
-                }
-            } else {
-                // print("⚠️ REFERENCE_SCROLL: Index \(targetIndex) out of bounds for table with \(tableRowCount) rows, retrying...")
-                // Retry with next attempt  
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    self.attemptScrollToReference(referenceId: referenceId, messagesArray: messagesArray, attempt: attempt + 1, maxRetries: maxRetries)
-                }
-            }
-        } else {
-            // print("⚠️ REFERENCE_SCROLL: Reference message '\(referenceId)' not found in array, retrying...")
-            
-            // print some debug info about the array
-            if messagesArray.count > 0 {
-                let first5 = Array(messagesArray.prefix(5))
-                let last5 = Array(messagesArray.suffix(5))
-                // print("🔍 REFERENCE_SCROLL: Array first 5: \(first5)")
-                // print("🔍 REFERENCE_SCROLL: Array last 5: \(last5)")
-            }
-            
-            // Retry with next attempt
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                // Get fresh messages array in case it changed
-                let freshArray = !self.viewModel.messages.isEmpty ? 
-                    self.viewModel.messages : 
-                    (self.viewModel.viewState.channelMessages[self.viewModel.channel.id] ?? [])
-                self.attemptScrollToReference(referenceId: referenceId, messagesArray: freshArray, attempt: attempt + 1, maxRetries: maxRetries)
-            }
+        // Force layout to calculate new cell positions
+        tableView.layoutIfNeeded()
+        
+        // Find the reference message in the new data
+        guard let newIndex = messagesArray.firstIndex(of: anchor.messageId) else {
+            return
         }
+        
+        guard newIndex < tableView.numberOfRows(inSection: 0) else {
+            return
+        }
+        
+        
+        // Calculate new position
+        let newIndexPath = IndexPath(row: newIndex, section: 0)
+        let newCellFrame = tableView.rectForRow(at: newIndexPath)
+
+        
+        // Restore exact position: new cell origin - saved distance = new offset
+        let newContentOffset = newCellFrame.origin.y - anchor.distanceFromTop
+
+        
+        // Clamp to valid range
+        let maxOffset = max(0, tableView.contentSize.height - tableView.bounds.height + tableView.contentInset.bottom)
+        let clampedOffset = max(0, min(newContentOffset, maxOffset))
+        
+        // Apply immediately without animation
+        tableView.setContentOffset(CGPoint(x: 0, y: clampedOffset), animated: false)
+        
+        
+        // Clear the reference
+        lastBeforeMessageId = nil
     }
     
 //    private func loadInitialMessagesImmediate() async {
 //        let channelId = viewModel.channel.id
-//        print("💾 REACTIVE_IMMEDIATE: Delegating to ViewModel for channel \(channelId)")
 //        
 //        // Ensure table is visible at the end
 //        defer {
@@ -6689,7 +6079,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
 //        await viewModel.loadChannelMessages()
 //        
 //        let duration = Date().timeIntervalSince(startTime)
-//        print("✅ REACTIVE_IMMEDIATE: ViewModel completed in \(String(format: "%.3f", duration))s")
 //        
 //        // Refresh UI
 //        await MainActor.run {
@@ -6700,7 +6089,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
 //        // Old network fetch code removed - all network happens via NetworkSyncService
 //        if false {
 //        let apiStartTime = Date()
-//        print("🌐 API_LOAD: Fetching fresh data from server")
 //        
 //        do {
 //            // Get server ID if this is a server channel
@@ -6710,7 +6098,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
 //            let messageLimit = (channelId == "01J7QTT66242A7Q26A2FH5TD48" && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : 50
 //            
 //            // Fetch from API only if DB did not provide any messages
-//            print("🌐 API CALL: fetchHistory - Channel: \(channelId), Limit: \(messageLimit)")
 //            let result = try await viewModel.viewState.http.fetchHistory(
 //                channel: channelId,
 //                limit: messageLimit,
@@ -6721,17 +6108,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
 //            
 //            let apiEndTime = Date()
 //            let apiDuration = apiEndTime.timeIntervalSince(apiStartTime)
-//            print("🌐 API_RESPONSE: Received \(result.messages.count) messages in \(String(format: "%.2f", apiDuration))s")
 //            
 //            // Save to database (DatabaseObserver will update ViewState automatically)
-//            print("💾 Saving \(result.messages.count) messages, \(result.users.count) users to database")
 //            Task.detached(priority: .utility) {
 //                await NetworkRepository.shared.saveFetchHistoryResponse(
 //                    messages: result.messages,
 //                    users: result.users,
 //                    members: result.members
 //                )
-//                print("✅ Data saved to Realm database")
 //            }
 //            
 //            // IMMEDIATE PROCESSING for UI responsiveness
@@ -6755,7 +6139,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
 //            }
 //            
 //            // Fetch reply message content for messages that have replies
-//            print("🔗 CALLING fetchReplyMessagesContentAndRefreshUI (immediate load) with \(result.messages.count) messages")
 //            await fetchReplyMessagesContentAndRefreshUI(for: result.messages)
 //            
 //            // Sort messages immediately
@@ -6767,7 +6150,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
 //            
 //            let processingEndTime = Date()
 //            let processingDuration = processingEndTime.timeIntervalSince(processingStartTime)
-//            print("⚡ PROCESSING_IMMEDIATE: Processed \(sortedIds.count) messages in \(String(format: "%.2f", processingDuration))s")
 //            
 //            // IMMEDIATE UI UPDATE
 //            let uiStartTime = Date()
@@ -6798,13 +6180,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
 //                let uiDuration = uiEndTime.timeIntervalSince(uiStartTime)
 //                let totalDuration = uiEndTime.timeIntervalSince(apiStartTime)
 //                
-//                print("⚡ UI_UPDATE_IMMEDIATE: Updated UI in \(String(format: "%.2f", uiDuration))s")
-//                print("⚡ TOTAL_IMMEDIATE_DURATION: \(String(format: "%.2f", totalDuration))s")
-//                print("⚡ BREAKDOWN: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s, UI=\(String(format: "%.2f", uiDuration))s")
 //            }
 //            
 //        } catch {
-//            print("❌ IMMEDIATE_LOAD_ERROR: \(error)")
 //            
 //            DispatchQueue.main.async {
 //                self.hideSkeletonView()
@@ -6899,7 +6277,6 @@ extension MessageableChannelViewController: UITableViewDataSourcePrefetching {
         // Not critical to implement, but helps save resources
     }
 }
-
 // MARK: - Empty State Handling
 extension MessageableChannelViewController {
     
@@ -7468,12 +6845,10 @@ extension MessageableChannelViewController {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         
-        print("⚡ VIEW_DID_DISAPPEAR: User has completely left channel \(viewModel.channel.id) - performing FINAL instant cleanup")
         let finalCleanupStartTime = CFAbsoluteTimeGetCurrent()
         
         // Check if we're returning from search - if so, don't cleanup
         if isReturningFromSearch {
-            print("🔍 VIEW_DID_DISAPPEAR: Returning from search, skipping final cleanup")
             return
         }
         
@@ -7488,7 +6863,6 @@ extension MessageableChannelViewController {
             }
             
             if isStayingInSameChannel {
-                print("🎯 VIEW_DID_DISAPPEAR: Staying in same channel, skipping final cleanup")
                 return
             }
         }
@@ -7502,11 +6876,9 @@ extension MessageableChannelViewController {
         // Clear preloaded status so it can be preloaded again when needed
         let channelId = viewModel.channel.id
         viewModel.viewState.preloadedChannels.remove(channelId)
-        print("🧹 CLEANUP: Cleared preloaded status for channel \(channelId)")
         
         let finalCleanupEndTime = CFAbsoluteTimeGetCurrent()
         let finalCleanupDuration = (finalCleanupEndTime - finalCleanupStartTime) * 1000
-        print("⚡ VIEW_DID_DISAPPEAR: Total final cleanup completed in \(String(format: "%.2f", finalCleanupDuration))ms")
         
         // Log final memory usage
         logMemoryUsage(prefix: "FINAL CLEANUP COMPLETE")
@@ -7540,7 +6912,6 @@ extension MessageableChannelViewController {
                 anchorMessageId = messagesForDataSource[indexPath.row]
                 let cellFrame = tableView.rectForRow(at: indexPath)
                 anchorDistanceFromTop = cellFrame.origin.y - tableView.contentOffset.y
-                // print("🔍 SCROLL_PRESERVE: Selected anchor message \(anchorMessageId!) at index \(indexPath.row), distance from top: \(anchorDistanceFromTop)")
                 break
             }
         }
@@ -7550,7 +6921,6 @@ extension MessageableChannelViewController {
             anchorMessageId = messagesForDataSource[firstVisible.row]
             let cellFrame = tableView.rectForRow(at: firstVisible)
             anchorDistanceFromTop = cellFrame.origin.y - tableView.contentOffset.y
-            // print("🔍 SCROLL_PRESERVE: Using fallback anchor message \(anchorMessageId!) at index \(firstVisible.row)")
         }
         
         // Perform the reload
@@ -7570,9 +6940,7 @@ extension MessageableChannelViewController {
                 let clampedOffset = max(0, min(newContentOffsetY, maxOffset))
                 
                 tableView.setContentOffset(CGPoint(x: 0, y: clampedOffset), animated: false)
-                // print("📍 SCROLL_PRESERVE: Restored position to anchor message at new index \(newIndex), offset: \(clampedOffset)")
             } else {
-                // print("⚠️ SCROLL_PRESERVE: Could not find anchor message \(anchorId) in new data")
             }
         }
     }

@@ -12,7 +12,9 @@ extension MessageableChannelViewController: UITableViewDelegate {
     // Note: UITableViewDataSource methods are now handled by LocalMessagesDataSource class
     
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
-        if indexPath.row == 0 {
+        // For reversed table view: last row (bottom) is the oldest message
+        // Mark as loading when we reach the last row (bottom) where older messages should load
+        if !localMessages.isEmpty && indexPath.row == localMessages.count - 1 {
             isLoadingMore = true
         }
         
@@ -21,7 +23,8 @@ extension MessageableChannelViewController: UITableViewDelegate {
             return
         }
         
-        if indexPath.row == localMessages.count - 1 {
+        // For reversed table: row 0 is newest, so mark as seen when displayed
+        if indexPath.row == 0 {
             markLastMessageAsSeen()
         }
         
@@ -60,7 +63,6 @@ extension MessageableChannelViewController: UITableViewDelegate {
             
             // CRITICAL FIX: Don't refresh if target message protection is active
             if self.targetMessageProtectionActive {
-                print("🔄 BLOCKED: refreshMessagesWithoutScrolling blocked - target message protection active")
                 return
             }
             
@@ -75,7 +77,6 @@ extension MessageableChannelViewController: UITableViewDelegate {
     func updateEmptyStateVisibility() {
         // CRITICAL FIX: Don't show empty state during target message loading
         if targetMessageProtectionActive || messageLoadingState == .loading {
-            print("🚫 EMPTY_STATE: Blocked showing empty state - target message loading in progress")
             hideEmptyStateView()
             return
         }

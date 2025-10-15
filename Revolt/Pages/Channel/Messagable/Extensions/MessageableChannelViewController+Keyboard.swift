@@ -44,21 +44,17 @@ extension MessageableChannelViewController {
                 // CRITICAL FIX: Don't auto-scroll if target message was recently highlighted
                 if let highlightTime = self.lastTargetMessageHighlightTime,
                    Date().timeIntervalSince(highlightTime) < 10.0 {
-                    print("🎯 KEYBOARD SHOW: Target message highlighted recently, skipping auto-scroll")
                 } else if wasNearBottom && self.tableView.isScrollEnabled {
-                    // Scroll to show the last message above the input
+                    // Scroll to show the newest message (at top) above the input
                     // FIXED: Respect target message protection
                     if !self.localMessages.isEmpty && !self.targetMessageProtectionActive {
-                        let lastIndex = self.localMessages.count - 1
-                        if lastIndex >= 0 && lastIndex < self.tableView.numberOfRows(inSection: 0) {
-                            let indexPath = IndexPath(row: lastIndex, section: 0)
-                            self.safeScrollToRow(at: indexPath, at: .bottom, animated: false, reason: "keyboard shown")
+                        if self.tableView.numberOfRows(inSection: 0) > 0 {
+                            let indexPath = IndexPath(row: 0, section: 0)
+                            self.safeScrollToRow(at: indexPath, at: .top, animated: false, reason: "keyboard shown")
                         }
                     } else if self.targetMessageProtectionActive {
-                        print("🛡️ Keyboard: Target protection active, skipping auto-scroll")
                     }
                     
-                    print("📱 KEYBOARD SHOW: Table view auto-resized due to constraint, scrolled to bottom")
                 }
                 
                 // Update table view bouncing behavior as visible height changed
@@ -95,7 +91,6 @@ extension MessageableChannelViewController {
             // Update table view bouncing behavior as visible height changed
             self.updateTableViewBouncing()
             
-            print("📱 KEYBOARD HIDE: Updated bouncing behavior")
         } completion: { _ in
             self.isKeyboardVisible = false
         }

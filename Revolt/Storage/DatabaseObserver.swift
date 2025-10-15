@@ -33,12 +33,10 @@ class DatabaseObserver: ObservableObject {
     
     init(viewState: ViewState?) {
         self.viewState = viewState
-        print("DatabaseObserver initialized")
         setupObservers()
     }
     
     deinit {
-        print("DatabaseObserver deinitializing")
         tokens.forEach { $0.invalidate() }
         tokens.removeAll()
     }
@@ -46,7 +44,6 @@ class DatabaseObserver: ObservableObject {
     // MARK: - Observer Setup
     
     private func setupObservers() {
-        print("Setting up database observers")
         
         Task {
             await observeUsers()
@@ -54,7 +51,6 @@ class DatabaseObserver: ObservableObject {
             await observeChannels()
             await observeServers()
             
-            print("All database observers setup complete")
         }
     }
     
@@ -65,7 +61,6 @@ class DatabaseObserver: ObservableObject {
             let realm = try await Realm()
             let users = realm.objects(UserRealm.self)
             
-            print("Setting up user observer for \(users.count) users")
             
             let token = users.observe { [weak self] changes in
                 Task { @MainActor in
@@ -80,24 +75,20 @@ class DatabaseObserver: ObservableObject {
             }
             
         } catch {
-            print("Failed to setup user observer: \(error.localizedDescription)")
         }
     }
     
     private func handleUsersChange(_ changes: RealmCollectionChange<Results<UserRealm>>) async {
         switch changes {
         case .initial(let results):
-            print("Initial users loaded: \(results.count)")
             users = Array(results)
             notifyViewStateUsersChanged()
             
         case .update(let results, let deletions, let insertions, let modifications):
-            print("Users updated - deletions: \(deletions.count), insertions: \(insertions.count), modifications: \(modifications.count)")
             users = Array(results)
             notifyViewStateUsersChanged()
             
         case .error(let error):
-            print("Error in users observer: \(error.localizedDescription)")
         }
     }
     
@@ -105,7 +96,6 @@ class DatabaseObserver: ObservableObject {
         let convertedUsers = self.users.compactMap { $0.toOriginal() as Types.User? }
         let usersDictionary = Dictionary(uniqueKeysWithValues: convertedUsers.map { ($0.id, $0) })
         self.viewState?.updateUsersFromDatabase(usersDictionary)
-        print("ViewState merged \(usersDictionary.count) users from database")
     }
     
     // MARK: - Message Observation
@@ -115,7 +105,6 @@ class DatabaseObserver: ObservableObject {
             let realm = try await Realm()
             let messages = realm.objects(MessageRealm.self)
             
-            print("Setting up message observer for \(messages.count) messages")
             
             let token = messages.observe { [weak self] changes in
                 Task { @MainActor in
@@ -130,24 +119,20 @@ class DatabaseObserver: ObservableObject {
             }
             
         } catch {
-            print("Failed to setup message observer: \(error.localizedDescription)")
         }
     }
     
     private func handleMessagesChange(_ changes: RealmCollectionChange<Results<MessageRealm>>) async {
         switch changes {
         case .initial(let results):
-            print("Initial messages loaded: \(results.count)")
             messages = Array(results)
             notifyViewStateMessagesChanged()
             
         case .update(let results, let deletions, let insertions, let modifications):
-            print("Messages updated - deletions: \(deletions.count), insertions: \(insertions.count), modifications: \(modifications.count)")
             messages = Array(results)
             notifyViewStateMessagesChanged()
             
         case .error(let error):
-            print("Error in messages observer: \(error.localizedDescription)")
         }
     }
     
@@ -155,7 +140,13 @@ class DatabaseObserver: ObservableObject {
         let convertedMessages = self.messages.compactMap { $0.toOriginal() as Types.Message? }
         let messagesDictionary = Dictionary(uniqueKeysWithValues: convertedMessages.map { ($0.id, $0) })
         self.viewState?.updateMessagesFromDatabase(messagesDictionary)
-        print("ViewState merged \(messagesDictionary.count) messages from database")
+        
+        // POST NOTIFICATION FOR UI - Reactive architecture
+        NotificationCenter.default.post(
+            name: NSNotification.Name("DatabaseMessagesUpdated"),
+            object: nil
+        )
+        
     }
     
     // MARK: - Channel Observation
@@ -165,7 +156,6 @@ class DatabaseObserver: ObservableObject {
             let realm = try await Realm()
             let channels = realm.objects(ChannelRealm.self)
             
-            print("Setting up channel observer for \(channels.count) channels")
             
             let token = channels.observe { [weak self] changes in
                 Task { @MainActor in
@@ -180,24 +170,20 @@ class DatabaseObserver: ObservableObject {
             }
             
         } catch {
-            print("Failed to setup channel observer: \(error.localizedDescription)")
         }
     }
     
     private func handleChannelsChange(_ changes: RealmCollectionChange<Results<ChannelRealm>>) async {
         switch changes {
         case .initial(let results):
-            print("Initial channels loaded: \(results.count)")
             channels = Array(results)
             notifyViewStateChannelsChanged()
             
         case .update(let results, let deletions, let insertions, let modifications):
-            print("Channels updated - deletions: \(deletions.count), insertions: \(insertions.count), modifications: \(modifications.count)")
             channels = Array(results)
             notifyViewStateChannelsChanged()
             
         case .error(let error):
-            print("Error in channels observer: \(error.localizedDescription)")
         }
     }
     
@@ -205,7 +191,6 @@ class DatabaseObserver: ObservableObject {
         let convertedChannels = self.channels.compactMap { $0.toOriginal() as Types.Channel? }
         let channelsDictionary = Dictionary(uniqueKeysWithValues: convertedChannels.map { ($0.id, $0) })
         self.viewState?.updateChannelsFromDatabase(channelsDictionary)
-        print("ViewState merged \(channelsDictionary.count) channels from database")
     }
     
     // MARK: - Server Observation
@@ -215,7 +200,6 @@ class DatabaseObserver: ObservableObject {
             let realm = try await Realm()
             let servers = realm.objects(ServerRealm.self)
             
-            print("Setting up server observer for \(servers.count) servers")
             
             let token = servers.observe { [weak self] changes in
                 Task { @MainActor in
@@ -230,24 +214,20 @@ class DatabaseObserver: ObservableObject {
             }
             
         } catch {
-            print("Failed to setup server observer: \(error.localizedDescription)")
         }
     }
     
     private func handleServersChange(_ changes: RealmCollectionChange<Results<ServerRealm>>) async {
         switch changes {
         case .initial(let results):
-            print("Initial servers loaded: \(results.count)")
             servers = Array(results)
             notifyViewStateServersChanged()
             
         case .update(let results, let deletions, let insertions, let modifications):
-            print("Servers updated - deletions: \(deletions.count), insertions: \(insertions.count), modifications: \(modifications.count)")
             servers = Array(results)
             notifyViewStateServersChanged()
             
         case .error(let error):
-            print("Error in servers observer: \(error.localizedDescription)")
         }
     }
     
@@ -255,13 +235,11 @@ class DatabaseObserver: ObservableObject {
         let convertedServers = self.servers.compactMap { $0.toOriginal() as Types.Server? }
         let serversDictionary = Dictionary(uniqueKeysWithValues: convertedServers.map { ($0.id, $0) })
         self.viewState?.updateServersFromDatabase(serversDictionary)
-        print("ViewState merged \(serversDictionary.count) servers from database")
     }
     
     // MARK: - Friends Observer
     
     private func observeFriends() async {
-        print("Setting up friends observer")
         
         do {
             let realm = try await Realm()
@@ -282,27 +260,22 @@ class DatabaseObserver: ObservableObject {
                 self.notifyViewStateFriendsChanged()
             }
             
-            print("Friends observer setup complete with \(results.count) friends")
             
         } catch {
-            print("Failed to setup friends observer: \(error)")
         }
     }
     
     private func handleFriendsChanges(_ changes: RealmCollectionChange<Results<UserRealm>>) {
         switch changes {
         case .initial(let results):
-            print("Friends observer initial load: \(results.count) friends")
             self.friends = Array(results)
             self.notifyViewStateFriendsChanged()
             
         case .update(let results, let deletions, let insertions, let modifications):
-            print("Friends observer update: \(results.count) friends, \(insertions.count) insertions, \(modifications.count) modifications, \(deletions.count) deletions")
             self.friends = Array(results)
             self.notifyViewStateFriendsChanged()
             
         case .error(let error):
-            print("Friends observer error: \(error)")
         }
     }
     
@@ -310,13 +283,11 @@ class DatabaseObserver: ObservableObject {
         let convertedFriends = self.friends.compactMap { $0.toOriginal() as Types.User? }
         let friendsDictionary = Dictionary(uniqueKeysWithValues: convertedFriends.map { ($0.id, $0) })
         self.viewState?.updateUsersFromDatabase(friendsDictionary)
-        print("ViewState merged \(friendsDictionary.count) friends from database")
     }
     
     // MARK: - Members Observer
     
     private func observeMembers() async {
-        print("Setting up members observer")
         
         do {
             let realm = try await Realm()
@@ -336,27 +307,22 @@ class DatabaseObserver: ObservableObject {
                 self.notifyViewStateMembersChanged()
             }
             
-            print("Members observer setup complete with \(results.count) members")
             
         } catch {
-            print("Failed to setup members observer: \(error)")
         }
     }
     
     private func handleMembersChanges(_ changes: RealmCollectionChange<Results<MemberRealm>>) {
         switch changes {
         case .initial(let results):
-            print("Members observer initial load: \(results.count) members")
             self.members = Array(results)
             self.notifyViewStateMembersChanged()
             
         case .update(let results, let deletions, let insertions, let modifications):
-            print("Members observer update: \(results.count) members, \(insertions.count) insertions, \(modifications.count) modifications, \(deletions.count) deletions")
             self.members = Array(results)
             self.notifyViewStateMembersChanged()
             
         case .error(let error):
-            print("Members observer error: \(error)")
         }
     }
     
@@ -376,13 +342,11 @@ class DatabaseObserver: ObservableObject {
         }
         
         self.viewState?.updateMembersFromDatabase(membersByServer)
-        print("ViewState merged \(convertedMembers.count) members from database")
     }
     
     // MARK: - Public Methods
     
     func refreshAllObservers() {
-        print("Force refreshing all observers")
         
         Task {
             await observeUsers()
@@ -434,7 +398,6 @@ extension ViewState {
     func updateChannelsFromDatabase(_ channels: [String: Types.Channel]) {
         for (id, channel) in channels {
             self.channels[id] = channel
-            self.allEventChannels[id] = channel
             
             switch channel {
             case .dm_channel(_), .group_dm_channel(_):

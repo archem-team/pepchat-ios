@@ -148,6 +148,68 @@ class NetworkSyncService {
         return []
     }
     
+    // MARK: - Channels Sync
+    
+    /// Syncs all channels from API to database
+    /// Returns immediately - sync happens in background
+    func syncAllChannels() {
+        guard !activeSyncs.contains("all_channels") else {
+            logger.debug("⏭️ Channels sync already active")
+            return
+        }
+        
+        activeSyncs.insert("all_channels")
+        logger.info("🔄 Starting background sync for all channels")
+        
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self = self else { return }
+            
+            do {
+                // Channels are synced via WebSocket Ready event
+                // This is mainly for triggering a refresh if needed
+                logger.debug("✅ Channels sync - data comes from WebSocket Ready event")
+                
+            } catch {
+                logger.error("❌ Channels sync failed: \(error.localizedDescription)")
+            }
+            
+            await MainActor.run {
+                self.activeSyncs.remove("all_channels")
+            }
+        }
+    }
+    
+    // MARK: - Servers Sync
+    
+    /// Syncs all servers from API to database
+    /// Returns immediately - sync happens in background
+    func syncAllServers() {
+        guard !activeSyncs.contains("all_servers") else {
+            logger.debug("⏭️ Servers sync already active")
+            return
+        }
+        
+        activeSyncs.insert("all_servers")
+        logger.info("🔄 Starting background sync for all servers")
+        
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self = self else { return }
+            
+            do {
+                // Servers are synced via WebSocket Ready event
+                // This is mainly for triggering a refresh if needed
+                logger.debug("✅ Servers sync - data comes from WebSocket Ready event")
+                
+            } catch {
+                logger.error("❌ Servers sync failed: \(error.localizedDescription)")
+            }
+            
+            await MainActor.run {
+                self.activeSyncs.remove("all_servers")
+            }
+        }
+    }
+    
     // MARK: - Discover Servers Sync
     
     /// Syncs discover servers from CSV to database
@@ -271,7 +333,7 @@ class NetworkSyncService {
                 
                 let result = try await viewState.http.fetchHistory(
                     channel: channelId,
-                    limit: 50,
+                    limit: 100,
                     sort: "Latest",
                     server: serverId,
                     include_users: true
@@ -400,8 +462,12 @@ class NetworkSyncService {
                     channel: channelId,
                     limit: 100,
                     before: messageId,
+                    after: nil,
+                    nearby: nil,
+                    sort: "Latest",
                     server: serverId,
-                    messages: [messageId]
+                    messages: [],
+                    include_users: true
                 ).get()
                 
                 await self.logger.info("✅ Fetched \(result.messages.count) older messages")

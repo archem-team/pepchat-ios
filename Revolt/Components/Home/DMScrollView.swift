@@ -23,40 +23,6 @@ struct DMScrollView: View {
     @State private var selectedChannel : Channel? = nil
     @State private var wsState : WsState = .connecting
     
-    // Function to check and fix missing DMs
-    private func checkAndFixMissingDMs() {
-        // print("🔄 DMScrollView: Checking for missing DMs...")
-        
-        let totalDmChannels = viewState.allDmChannelIds.count
-        let currentlyVisibleDms = viewState.dms.count
-        
-        // print("🔄 DMScrollView: Total DM channels: \(totalDmChannels), Currently visible: \(currentlyVisibleDms)")
-        // print("🔄 DMScrollView: Loaded batches: \(viewState.loadedDmBatches)")
-        
-        // Use the new validation function
-        viewState.validateAndFixDmListConsistency()
-        
-        // If we still have fewer visible DMs than we should, fix it
-        if totalDmChannels > 0 && currentlyVisibleDms < min(totalDmChannels, viewState.dmBatchSize * 2) {
-            // print("🔄 DMScrollView: Missing DMs detected, reinitializing...")
-            viewState.reinitializeDmListFromCache()
-            
-            // Also ensure the first few batches are loaded
-            let totalBatches = (totalDmChannels + viewState.dmBatchSize - 1) / viewState.dmBatchSize
-            let batchesToLoad = min(3, totalBatches)
-            for batchIndex in 0..<batchesToLoad {
-                if !viewState.loadedDmBatches.contains(batchIndex) {
-                    // print("🔄 DMScrollView: Loading missing batch \(batchIndex)")
-                    viewState.loadDmBatch(batchIndex)
-                }
-            }
-        }
-        
-        // Ensure no gaps in loaded batches
-        viewState.ensureNoBatchGaps()
-        
-        // print("🔄 DMScrollView: After fix - Visible DMs: \(viewState.dms.count), Loaded batches: \(viewState.loadedDmBatches)")
-    }
     
     var body: some View {
         
@@ -141,7 +107,6 @@ struct DMScrollView: View {
                     do {
                         // Open the direct message channel for the current user
                         guard let currentUser = viewState.currentUser else {
-                            print("Error: currentUser is nil")
                             return
                         }
                         let channel = try await viewState.http.openDm(user: currentUser.id).get()
@@ -153,7 +118,6 @@ struct DMScrollView: View {
                         viewState.path.append(NavigationDestination.maybeChannelView)
                     } catch let error {
                         // Handle error here
-                        print("error \(error)")
                     }
                 }
             } label: {
@@ -223,7 +187,6 @@ struct DMScrollView: View {
                                 toggleSidebar()
                                 // CRITICAL FIX: Clear channel messages before navigating to ensure full message history is loaded
                                 // This prevents the issue where only new WebSocket messages are shown
-                                print("🔄 DMScrollView: Clearing channel messages for DM \(channel.id) to ensure full history loads")
                                 viewState.channelMessages[channel.id] = []
                                 viewState.preloadedChannels.remove(channel.id)
                                 viewState.selectDm(withId: channel.id)
@@ -244,7 +207,6 @@ struct DMScrollView: View {
                                             toggleSidebar()
                                             // CRITICAL FIX: Clear channel messages before navigating to ensure full message history is loaded
                                             // This prevents the issue where only new WebSocket messages are shown
-                                            print("🔄 DMScrollView: Clearing channel messages for DM \(channel.id) to ensure full history loads")
                                             viewState.channelMessages[channel.id] = []
                                             viewState.preloadedChannels.remove(channel.id)
                                             viewState.selectDm(withId: channel.id)
@@ -259,30 +221,6 @@ struct DMScrollView: View {
                                     
                                 }
                                 
-                            }
-                            .onAppear {
-                                // IMPROVED LAZY LOADING: Load batches based on actual visible index
-                                viewState.loadDmBatchesIfNeeded(visibleIndex: index)
-                                
-                                // Also load more when near the end
-                                if index >= dmsList.count - 5 && viewState.hasMoreDmsToLoad {
-                                    viewState.loadMoreDmsIfNeeded()
-                                }
-                            }
-                            .onDisappear {
-                                // CRITICAL FIX: When item disappears, check if we need to reload missing batches
-                                // This happens when user scrolls up after scrolling down
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                    // Check if this item should still be visible based on its index
-                                    if index < viewState.dms.count {
-                                        // If the item should be visible but disappeared, reload its batch
-                                        let batchIndex = index / viewState.dmBatchSize
-                                        if !viewState.loadedDmBatches.contains(batchIndex) {
-                                            // print("🔄 LAZY_DM: Item \(index) disappeared but should be visible, reloading batch \(batchIndex)")
-                                            viewState.loadDmBatch(batchIndex)
-                                        }
-                                    }
-                                }
                             }
                         }
                         
@@ -320,25 +258,15 @@ struct DMScrollView: View {
         .onAppear{
             self.wsState = self.viewState.wsCurrentState
             
-            // CRITICAL FIX: Check for missing DMs when view appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                self.checkAndFixMissingDMs()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            // Also check when app becomes active
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.checkAndFixMissingDMs()
-            }
+            // DATABASE-FIRST: Trigger background sync for channels
+            NetworkSyncService.shared.syncAllChannels()
         }
         // CRITICAL FIX: Listen for DM updates from WebSocket
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DMListNeedsUpdate"))) { notification in
-            // print("📱 DMScrollView: Received WebSocket update notification")
             // The view will automatically update due to @EnvironmentObject viewState
             // But we'll ensure the DM list is refreshed
             if let userInfo = notification.userInfo as? [String: Any],
                let channelId = userInfo["channelId"] as? String {
-                // print("📱 DMScrollView: New message in channel \(channelId)")
                 // Force a UI refresh by triggering viewState update
                 viewState.objectWillChange.send()
             }
@@ -382,7 +310,6 @@ struct DMScrollView: View {
                     case .groupSetting(let channelId) :
                         self.viewState.path.append(NavigationDestination.channel_settings(channelId))
                     default:
-                        print("---")
                     
                    }
                 
