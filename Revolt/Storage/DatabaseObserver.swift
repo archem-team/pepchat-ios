@@ -89,6 +89,7 @@ class DatabaseObserver: ObservableObject {
             notifyViewStateUsersChanged()
             
         case .error(let error):
+			break
         }
     }
     
@@ -133,6 +134,7 @@ class DatabaseObserver: ObservableObject {
             notifyViewStateMessagesChanged()
             
         case .error(let error):
+            break
         }
     }
     
@@ -184,6 +186,7 @@ class DatabaseObserver: ObservableObject {
             notifyViewStateChannelsChanged()
             
         case .error(let error):
+            break
         }
     }
     
@@ -228,6 +231,7 @@ class DatabaseObserver: ObservableObject {
             notifyViewStateServersChanged()
             
         case .error(let error):
+			break
         }
     }
     
@@ -276,6 +280,7 @@ class DatabaseObserver: ObservableObject {
             self.notifyViewStateFriendsChanged()
             
         case .error(let error):
+            break
         }
     }
     
@@ -323,6 +328,7 @@ class DatabaseObserver: ObservableObject {
             self.notifyViewStateMembersChanged()
             
         case .error(let error):
+            break
         }
     }
     

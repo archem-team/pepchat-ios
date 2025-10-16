@@ -3648,9 +3648,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 }
             }
         case .delete:
-            // Handle deleting message
+            return
         case .report:
-            // Handle reporting message
+			return
         case .copy:
             // Copy message content to clipboard
             UIPasteboard.general.string = message.content
@@ -3698,7 +3698,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 messageInputView.focusTextField()
             }
         case .markUnread:
-            // Handle marking message as unread
+			break
         case .copyLink:
             // Copy message link to clipboard
             let channelId = message.channel

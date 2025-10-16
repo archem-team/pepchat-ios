@@ -2987,6 +2987,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     case .success(_):
                         break
                     case .failure(let error):
+						print("Failed to load emoji image: \(error)")
                     }
                 }
             )

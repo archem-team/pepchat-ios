@@ -310,7 +310,7 @@ struct DMScrollView: View {
                     case .groupSetting(let channelId) :
                         self.viewState.path.append(NavigationDestination.channel_settings(channelId))
                     default:
-                    
+						break
                    }
                 
                 }

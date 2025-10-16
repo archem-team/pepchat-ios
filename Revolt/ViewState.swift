@@ -1922,6 +1922,7 @@ public class ViewState: ObservableObject {
                                         let response = await self.http.uploadNotificationToken(token: existingToken)
                                         switch response {
                                             case .success:
+                                                break
                                             case .failure(let error):
                                                 self.storePendingNotificationToken(existingToken)
                                         }
@@ -1956,7 +1957,7 @@ public class ViewState: ObservableObject {
                     }
                     
                 case .failure(_):
-                    ()
+                    break
                 }
             }
     }
@@ -2434,6 +2435,7 @@ public class ViewState: ObservableObject {
             }
             
         case .authenticated:
+            break
             
         case .invalid_session:
             Task {
@@ -2683,7 +2685,7 @@ public class ViewState: ObservableObject {
                 }
                 
             default:
-                // Other channel types - store in event channels
+               break
             }
             
             // Update app badge count when new channel is created
@@ -2879,6 +2881,7 @@ public class ViewState: ObservableObject {
                         self.checkAndCleanupIfNeeded()
                         
                     case .failure(let error):
+						print(error)
                 }
                 
             } else {
@@ -2955,6 +2958,7 @@ public class ViewState: ObservableObject {
                         }
                         self.checkAndCleanupIfNeeded()
                     case .failure(_):
+						break
                 }
                 
                 switch memberResult {
@@ -2963,6 +2967,7 @@ public class ViewState: ObservableObject {
                         serverMembers[e.user] = member
                         self.members[e.id] = serverMembers
                     case .failure(_):
+						break
                 }
 
             }
@@ -4444,7 +4449,7 @@ public class ViewState: ObservableObject {
                 pendingNotificationToken = nil // Clear pending token after success
                 UserDefaults.standard.removeObject(forKey: "pendingNotificationToken")
             case .failure(let error):
-                // Keep the pending token for next retry
+                break
         }
     }
     
