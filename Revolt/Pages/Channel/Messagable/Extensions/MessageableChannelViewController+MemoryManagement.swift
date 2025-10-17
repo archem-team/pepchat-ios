@@ -242,6 +242,10 @@ extension MessageableChannelViewController {
         // Don't perform any aggressive cleanup while user is actively viewing messages
         // Messages will be cleared when leaving the channel
         print("⚠️ MEMORY WARNING: Received memory warning but deferring cleanup until channel exit")
+        
+        // PERFORMANCE: Clear height caches to free up memory
+        MessageCellHeightCache.shared.clearAllCaches()
+        
         return
     }
     

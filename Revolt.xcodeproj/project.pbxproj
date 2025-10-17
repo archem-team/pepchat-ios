@@ -266,6 +266,7 @@
 		7031993BD3D264C895FFB466 /* CreateServerRoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F75CCC5D94FA80B2DCBD7821 /* CreateServerRoleView.swift */; };
 		853B147C2EA2C5FA00B25C36 /* ChannelDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853B147B2EA2C5FA00B25C36 /* ChannelDataManager.swift */; };
 		853B147E2EA2C61400B25C36 /* DatabaseCleanupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853B147D2EA2C61400B25C36 /* DatabaseCleanupService.swift */; };
+		853B14802EA2FB8D00B25C36 /* MessageCellHeightCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853B147F2EA2FB8D00B25C36 /* MessageCellHeightCache.swift */; };
 		8564AA702E6C4393004C849C /* RealmManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA6F2E6C4393004C849C /* RealmManager.swift */; };
 		8564AA772E6C4CF7004C849C /* DetachRealm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA762E6C4CF7004C849C /* DetachRealm.swift */; };
 		8564AA8D2E6C5A98004C849C /* ModelMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA7D2E6C5A98004C849C /* ModelMappers.swift */; };
@@ -656,6 +657,7 @@
 		56C3A459C46C9725691178F3 /* RoleColorPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleColorPickerSheet.swift; sourceTree = "<group>"; };
 		853B147B2EA2C5FA00B25C36 /* ChannelDataManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelDataManager.swift; sourceTree = "<group>"; };
 		853B147D2EA2C61400B25C36 /* DatabaseCleanupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseCleanupService.swift; sourceTree = "<group>"; };
+		853B147F2EA2FB8D00B25C36 /* MessageCellHeightCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCellHeightCache.swift; sourceTree = "<group>"; };
 		8564AA6F2E6C4393004C849C /* RealmManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealmManager.swift; sourceTree = "<group>"; };
 		8564AA762E6C4CF7004C849C /* DetachRealm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachRealm.swift; sourceTree = "<group>"; };
 		8564AA782E6C5A98004C849C /* ApiMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiMappers.swift; sourceTree = "<group>"; };
@@ -1113,6 +1115,7 @@
 			children = (
 				059B24D12DE745F7007ACFFB /* URLDetector.swift */,
 				059B24CF2DE5BB56007ACFFB /* MessageInputHandler.swift */,
+				853B147F2EA2FB8D00B25C36 /* MessageCellHeightCache.swift */,
 				05F3042A2DCF485A0058E80E /* MarkdownProcessor.swift */,
 				05F304282DCF484E0058E80E /* ULID.swift */,
 			);
@@ -2219,6 +2222,7 @@
 				172F2D012C22ED4D00948C00 /* IteratorProtocol.swift in Sources */,
 				0555DD492CE3FA0C00D7E40D /* PeptideDivider.swift in Sources */,
 				1718F3D02B0BCAA50018E524 /* UnreadCounter.swift in Sources */,
+				853B14802EA2FB8D00B25C36 /* MessageCellHeightCache.swift in Sources */,
 				05358AA22CCEA2C600B16635 /* PeptideImage.swift in Sources */,
 				059B24B92DE5BAFA007ACFFB /* MessageableChannelViewController+Keyboard.swift in Sources */,
 				059833E22CCFC24C005227A3 /* PeptideButton.swift in Sources */,

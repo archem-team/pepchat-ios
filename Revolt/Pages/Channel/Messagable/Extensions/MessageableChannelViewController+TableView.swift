@@ -23,6 +23,11 @@ extension MessageableChannelViewController: UITableViewDelegate {
             return
         }
         
+        // PERFORMANCE: Cache cell height for future use
+        let messageId = localMessages[indexPath.row]
+        let cellHeight = cell.frame.height
+        heightCache.setHeight(cellHeight, for: messageId, in: viewModel.channel.id)
+        
         // For reversed table: row 0 is newest, so mark as seen when displayed
         if indexPath.row == 0 {
             markLastMessageAsSeen()
@@ -53,6 +58,19 @@ extension MessageableChannelViewController: UITableViewDelegate {
         return UITableView.automaticDimension
     }
     
+    func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
+        // PERFORMANCE: Return cached height if available, otherwise use default estimate
+        guard indexPath.row < localMessages.count else {
+            return 150
+        }
+        
+        let messageId = localMessages[indexPath.row]
+        if let cachedHeight = heightCache.height(for: messageId, in: viewModel.channel.id) {
+            return cachedHeight
+        }
+        
+        return 150 // Default estimate for messages with markdown/embeds
+    }
 
     
     // MARK: - Helper Methods

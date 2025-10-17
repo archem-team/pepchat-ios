@@ -276,6 +276,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     // MARK: - Auto Scroll Suppression
     private var suppressAutoScroll: Bool = false
     
+    // MARK: - Performance Optimization
+    internal let heightCache = MessageCellHeightCache.shared
+    
     init(viewModel: MessageableChannelViewModel) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
@@ -309,7 +312,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // 🚀 PERFORMANCE: Load data immediately in viewDidLoad
         loadInitialDataIfNeeded()
-        
     }
     
     // MARK: - Performance Optimized Setup Methods
@@ -391,7 +393,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             name: NSNotification.Name("ChannelSearchClosing"),
             object: nil
         )
-        
     }
     
     /// Sets up only basic observers needed for immediate functionality
@@ -739,7 +740,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // 🚀 PERFORMANCE: Data already loaded in viewDidLoad, just handle viewDidAppear logic
         //handleViewDidAppearLogic()
-        
     }
     
     // MARK: - Performance Optimized Data Loading
@@ -994,6 +994,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Stop automatic memory cleanup timer
         stopMemoryCleanupTimer()
+        
+        // PERFORMANCE: Clear height cache for this channel
+        heightCache.clearCache(for: viewModel.channel.id)
         
         // CRITICAL FIX: Don't cleanup if we're returning from search
         if isReturningFromSearch {
@@ -1422,7 +1425,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         tableView.backgroundColor = .bgDefaultPurple13
         
         tableView.keyboardDismissMode = .interactive
-        tableView.estimatedRowHeight = 80 // Reduced for better performance
+        tableView.estimatedRowHeight = 150 // Optimized for typical message height with markdown/embeds
         tableView.rowHeight = UITableView.automaticDimension
         
         // PERFORMANCE: Enable cell prefetching and optimize scrolling
@@ -1702,13 +1705,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     private func loadMessagesFromDatabase() async {
         let channelId = viewModel.channel.id
         
-        // Fetch messages from database through repository
-        let dbMessages = await MessageRepository.shared.fetchMessages(forChannel: channelId)
+        // PERFORMANCE: Fetch only latest 50 messages initially for faster loading
+        // Older messages will be loaded on scroll
+        let dbMessages = await MessageRepository.shared.fetchLatestMessages(forChannel: channelId, limit: 50)
         
         guard !dbMessages.isEmpty else {
             return
         }
-        
         
         await MainActor.run {
             // Update ViewState from database
@@ -2567,7 +2570,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // FAST: Lightweight refresh method with minimal overhead
     func refreshMessages(forceUpdate: Bool = false) {
-        
         // CRITICAL FIX: Don't refresh if we're in the middle of nearby loading (unless forced for reactions)
         if messageLoadingState == .loading && !forceUpdate {
             return
@@ -5209,23 +5211,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // For messages between 11-15, calculate spacing more carefully
         
-        // Calculate the visible height of the table
-        let visibleHeight = tableView.bounds.height
-        
-        // Calculate the total height of all cells with error handling
-        var totalCellHeight: CGFloat = 0
-        
-        for i in 0..<messageCount {
-            let indexPath = IndexPath(row: i, section: 0)
-            // Add safety check for rect calculation
-            guard indexPath.row < tableView.numberOfRows(inSection: 0) else {
-                break
-            }
-            let rowHeight = tableView.rectForRow(at: indexPath).height
-            totalCellHeight += rowHeight
-        }
-        
-        
+        // PERFORMANCE: Skip expensive height calculations, just update bouncing
+        // The rectForRow calculation is too expensive for initial load
         // Just update bouncing behavior for medium message counts
         updateTableViewBouncing()
         
@@ -5258,11 +5245,19 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             return
         }
         
-        // Calculate actual content height by summing row heights
+        // PERFORMANCE: Calculate actual content height efficiently
+        // For large message counts, use estimated height to avoid expensive rectForRow calls
         var actualContentHeight: CGFloat = 0
-        for i in 0..<rowCount {
-            let indexPath = IndexPath(row: i, section: 0)
-            actualContentHeight += tableView.rectForRow(at: indexPath).height
+        if rowCount <= 50 {
+            // Only calculate actual heights for small message lists
+            for i in 0..<rowCount {
+                let indexPath = IndexPath(row: i, section: 0)
+                actualContentHeight += tableView.rectForRow(at: indexPath).height
+            }
+        } else {
+            // For large lists, estimate using average cached height or default
+            // This avoids blocking the UI with expensive calculations
+            actualContentHeight = CGFloat(rowCount) * 150
         }
         
         // Add header/footer heights only if they are visible
