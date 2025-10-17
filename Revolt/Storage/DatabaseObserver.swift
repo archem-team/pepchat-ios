@@ -144,11 +144,13 @@ class DatabaseObserver: ObservableObject {
         self.viewState?.updateMessagesFromDatabase(messagesDictionary)
         
         // POST NOTIFICATION FOR UI - Reactive architecture
-        NotificationCenter.default.post(
-            name: NSNotification.Name("DatabaseMessagesUpdated"),
-            object: nil
-        )
-        
+        // Explicitly dispatch to main thread to ensure observers receive it
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: NSNotification.Name("DatabaseMessagesUpdated"),
+                object: nil
+            )
+        }
     }
     
     // MARK: - Channel Observation

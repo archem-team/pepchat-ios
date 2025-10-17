@@ -50,6 +50,11 @@ extension MessageableChannelViewModel {
             notifyMessagesDidChange()
         } else {
             logger.info("💾 REACTIVE_VM: No messages in Database (first time load)")
+            
+            // Initialize empty state and notify so view knows we checked
+            viewState.channelMessages[channel.id] = []
+            self.messages = []
+            notifyMessagesDidChange()
         }
         
         // 2️⃣ Trigger background network sync

@@ -1694,6 +1694,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // DATABASE REACTIVE ARCHITECTURE: Handle messages loaded from database
     @objc private func messagesDidChangeFromDatabase(_ notification: Notification) {
+        print("📬 MessageableChannelViewController: Received DatabaseMessagesUpdated notification for channel \(viewModel.channel.id)")
         
         // Load messages from database via ViewModel
         Task {
@@ -1705,35 +1706,50 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     private func loadMessagesFromDatabase() async {
         let channelId = viewModel.channel.id
         
+        print("💾 ViewController: Loading messages from database for channel \(channelId)")
+        
         // PERFORMANCE: Fetch only latest 50 messages initially for faster loading
         // Older messages will be loaded on scroll
         let dbMessages = await MessageRepository.shared.fetchLatestMessages(forChannel: channelId, limit: 50)
         
-        guard !dbMessages.isEmpty else {
-            return
-        }
+        print("💾 ViewController: Fetched \(dbMessages.count) messages from database")
         
+        // FIXED: Don't return early - always update UI even if empty
+        // This ensures the view updates when database transitions from empty to populated
         await MainActor.run {
-            // Update ViewState from database
-            for message in dbMessages {
-                viewModel.viewState.messages[message.id] = message
+            if !dbMessages.isEmpty {
+                print("✅ ViewController: Updating UI with \(dbMessages.count) messages")
+                // Update ViewState from database
+                for message in dbMessages {
+                    viewModel.viewState.messages[message.id] = message
+                }
+                
+                // Sort messages by timestamp (newest first)
+                let sortedIds = dbMessages.map { $0.id }.sorted { id1, id2 in
+                    let date1 = createdAt(id: id1)
+                    let date2 = createdAt(id: id2)
+                    return date1 > date2
+                }
+                
+                // Update all message arrays
+                viewModel.viewState.channelMessages[channelId] = sortedIds
+                viewModel.messages = sortedIds
+                localMessages = sortedIds
+                
+                // Refresh the table view - FORCE update since we're loading from database
+                refreshMessages(forceUpdate: true)
+                
+                // Hide loading indicators
+                hideSkeletonView()
+                tableView.tableFooterView = nil
+                
+                // Clean up loading state (for first time loads)
+                MessageableChannelViewController.loadingMutex.lock()
+                MessageableChannelViewController.loadingChannels.remove(channelId)
+                MessageableChannelViewController.loadingMutex.unlock()
+                
+                messageLoadingState = .notLoading
             }
-            
-            // Sort messages by timestamp (newest first)
-            let sortedIds = dbMessages.map { $0.id }.sorted { id1, id2 in
-                let date1 = createdAt(id: id1)
-                let date2 = createdAt(id: id2)
-                return date1 > date2
-            }
-            
-            // Update all message arrays
-            viewModel.viewState.channelMessages[channelId] = sortedIds
-            viewModel.messages = sortedIds
-            localMessages = sortedIds
-            
-            
-            // Refresh the table view
-            refreshMessages()
         }
     }
     
@@ -2593,29 +2609,29 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         } else if targetMessageId != nil {
         }
         
-        // Get new messages directly - no async overhead
-        guard let channelMessages = viewModel.viewState.channelMessages[viewModel.channel.id],
-              !channelMessages.isEmpty,
-              localMessages != channelMessages else { return }
-        
-        // CRITICAL: Check if actual message objects exist before refreshing
-        let hasActualMessages = channelMessages.first(where: { viewModel.viewState.messages[$0] != nil }) != nil
-        if !hasActualMessages {
-            
-            // CRITICAL FIX: Don't force reload if target message protection is active (unless forced for reactions)
-            if targetMessageProtectionActive && !forceUpdate {
-                return
-            }
-            
-            // CRITICAL FIX: Don't load from database in refreshMessages - this should only happen in initial setup
-            return
-        }
+//        // Get new messages directly - no async overhead
+//        guard let channelMessages = viewModel.viewState.channelMessages[viewModel.channel.id],
+//              !channelMessages.isEmpty,
+//              localMessages != channelMessages else { return }
+//        
+//        // CRITICAL: Check if actual message objects exist before refreshing
+//        let hasActualMessages = channelMessages.first(where: { viewModel.viewState.messages[$0] != nil }) != nil
+//        if !hasActualMessages {
+//            
+//            // CRITICAL FIX: Don't force reload if target message protection is active (unless forced for reactions)
+//            if targetMessageProtectionActive && !forceUpdate {
+//                return
+//            }
+//            
+//            // CRITICAL FIX: Don't load from database in refreshMessages - this should only happen in initial setup
+//            return
+//        }
         
         let wasNearBottom = isUserNearBottom()
         
         // Capture old messages for diff calculation
         let oldMessages = localMessages
-        let newMessages = channelMessages
+		guard let newMessages = viewModel.viewState.channelMessages[viewModel.channel.id] else { return }
         
         // CRITICAL: Mark data source as updating to protect scroll events
         isDataSourceUpdating = true
@@ -2988,21 +3004,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             self.hideEmptyStateView()
         }
         
-        // Ensure cleanup when done
-        defer {
-            MessageableChannelViewController.loadingMutex.lock()
-            MessageableChannelViewController.loadingChannels.remove(channelId)
-            MessageableChannelViewController.loadingMutex.unlock()
-            
-            // CRITICAL FIX: Reset loading state when done
-            messageLoadingState = .notLoading
-            
-            // Remove loading indicator
-            DispatchQueue.main.async {
-                self.tableView.tableFooterView = nil
-            }
-        }
-        
         // OPTIMIZED: Don't clear existing messages immediately - keep them visible while loading
         // Only clear if we're switching to a completely different channel
         
@@ -3066,11 +3067,30 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             if foundInDB {
                 await MainActor.run {
                     self.refreshMessages()
-                                    self.scrollToTargetMessage()
-                                    }
-                                } else {
+                    self.scrollToTargetMessage()
+                }
             }
         }
+        
+        // Clean up loading state
+        // If we have messages, clean up now. If not (first time load), 
+        // the database notification handler will clean up when messages arrive
+        let hasMessages = !(viewModel.messages.isEmpty)
+        
+        if hasMessages {
+            // We have messages from database, clean up loading state
+            MessageableChannelViewController.loadingMutex.lock()
+            MessageableChannelViewController.loadingChannels.remove(channelId)
+            MessageableChannelViewController.loadingMutex.unlock()
+            
+            messageLoadingState = .notLoading
+            
+            DispatchQueue.main.async {
+                self.tableView.tableFooterView = nil
+            }
+        }
+        // If no messages (first time load), keep loading state active
+        // The notification handler will clean it up when database gets populated
     }
     
     // Helper method to load regular messages without a target
