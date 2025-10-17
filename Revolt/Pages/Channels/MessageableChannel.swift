@@ -16,20 +16,32 @@ struct VisibleKey: PreferenceKey {
 
 @MainActor
 class MessageableChannelViewModel: ObservableObject {
-    @ObservedObject var viewState: ViewState
+    @ObservedObject var viewState: ViewState // Keep for session state and members
     @Published var channel: Channel
     @Published var server: Server?
-    @Binding var messages: [String]
     @Published var replies: [Reply] = []
     @Published var queuedMessages: [QueuedMessage] = []
+    
+    // DATABASE-FIRST: Use ChannelDataManager for messages and users
+    @Published var dataManager: ChannelDataManager
+    
+    // Computed property for backward compatibility
+    var messages: [String] {
+        return dataManager.messageIds
+    }
 
-    init(viewState: ViewState, channel: Channel, server: Server?, messages: Binding<[String]>) {
+    init(viewState: ViewState, channel: Channel, server: Server?, messages: Binding<[String]>? = nil) {
         self.viewState = viewState
         self.channel = channel
         self.server = server
-        self._messages = messages
+        self.dataManager = ChannelDataManager(channelId: channel.id)
         self.replies = []
         self.queuedMessages = []
+        
+        // Load initial messages from database
+        Task {
+            await dataManager.loadInitialMessages()
+        }
     }
 
     func getMember(message: Message) -> Binding<Member?> {
@@ -43,54 +55,36 @@ class MessageableChannelViewModel: ObservableObject {
     func loadMoreMessages(before: String? = nil) async -> FetchHistory? {
         if isPreview { return nil }
 
-        // 🎯 REACTIVE ARCHITECTURE: Read from Database ONLY
-        print("💾 REACTIVE_LOAD_MORE: Loading messages from Database")
+        // DATABASE-FIRST: Load from ChannelDataManager
+        print("💾 DATABASE-FIRST: Loading messages via ChannelDataManager")
         
-        // 1️⃣ Read from Database
-        let dbMessages = await MessageRepository.shared.fetchMessages(forChannel: channel.id)
-        
-        if !dbMessages.isEmpty {
-            print("💾 REACTIVE_LOAD_MORE: Found \(dbMessages.count) messages in Database")
-            
-            // Update ViewState from Database
-            for message in dbMessages {
-                viewState.messages[message.id] = message
-            }
-            
-            let sortedIds = dbMessages.map { $0.id }.sorted { id1, id2 in
-                let date1 = createdAt(id: id1)
-                let date2 = createdAt(id: id2)
-                return date1 < date2
-            }
-            
-            viewState.channelMessages[channel.id] = sortedIds
-            print("💾 REACTIVE_LOAD_MORE: ViewState updated from Database")
+        if before != nil {
+            // Load more older messages (pagination)
+            let hasMore = await dataManager.loadMoreMessages()
+            print("💾 DATABASE-FIRST: Loaded more messages, hasMore: \(hasMore)")
         } else {
-            print("💾 REACTIVE_LOAD_MORE: No messages in Database")
+            // Initial load already done in init, but trigger sync
+            print("💾 DATABASE-FIRST: Initial messages already loaded")
         }
         
-        // 2️⃣ Trigger background network sync
+        // Trigger background network sync to fetch new messages from server
         if let messageId = before {
-            // Load more older messages
             await NetworkSyncService.shared.syncMoreMessages(
                 channelId: channel.id,
                 before: messageId,
                 viewState: viewState
             )
-            print("🔄 REACTIVE_LOAD_MORE: Background sync triggered for older messages")
+            print("🔄 DATABASE-FIRST: Background sync triggered for older messages")
         } else {
-            // Initial load
             await NetworkSyncService.shared.syncChannelMessages(
                 channelId: channel.id,
                 viewState: viewState
             )
-            print("🔄 REACTIVE_LOAD_MORE: Background sync triggered for initial load")
+            print("🔄 DATABASE-FIRST: Background sync triggered for initial load")
         }
         
-        // Return empty result - DatabaseObserver will update UI when sync completes
+        // Return empty - data is in dataManager, not ViewState
         return FetchHistory(messages: [], users: [])
-        
-        // Old HTTP fetch code removed - all network happens via NetworkSyncService
     }
 
     func loadMoreMessagesIfNeeded(current: Message?) async -> FetchHistory? {
@@ -98,7 +92,7 @@ class MessageableChannelViewModel: ObservableObject {
             return await loadMoreMessages()
         }
 
-        guard let firstMessage = $messages.wrappedValue.first else {
+        guard let firstMessage = dataManager.messageIds.first else {
             return await loadMoreMessages()
         }
         
@@ -107,6 +101,21 @@ class MessageableChannelViewModel: ObservableObject {
         }
 
         return nil
+    }
+    
+    // DATABASE-FIRST: Helper to get message from data manager
+    func getMessage(id: String) -> Message? {
+        return dataManager.getMessage(id: id)
+    }
+    
+    // DATABASE-FIRST: Helper to get user from data manager
+    func getUser(id: String) -> User? {
+        return dataManager.getUser(id: id)
+    }
+    
+    // DATABASE-FIRST: Clear data when view is dismissed
+    func cleanup() {
+        dataManager.clearData()
     }
 }
 

@@ -55,6 +55,29 @@ class UserRepository {
         return userRealm.toOriginal() as? Types.User
     }
     
+    /// Batch fetch multiple users by their IDs (optimized for message rendering)
+    func fetchUsers(ids: [String]) async -> [String: Types.User] {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        guard !ids.isEmpty else { return [:] }
+        
+        let realms = await realmManager.getListOfObjects(type: UserRealm.self)
+        let idSet = Set(ids)
+        let filtered = realms.filter { idSet.contains($0.id) }
+        
+        var usersDictionary: [String: Types.User] = [:]
+        for userRealm in filtered {
+            if let user = userRealm.toOriginal() as? Types.User {
+                usersDictionary[user.id] = user
+            }
+        }
+        
+        let endTime = CFAbsoluteTimeGetCurrent()
+        let duration = (endTime - startTime) * 1000
+        logger.debug("📊 Batch fetched \(usersDictionary.count) users in \(String(format: "%.2f", duration))ms")
+        
+        return usersDictionary
+    }
+    
     /// Fetch all users from Realm
     func fetchAllUsers() async -> [Types.User] {
         let realms = await realmManager.getListOfObjects(type: UserRealm.self)

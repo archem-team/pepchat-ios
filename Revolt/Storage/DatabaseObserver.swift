@@ -376,61 +376,60 @@ class DatabaseObserver: ObservableObject {
     }
 }
 
-// MARK: - ViewState Update Methods
+// MARK: - ViewState Update Methods (DATABASE-FIRST ARCHITECTURE)
+// ViewState update methods removed - data no longer accumulated in singleton
+// Views now load data directly from repositories on-demand
+// DatabaseObserver only posts NotificationCenter notifications for reactive updates
 
 extension ViewState {
     func updateUsersFromDatabase(_ users: [String: Types.User]) {
-        for (id, user) in users {
-            self.users[id] = user
-            self.allEventUsers[id] = user
-        }
+        // DATABASE-FIRST: Don't accumulate in ViewState
+        // Views will load users directly from UserRepository when needed
+        // Post notification for any views that need to react
+        NotificationCenter.default.post(
+            name: NSNotification.Name("DatabaseUsersUpdated"),
+            object: nil,
+            userInfo: ["userIds": Array(users.keys)]
+        )
     }
     
     func updateMessagesFromDatabase(_ messages: [String: Types.Message]) {
-        for (id, message) in messages {
-            self.messages[id] = message
-            
-            if var channelMsgs = self.channelMessages[message.channel] {
-                if !channelMsgs.contains(id) {
-                    channelMsgs.append(id)
-                    self.channelMessages[message.channel] = channelMsgs
-                }
-            } else {
-                self.channelMessages[message.channel] = [id]
-            }
-        }
+        // DATABASE-FIRST: Don't accumulate in ViewState
+        // ChannelDataManager will load messages from MessageRepository
+        // Post notification already handled in notifyViewStateMessagesChanged()
     }
     
     func updateChannelsFromDatabase(_ channels: [String: Types.Channel]) {
+        // DATABASE-FIRST: Only store channels temporarily for navigation
+        // Full channel data loaded from ChannelRepository when needed
         for (id, channel) in channels {
             self.channels[id] = channel
-            
-            switch channel {
-            case .dm_channel(_), .group_dm_channel(_):
-                if !self.dms.contains(where: { $0.id == id }) {
-                    self.dms.append(channel)
-                }
-            default:
-                break
-            }
         }
+        
+        NotificationCenter.default.post(
+            name: NSNotification.Name("DatabaseChannelsUpdated"),
+            object: nil
+        )
     }
     
     func updateServersFromDatabase(_ servers: [String: Types.Server]) {
+        // DATABASE-FIRST: Only store servers temporarily for navigation
         for (id, server) in servers {
             self.servers[id] = server
         }
+        
+        NotificationCenter.default.post(
+            name: NSNotification.Name("DatabaseServersUpdated"),
+            object: nil
+        )
     }
     
     func updateMembersFromDatabase(_ membersByServer: [String: [String: Types.Member]]) {
-        for (serverId, serverMembers) in membersByServer {
-            if self.members[serverId] == nil {
-                self.members[serverId] = [:]
-            }
-            
-            for (userId, member) in serverMembers {
-                self.members[serverId]?[userId] = member
-            }
-        }
+        // DATABASE-FIRST: Don't accumulate members
+        // Load from MemberRepository when needed
+        NotificationCenter.default.post(
+            name: NSNotification.Name("DatabaseMembersUpdated"),
+            object: nil
+        )
     }
 }

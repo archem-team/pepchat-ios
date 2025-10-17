@@ -326,21 +326,7 @@ public class ViewState: ObservableObject {
             keychain["sessionToken"] = sessionToken
         }
     }
-    @Published var users: [String: Types.User] {
-        didSet {
-            // MEMORY MANAGEMENT: Use debounced save (memory limits disabled for users)
-            // Move JSON encoding off main thread to prevent app hanging
-            let users = self.users
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(users) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "users", data: data)
-                    }
-                }
-            }
-        }
-    }
+    @Published var users: [String: Types.User]
     
     func updateRelationship(for userId: String, with newRelationship: Relation) {
         if var user = users[userId] {
@@ -351,102 +337,12 @@ public class ViewState: ObservableObject {
         }
     }
     
-    @Published var servers: OrderedDictionary<String, Server> {
-        didSet {
-            // DISABLED: Don't save servers to UserDefaults to force refresh from backend
-            // let servers = self.servers
-            // Task.detached(priority: .background) { [weak self] in
-            //     guard let self = self else { return }
-            //     if let data = try? JSONEncoder().encode(servers) {
-            //         await MainActor.run {
-            //             self.debouncedSave(key: "servers", data: data)
-            //         }
-            //     }
-            // }
-        }
-    }
-    @Published var channels: [String: Channel] {
-        didSet {
-            // DISABLED: Don't save channels to UserDefaults to force refresh from backend
-            // let channels = self.channels
-            // Task.detached(priority: .background) { [weak self] in
-            //     guard let self = self else { return }
-            //     if let data = try? JSONEncoder().encode(channels) {
-            //         await MainActor.run {
-            //             self.debouncedSave(key: "channels", data: data)
-            //         }
-            //     }
-            // }
-        }
-    }
-    @Published var messages: [String: Message] {
-        didSet {
-            // MEMORY MANAGEMENT: Don't persist messages to UserDefaults - they're loaded from server
-            // This prevents memory spikes from encoding large dictionaries
-            Task { @MainActor in
-                // If we have messages and loading was active, turn off loading
-                if self.isLoadingChannelMessages && !messages.isEmpty {
-                    self.setChannelLoadingState(isLoading: false)
-                }
-                self.enforceMemoryLimits()
-            }
-        }
-    }
-    @Published var channelMessages: [String: [String]] {
-        didSet {
-            // MEMORY MANAGEMENT: Use debounced save for channelMessages
-            // Move JSON encoding off main thread to prevent app hanging
-            let channelMessages = self.channelMessages
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-            if let data = try? JSONEncoder().encode(channelMessages) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "channelMessages", data: data)
-                    }
-                }
-            }
-            
-            // Check if we should turn off loading state
-            Task { @MainActor in
-                if self.isLoadingChannelMessages {
-                    if case .channel(let channelId) = self.currentChannel {
-                        let hasMessages = (channelMessages[channelId]?.count ?? 0) > 0
-                        if hasMessages {
-                            self.setChannelLoadingState(isLoading: false)
-                        }
-                    }
-                }
-            }
-        }
-    }
-    @Published var members: [String: [String: Member]] {
-        didSet {
-            // DISABLED: Don't save members to UserDefaults to force refresh from backend
-            // let members = self.members
-            // Task.detached(priority: .background) { [weak self] in
-            //     guard let self = self else { return }
-            //     if let data = try? JSONEncoder().encode(members) {
-            //         await MainActor.run {
-            //             self.debouncedSave(key: "members", data: data)
-            //         }
-            //     }
-            // }
-        }
-    }
-    @Published var dms: [Channel] {
-        didSet {
-            // DISABLED: Don't save DMs to UserDefaults to force refresh from backend
-            // let dms = self.dms
-            // Task.detached(priority: .background) { [weak self] in
-            //     guard let self = self else { return }
-            //     if let data = try? JSONEncoder().encode(dms) {
-            //         await MainActor.run {
-            //             self.debouncedSave(key: "dms", data: data)
-            //         }
-            //     }
-            // }
-        }
-    }
+    @Published var servers: OrderedDictionary<String, Server>
+    @Published var channels: [String: Channel]
+    @Published var messages: [String: Message]
+    @Published var channelMessages: [String: [String]]
+    @Published var members: [String: [String: Member]]
+    @Published var dms: [Channel]
     
     // DM Management (database-first architecture)
     private var isDmListInitialized = false // Track if DM list has been initialized
@@ -684,7 +580,8 @@ public class ViewState: ObservableObject {
     
     @MainActor
     private func enforceMemoryLimits() {
-        // CRITICAL FIX: Completely disable enforceMemoryLimits to prevent infinite loop and black messages
+        // DATABASE-FIRST: Memory limits no longer needed - data lives in database, not memory
+        // ViewState only holds temporary/session data that naturally stays small
         return
         
         // Check current memory usage
@@ -815,28 +712,22 @@ public class ViewState: ObservableObject {
         }
     }
     
-    // DISABLED: Smart message cleanup based on current channel and loading direction
+    // DATABASE-FIRST: All cleanup functions removed - data managed by ChannelDataManager per-view
     @MainActor
     private func smartMessageCleanup() {
-        // CRITICAL FIX: Disable message cleanup to prevent black messages
+        // No longer needed - messages loaded on-demand from database
         return
     }
     
-    // Smart user cleanup to prevent excessive memory usage - DISABLED to prevent black messages
     @MainActor
     private func smartUserCleanup() {
-        // CRITICAL FIX: Completely disable user cleanup to prevent black messages
-        
-        // Only log warning if we have too many users, but don't clean them up
-        if users.count > maxUsersInMemory {
-        }
-        
-        return // Exit early, no cleanup
+        // No longer needed - users loaded on-demand from database
+        return
     }
     
     @MainActor
     private func cleanupMemory() {
-        // CRITICAL FIX: Completely disable cleanupMemory to prevent infinite loop and black messages
+        // No longer needed - memory naturally bounded by per-view data managers
         return
     }
     
@@ -1134,20 +1025,17 @@ public class ViewState: ObservableObject {
         self.userSettingsStore = UserSettingsData.maybeRead(viewState: nil, isLoginUser: true)
         
 
-        // CRITICAL DEBUG: Add logging for data loading from UserDefaults
+        // DATABASE-FIRST: Remove UserDefaults data loading to prevent memory spikes at launch
+        // All data now loaded from Realm database on-demand through repositories
         
-        self.users = ViewState.decodeUserDefaults(forKey: "users", withDecoder: decoder, defaultingTo: [:])
-        // Force refresh servers and channels from backend instead of using cached data
-        self.servers = [:] // ViewState.decodeUserDefaults(forKey: "servers", withDecoder: decoder, defaultingTo: [:])
-        self.channels = [:] // ViewState.decodeUserDefaults(forKey: "channels", withDecoder: decoder, defaultingTo: [:])
-        /*self.messages = ViewState.decodeUserDefaults(forKey: "messages", withDecoder: decoder, defaultingTo: [:])
-         self.channelMessages = ViewState.decodeUserDefaults(forKey: "channelMessages", withDecoder: decoder, defaultingTo: [:])*/
+        // Initialize empty - data will be loaded from database when needed
+        self.users = [:]
+        self.servers = [:]
+        self.channels = [:]
         self.messages = [:]
         self.channelMessages = [:]
-        // Force refresh members from backend
-        self.members = [:] // ViewState.decodeUserDefaults(forKey: "members", withDecoder: decoder, defaultingTo: [:])
-        // Force refresh DMs from backend
-        self.dms = [] // ViewState.decodeUserDefaults(forKey: "dms", withDecoder: decoder, defaultingTo: [])
+        self.members = [:]
+        self.dms = []
         self.emojis = ViewState.decodeUserDefaults(forKey: "emojis", withDecoder: decoder, defaultingTo: [:])
         
         //self.currentSelection = ViewState.decodeUserDefaults(forKey: "currentSelection", withDecoder: decoder, defaultingTo: .dms)
@@ -1218,6 +1106,12 @@ public class ViewState: ObservableObject {
             await MainActor.run { [weak self] in
                 self?.cleanupStaleUnreads()
             }
+        }
+        
+        // MARK: - Database Cleanup Service
+        // Start periodic database cleanup to prevent unbounded growth
+        Task {
+            await DatabaseCleanupService.shared.startPeriodicCleanup()
         }
         
         // MARK: - Database Observer Setup
@@ -5228,5 +5122,56 @@ extension Channel {
         case .voice_channel(let c):
             return c.name
         }
+    }
+}
+
+// MARK: - Database-First Accessor Methods (Backward Compatibility)
+// These methods allow views to access data from repositories without breaking existing code
+
+extension ViewState {
+    /// Get a channel by ID from database (async)
+    func getChannel(id: String) async -> Types.Channel? {
+        return await ChannelRepository.shared.fetchChannel(id: id)
+    }
+    
+    /// Get a user by ID from database (async)
+    func getUser(id: String) async -> Types.User? {
+        return await UserRepository.shared.fetchUser(id: id)
+    }
+    
+    /// Get a message by ID from database (async)
+    func getMessage(id: String) async -> Types.Message? {
+        return await MessageRepository.shared.fetchMessage(id: id)
+    }
+    
+    /// Batch fetch users by IDs from database (async)
+    func getUsers(ids: [String]) async -> [String: Types.User] {
+        return await UserRepository.shared.fetchUsers(ids: ids)
+    }
+    
+    /// Get latest messages for a channel (async, paginated)
+    func getChannelMessages(channelId: String, limit: Int = 50) async -> [Types.Message] {
+        return await MessageRepository.shared.fetchLatestMessages(forChannel: channelId, limit: limit)
+    }
+    
+    /// Get all DM channels from database (async)
+    func getDMChannels() async -> [Types.Channel] {
+        return await ChannelRepository.shared.fetchAllDMs()
+    }
+    
+    // Synchronous accessors for backward compatibility (fallback to dict if exists)
+    /// Get channel synchronously from in-memory cache (may be empty in database-first mode)
+    func getChannelSync(id: String) -> Types.Channel? {
+        return channels[id]
+    }
+    
+    /// Get user synchronously from in-memory cache (may be empty in database-first mode)
+    func getUserSync(id: String) -> Types.User? {
+        return users[id]
+    }
+    
+    /// Get message synchronously from in-memory cache (may be empty in database-first mode)
+    func getMessageSync(id: String) -> Types.Message? {
+        return messages[id]
     }
 }

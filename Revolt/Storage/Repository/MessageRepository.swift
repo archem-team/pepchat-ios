@@ -55,11 +55,76 @@ class MessageRepository {
         return messageRealm.toOriginal() as? Types.Message
     }
     
-    /// Fetch messages for a specific channel
+    /// Fetch messages for a specific channel (all messages - use with caution)
     func fetchMessages(forChannel channelId: String) async -> [Types.Message] {
         let realms = await realmManager.getListOfObjects(type: MessageRealm.self)
         let filtered = realms.filter { $0.channel == channelId }
         return filtered.compactMap { $0.toOriginal() as? Types.Message }
+    }
+    
+    /// Fetch latest messages for a channel with limit (paginated)
+    func fetchLatestMessages(forChannel channelId: String, limit: Int = 50) async -> [Types.Message] {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let realms = await realmManager.getListOfObjects(type: MessageRealm.self)
+        let filtered = realms.filter { $0.channel == channelId }
+        
+        // Sort by ID (ULID contains timestamp, so sorting by ID = sorting by time)
+        let sorted = filtered.sorted { $0.id > $1.id }
+        let limited = Array(sorted.prefix(limit))
+        let messages = limited.compactMap { $0.toOriginal() as? Types.Message }
+        
+        let endTime = CFAbsoluteTimeGetCurrent()
+        let duration = (endTime - startTime) * 1000
+        logger.debug("📊 Fetched \(messages.count) latest messages for channel \(channelId) in \(String(format: "%.2f", duration))ms")
+        
+        return messages
+    }
+    
+    /// Fetch messages before a specific message ID (for pagination/infinite scroll)
+    func fetchMessagesBeforeId(channelId: String, beforeId: String, limit: Int = 50) async -> [Types.Message] {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let realms = await realmManager.getListOfObjects(type: MessageRealm.self)
+        
+        // Filter by channel and messages older than beforeId
+        let filtered = realms.filter { $0.channel == channelId && $0.id < beforeId }
+        
+        // Sort by ID descending (newest first)
+        let sorted = filtered.sorted { $0.id > $1.id }
+        let limited = Array(sorted.prefix(limit))
+        let messages = limited.compactMap { $0.toOriginal() as? Types.Message }
+        
+        let endTime = CFAbsoluteTimeGetCurrent()
+        let duration = (endTime - startTime) * 1000
+        logger.debug("📊 Fetched \(messages.count) messages before \(beforeId) in \(String(format: "%.2f", duration))ms")
+        
+        return messages
+    }
+    
+    /// Fetch messages with pagination (offset-based)
+    func fetchMessages(forChannel channelId: String, limit: Int, offset: Int) async -> [Types.Message] {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let realms = await realmManager.getListOfObjects(type: MessageRealm.self)
+        let filtered = realms.filter { $0.channel == channelId }
+        
+        // Sort by ID descending
+        let sorted = filtered.sorted { $0.id > $1.id }
+        
+        // Apply offset and limit
+        let offsetArray = Array(sorted.dropFirst(offset))
+        let limited = Array(offsetArray.prefix(limit))
+        let messages = limited.compactMap { $0.toOriginal() as? Types.Message }
+        
+        let endTime = CFAbsoluteTimeGetCurrent()
+        let duration = (endTime - startTime) * 1000
+        logger.debug("📊 Fetched \(messages.count) messages (offset: \(offset), limit: \(limit)) in \(String(format: "%.2f", duration))ms")
+        
+        return messages
+    }
+    
+    /// Get total message count for a channel
+    func getMessageCount(forChannel channelId: String) async -> Int {
+        let realms = await realmManager.getListOfObjects(type: MessageRealm.self)
+        return realms.filter { $0.channel == channelId }.count
     }
     
     /// Fetch all messages from Realm

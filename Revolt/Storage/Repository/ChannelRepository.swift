@@ -74,4 +74,46 @@ class ChannelRepository {
         let realms = await realmManager.getListOfObjects(type: ChannelRealm.self)
         return realms.compactMap { $0.toOriginal() as? Types.Channel }
     }
+    
+    /// Fetch all DM channels
+    func fetchDMChannels() async -> [Types.Channel] {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let realms = await realmManager.getListOfObjects(type: ChannelRealm.self)
+        let filtered = realms.filter { $0.dmChannel != nil }
+        let channels = filtered.compactMap { $0.toOriginal() as? Types.Channel }
+        
+        let endTime = CFAbsoluteTimeGetCurrent()
+        let duration = (endTime - startTime) * 1000
+        logger.debug("📊 Fetched \(channels.count) DM channels in \(String(format: "%.2f", duration))ms")
+        
+        return channels
+    }
+    
+    /// Fetch all Group DM channels
+    func fetchGroupDMChannels() async -> [Types.Channel] {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let realms = await realmManager.getListOfObjects(type: ChannelRealm.self)
+        let filtered = realms.filter { $0.groupDMChannel != nil }
+        let channels = filtered.compactMap { $0.toOriginal() as? Types.Channel }
+        
+        let endTime = CFAbsoluteTimeGetCurrent()
+        let duration = (endTime - startTime) * 1000
+        logger.debug("📊 Fetched \(channels.count) Group DM channels in \(String(format: "%.2f", duration))ms")
+        
+        return channels
+    }
+    
+    /// Fetch all DM and Group DM channels combined
+    func fetchAllDMs() async -> [Types.Channel] {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let realms = await realmManager.getListOfObjects(type: ChannelRealm.self)
+        let filtered = realms.filter { $0.dmChannel != nil || $0.groupDMChannel != nil }
+        let channels = filtered.compactMap { $0.toOriginal() as? Types.Channel }
+        
+        let endTime = CFAbsoluteTimeGetCurrent()
+        let duration = (endTime - startTime) * 1000
+        logger.debug("📊 Fetched \(channels.count) total DM channels in \(String(format: "%.2f", duration))ms")
+        
+        return channels
+    }
 }

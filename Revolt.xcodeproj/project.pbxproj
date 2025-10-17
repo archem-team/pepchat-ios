@@ -264,6 +264,8 @@
 		5C950CA0787B4F15B7A6C6E9922080C7 /* PlatformConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */; };
 		6BCA311E24F881F7AD3821ED /* Pods_Revolt.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FE56550EFBFBAF006803242A /* Pods_Revolt.framework */; };
 		7031993BD3D264C895FFB466 /* CreateServerRoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F75CCC5D94FA80B2DCBD7821 /* CreateServerRoleView.swift */; };
+		853B147C2EA2C5FA00B25C36 /* ChannelDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853B147B2EA2C5FA00B25C36 /* ChannelDataManager.swift */; };
+		853B147E2EA2C61400B25C36 /* DatabaseCleanupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853B147D2EA2C61400B25C36 /* DatabaseCleanupService.swift */; };
 		8564AA702E6C4393004C849C /* RealmManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA6F2E6C4393004C849C /* RealmManager.swift */; };
 		8564AA772E6C4CF7004C849C /* DetachRealm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA762E6C4CF7004C849C /* DetachRealm.swift */; };
 		8564AA8D2E6C5A98004C849C /* ModelMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA7D2E6C5A98004C849C /* ModelMappers.swift */; };
@@ -652,6 +654,8 @@
 		1B7781EEF5DE3A7595F88813 /* Pods-Revolt.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Revolt.debug.xcconfig"; path = "Target Support Files/Pods-Revolt/Pods-Revolt.debug.xcconfig"; sourceTree = "<group>"; };
 		4C7131D5AEB5410C09A5A436 /* Pods-Revolt.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Revolt.release.xcconfig"; path = "Target Support Files/Pods-Revolt/Pods-Revolt.release.xcconfig"; sourceTree = "<group>"; };
 		56C3A459C46C9725691178F3 /* RoleColorPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleColorPickerSheet.swift; sourceTree = "<group>"; };
+		853B147B2EA2C5FA00B25C36 /* ChannelDataManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelDataManager.swift; sourceTree = "<group>"; };
+		853B147D2EA2C61400B25C36 /* DatabaseCleanupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseCleanupService.swift; sourceTree = "<group>"; };
 		8564AA6F2E6C4393004C849C /* RealmManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealmManager.swift; sourceTree = "<group>"; };
 		8564AA762E6C4CF7004C849C /* DetachRealm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachRealm.swift; sourceTree = "<group>"; };
 		8564AA782E6C5A98004C849C /* ApiMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiMappers.swift; sourceTree = "<group>"; };
@@ -1551,6 +1555,8 @@
 			isa = PBXGroup;
 			children = (
 				85FD19092E930C7900DDF989 /* NetworkSyncService.swift */,
+				853B147B2EA2C5FA00B25C36 /* ChannelDataManager.swift */,
+				853B147D2EA2C61400B25C36 /* DatabaseCleanupService.swift */,
 				8564AA6F2E6C4393004C849C /* RealmManager.swift */,
 				85A81F282E9017520017BBCF /* DatabaseObserver.swift */,
 				85A81F342E901DE60017BBCF /* Repository */,
@@ -1928,7 +1934,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 			shellPath = /bin/sh;
-			shellScript = "  export SENTRY_ORG=archem\n  export SENTRY_PROJECT=pepchat-ios\n  export SENTRY_URL=https://archem.sentry.io/\n  export SENTRY_AUTH_TOKEN=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\n  /opt/homebrew/bin/sentry-cli debug-files upload --include-sources \"$DWARF_DSYM_FOLDER_PATH\" --force-foreground\n";
+			shellScript = "  export SENTRY_ORG=archem\n  export SENTRY_PROJECT=pepchat-ios\n  export SENTRY_URL=https://archem.sentry.io/\n  export SENTRY_AUTH_TOKEN=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\n  if [ -f /opt/homebrew/bin/sentry-cli ]; then\n    /opt/homebrew/bin/sentry-cli debug-files upload --include-sources \"$DWARF_DSYM_FOLDER_PATH\" --force-foreground\n  else\n    echo \"warning: sentry-cli not found at /opt/homebrew/bin/sentry-cli - skipping debug symbols upload\"\n  fi\n";
 		};
 		716160A99BCD8FF6C9CDE1AE /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -2013,6 +2019,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F5E857092E10EF1C00E8655F /* AudioSessionManager.swift in Sources */,
+				853B147C2EA2C5FA00B25C36 /* ChannelDataManager.swift in Sources */,
 				0555DD452CE3E12400D7E40D /* MfaSheet.swift in Sources */,
 				05358AA42CCEA74600B16635 /* CGFloat.swift in Sources */,
 				0505E7D22D025D2C00B12713 /* AddMembersToChannelView.swift in Sources */,
@@ -2145,6 +2152,7 @@
 				059B24C22DE5BB23007ACFFB /* ScrollPositionManager.swift in Sources */,
 				17F9D7632C9208B500D0BB6F /* MessageReactionsSheet.swift in Sources */,
 				178BB1102B02D89A001143A4 /* HCaptchaView.swift in Sources */,
+				853B147E2EA2C61400B25C36 /* DatabaseCleanupService.swift in Sources */,
 				059381CA2D29165200A49BD5 /* ServerChannelsView.swift in Sources */,
 				8564AA8D2E6C5A98004C849C /* ModelMappers.swift in Sources */,
 				8564AA8E2E6C5A98004C849C /* ChannelMappers.swift in Sources */,
