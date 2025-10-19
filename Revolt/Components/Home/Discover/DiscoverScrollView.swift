@@ -36,6 +36,11 @@ struct DiscoverScrollView: View {
                     await self.checkMembershipForAllItems()
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("DatabaseServersUpdated"))) { _ in
+                Task {
+                    await self.checkMembershipForAllItems()
+                }
+            }
     }
     
     // MARK: - View Components
@@ -258,6 +263,8 @@ struct DiscoverScrollView: View {
         // Check membership for each item
         for item in discoverItems {
             await checkAndCacheMembership(for: item)
+            // Throttle to avoid potential API rate limits when resolving invites
+            try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
         }
         
         // Trigger UI update
@@ -296,23 +303,17 @@ struct DiscoverScrollView: View {
                     inviteCache[item.code] = serverId
                 }
                 
-                // Check if user is a member of this server
-                guard let currentUser = viewState.currentUser else {
-                    await MainActor.run {
-                        membershipCache[serverId] = false
-                        checkingInvites.remove(item.code)
-                    }
-                    return
-                }
-                
-                let isMember = viewState.getMember(byServerId: serverId, userId: currentUser.id) != nil
-                
+                // Determine membership from authoritative local server presence
+                let isMemberNow = viewState.servers[serverId] != nil
                 await MainActor.run {
-                    membershipCache[serverId] = isMember
+                    // Never downgrade: if previously true, keep true
+                    if membershipCache[serverId] != true {
+                        membershipCache[serverId] = isMemberNow
+                    }
                     checkingInvites.remove(item.code)
                 }
                 
-                print("✅ [DiscoverScrollView] \(item.title): Member = \(isMember)")
+                print("✅ [DiscoverScrollView] \(item.title): Member = \(isMemberNow)")
             } else {
                 // Group invite or other type - not a server
                 await MainActor.run {
@@ -323,13 +324,15 @@ struct DiscoverScrollView: View {
         } catch {
             print("❌ [DiscoverScrollView] Failed to fetch invite \(item.code): \(error)")
             
-            // Fallback to name-based matching
-            let nameMembership = viewState.servers.values.contains { server in
+            // Fallback to name-based matching, but avoid downgrading/caching false on transient failures
+            let stillMemberByName = viewState.servers.values.contains { server in
                 server.name.lowercased() == item.title.lowercased()
             }
             
             await MainActor.run {
-                membershipCache[item.code] = nameMembership
+                if stillMemberByName {
+                    membershipCache[item.code] = true
+                }
                 checkingInvites.remove(item.code)
             }
         }
@@ -344,16 +347,10 @@ struct DiscoverScrollView: View {
                 return cachedMembership
             }
             
-            // Check membership using the server ID
-            guard let currentUser = viewState.currentUser else {
-                return false
-            }
-            
-            let isMember = viewState.getMember(byServerId: serverId, userId: currentUser.id) != nil
-            
-            // Cache the result
-            membershipCache[serverId] = isMember
-            return isMember
+            // Determine membership from authoritative local server presence
+            let isMemberNow = viewState.servers[serverId] != nil
+            membershipCache[serverId] = isMemberNow
+            return isMemberNow
         }
         
         // Check if we have a cached result for this invite code directly
@@ -367,6 +364,9 @@ struct DiscoverScrollView: View {
             item.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         }
         
+        if nameMembership {
+            membershipCache[item.code] = true
+        }
         return nameMembership
     }
 }
