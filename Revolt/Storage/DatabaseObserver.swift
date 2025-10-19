@@ -454,8 +454,26 @@ extension ViewState {
     func updateChannelsFromDatabase(_ channels: [String: Types.Channel]) {
         // DATABASE-FIRST: Only store channels temporarily for navigation
         // Full channel data loaded from ChannelRepository when needed
+        var dmChannelsUpdated = false
+        
         for (id, channel) in channels {
             self.channels[id] = channel
+            
+            // Check if this is a DM channel that needs re-sorting
+            switch channel {
+            case .dm_channel(_), .group_dm_channel(_):
+                if let index = dms.firstIndex(where: { $0.id == id }) {
+                    dms[index] = channel
+                    dmChannelsUpdated = true
+                }
+            default:
+                break
+            }
+        }
+        
+        // Re-sort DMs if any were updated
+        if dmChannelsUpdated {
+            sortDMs()
         }
         
         NotificationCenter.default.post(

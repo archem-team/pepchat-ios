@@ -1176,6 +1176,9 @@ public class ViewState: ObservableObject {
                 self.channelMessages[channel.id] = []
             }
         }
+        
+        // Sort DMs after loading from database
+        sortDMs()
     }
     
     // MARK: - Channel Preloading
@@ -2288,10 +2291,9 @@ public class ViewState: ObservableObject {
             NotificationCenter.default.post(name: NSNotification.Name("NewMessagesReceived"), object: nil)
             
             if let index = dms.firstIndex(where: { $0.id == m.channel }) {
-                let dmChannel = dms.remove(at: index)
-
+                // Update the DM channel with new last_message_id
                 let updatedDM: Channel
-                switch dmChannel {
+                switch dms[index] {
                     case .dm_channel(var c):
                         c.last_message_id = m.id
                         updatedDM = .dm_channel(c)
@@ -2299,16 +2301,13 @@ public class ViewState: ObservableObject {
                         c.last_message_id = m.id
                         updatedDM = .group_dm_channel(c)
                     default:
-                        updatedDM = dmChannel
+                        updatedDM = dms[index]
                 }
 
-                dms.insert(updatedDM, at: 0)
+                dms[index] = updatedDM
                 
-                // FIX: Ensure DM list state is maintained (database-first)
-                if isDmListInitialized && currentSelection == .dms {
-                    // DMs will be re-sorted by processDMs when needed
-                    // No manual ordering needed with database-first approach
-                }
+                // Re-sort DMs to maintain correct order based on message timestamps
+                sortDMs()
             }
             
             if var existing = channels[m.channel] {
@@ -3293,35 +3292,53 @@ public class ViewState: ObservableObject {
             }
         }
         
-        
-        // Sort all DM channels
-        let sortedDmChannels = dmChannels.sorted { first, second in
-            let firstLast = first.last_message_id
-            let secondLast = second.last_message_id
-            
-            let firstUnreadLast = unreads[first.id]?.last_id
-            let secondUnreadLast = unreads[second.id]?.last_id
-            
-            let firstIsUnread = firstLast != nil && firstLast != firstUnreadLast
-            let secondIsUnread = secondLast != nil && secondLast != secondUnreadLast
-            
-            // Show unread DMs first
-            if firstIsUnread && !secondIsUnread {
-                return true
-            } else if !firstIsUnread && secondIsUnread {
-                return false
-            } else {
-                return (firstLast ?? "") > (secondLast ?? "")
-            }
-        }
-        
         // Load all DMs directly (database-first, no batching)
-        dms = sortedDmChannels
+        dms = dmChannels
+        
+        // Sort using new method
+        sortDMs()
         
         // Load users for DMs
         loadUsersForFirstDmBatch()
         
         isDmListInitialized = true
+    }
+    
+    // MARK: - DM Sorting
+    
+    /// Sorts the DMs array by last activity timestamp
+    /// Priority 1: Unread DMs first
+    /// Priority 2: Most recent activity (message timestamp or channel creation time)
+    func sortDMs() {
+        dms.sort { first, second in
+            let firstUnreadLast = unreads[first.id]?.last_id
+            let secondUnreadLast = unreads[second.id]?.last_id
+            
+            let firstIsUnread = first.last_message_id != nil && first.last_message_id != firstUnreadLast
+            let secondIsUnread = second.last_message_id != nil && second.last_message_id != secondUnreadLast
+            
+            // Priority 1: Unread DMs first
+            if firstIsUnread && !secondIsUnread { return true }
+            if !firstIsUnread && secondIsUnread { return false }
+            
+            // Priority 2: Sort by timestamp (from message or channel creation)
+            let firstTimestamp = extractTimestampForSorting(from: first)
+            let secondTimestamp = extractTimestampForSorting(from: second)
+            
+            return firstTimestamp > secondTimestamp
+        }
+    }
+    
+    /// Extracts timestamp for sorting from a channel
+    /// - If channel has a last_message_id, uses that timestamp (most recent activity)
+    /// - Otherwise uses channel creation timestamp
+    private func extractTimestampForSorting(from channel: Channel) -> Date {
+        // If has last_message_id, use that (most recent activity)
+        if let messageId = channel.last_message_id {
+            return createdAt(id: messageId)
+        }
+        // Otherwise use channel creation time
+        return createdAt(id: channel.id)
     }
     
     // Load a specific batch of DMs
