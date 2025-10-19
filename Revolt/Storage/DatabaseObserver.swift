@@ -133,16 +133,17 @@ class DatabaseObserver: ObservableObject {
             
         case .update(let results, let deletions, let insertions, let modifications):
             messages = Array(results)
-            // Compute affected channelIds using indexes
+            // Compute affected channelIds using indexes (prefer insertions/modifications)
             var channelIds = Set<String>()
-            for index in deletions {
-                if index < results.count { channelIds.insert(results[index].channel) }
+            for index in insertions where index < results.count {
+                channelIds.insert(results[index].channel)
             }
-            for index in insertions {
-                if index < results.count { channelIds.insert(results[index].channel) }
+            for index in modifications where index < results.count {
+                channelIds.insert(results[index].channel)
             }
-            for index in modifications {
-                if index < results.count { channelIds.insert(results[index].channel) }
+            // If nothing detected (e.g., deletions-only), fall back to all visible result channels
+            if channelIds.isEmpty {
+                channelIds = Set(results.map { $0.channel })
             }
             notifyViewStateMessagesChanged(affectedChannelIds: Array(channelIds))
             

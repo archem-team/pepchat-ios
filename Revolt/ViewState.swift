@@ -4100,6 +4100,36 @@ public class ViewState: ObservableObject {
         self.loadUsersForVisibleMessages(channelId: id)
     }
     
+    /// Navigate to a specific channel/message and proactively fetch target context if missing
+    @MainActor
+    func navigateToChannelMessage(serverId: String?, channelId: String, messageId: String) {
+        // Preserve target message for the destination view
+        self.currentTargetMessageId = messageId
+        
+        // Prepare channel state
+        self.channelMessages[channelId] = []
+        self.atTopOfChannel.remove(channelId)
+        
+        // Select appropriate context
+        if let serverId = serverId, !serverId.isEmpty {
+            self.selectServer(withId: serverId)
+            self.selectChannel(inServer: serverId, withId: channelId)
+        } else {
+            self.selectDm(withId: channelId)
+        }
+        
+        // Push channel view
+        self.path = []
+        self.path.append(NavigationDestination.maybeChannelView)
+        
+        // Proactively fetch target and nearby context if DB is empty
+        NetworkSyncService.shared.syncTargetMessage(
+            messageId: messageId,
+            channelId: channelId,
+            viewState: self
+        )
+    }
+    
     func resolveAvatarUrl(user: Types.User, member: Member?, masquerade: Masquerade?) -> (url: URL, username: String, isAvatarSet : Bool) {
         
         let username = user.username

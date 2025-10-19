@@ -51,7 +51,7 @@ struct RevoltApp: App {
                 .background(.bgDefaultPurple13)
                 .typesettingLanguage((state.currentLocale ?? systemLocale).language)  // Set typesetting language based on current locale
                 .onOpenURL { url in
-                    print("📱 UNIVERSAL_LINK: Received URL: \(url)")  // Log the opened URL for debugging
+                    
                     let components = NSURLComponents(string: url.absoluteString)
                     // Handle different URL schemes and paths
                     switch url.scheme {
@@ -63,87 +63,89 @@ struct RevoltApp: App {
                         case "channel":
                             // Handle channel links: /channel/CHANNEL_ID or /channel/CHANNEL_ID/MESSAGE_ID
                             if let channelId = url.pathComponents[safe: 2] {
-                                print("📱 UNIVERSAL_LINK: Navigating to channel: \(channelId)")
                                 
-                                if let channel = state.channels[channelId] {
-                                    // Clear existing messages for this channel
+                                if let messageId = url.pathComponents[safe: 3] {
+                                    // Prepare state
+                                    state.currentTargetMessageId = messageId
                                     state.channelMessages[channelId] = []
+                                    state.atTopOfChannel.remove(channelId)
                                     
-                                    // Navigate to the appropriate server or DMs
-                                    if let serverId = channel.server {
-                                        state.currentSelection = .server(serverId)
-                                    } else {
-                                        state.currentSelection = .dms
-                                    }
-                                    state.currentChannel = .channel(channelId)
-                                    
-                                    // Handle message ID if present
-                                    if let messageId = url.pathComponents[safe: 3] {
-                                        print("📱 UNIVERSAL_LINK: Message ID found: \(messageId)")
-                                        state.currentTargetMessageId = messageId
-                                    } else {
-                                        state.currentTargetMessageId = nil
-                                    }
-                                    
-                                    // Navigate to the channel view
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                        // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
-                                        // This ensures that when user presses back, they go to server list instead of previous channel
-                                        print("🔄 RevoltApp: Clearing navigation path to prevent back to previous channel")
+                                    // Navigate to DM/channel
+                                    DispatchQueue.main.async {
+                                        state.selectDm(withId: channelId)
                                         state.path = []
                                         state.path.append(NavigationDestination.maybeChannelView)
                                     }
+                                    
+                                    // Proactively fetch target context
+                                    NetworkSyncService.shared.syncTargetMessage(
+                                        messageId: messageId,
+                                        channelId: channelId,
+                                        viewState: state
+                                    )
                                 } else {
-                                    print("📱 UNIVERSAL_LINK: Channel not found: \(channelId)")
+                                    // No target message; just open DM channel
+                                    DispatchQueue.main.async {
+                                        state.selectDm(withId: channelId)
+                                        state.path = []
+                                        state.path.append(NavigationDestination.maybeChannelView)
+                                    }
                                 }
                             }
                         case "server":
                             // Handle server links: /server/SERVER_ID/channel/CHANNEL_ID or /server/SERVER_ID/channel/CHANNEL_ID/MESSAGE_ID
                             if let serverId = url.pathComponents[safe: 2] {
-                                print("📱 UNIVERSAL_LINK: Navigating to server: \(serverId)")
                                 
-                                if state.servers[serverId] != nil {
-                                    state.currentSelection = .server(serverId)
-                                    
-                                    // Check if URL contains "channel" and then channel ID
-                                    if url.pathComponents.count > 4 && url.pathComponents[safe: 3] == "channel",
-                                       let channelId = url.pathComponents[safe: 4] {
-                                        // Clear existing messages for this channel
+                                // Check if URL contains "channel" and then channel ID
+                                if url.pathComponents.count > 4 && url.pathComponents[safe: 3] == "channel",
+                                   let channelId = url.pathComponents[safe: 4] {
+                                    if let messageId = url.pathComponents[safe: 5] {
+                                        
+                                        // Prepare state
+                                        state.currentTargetMessageId = messageId
                                         state.channelMessages[channelId] = []
+                                        state.atTopOfChannel.remove(channelId)
                                         
-                                        state.currentChannel = .channel(channelId)
-                                        
-                                        // Handle message ID if present (would be at index 5)
-                                        if let messageId = url.pathComponents[safe: 5] {
-                                            print("📱 UNIVERSAL_LINK: Message ID found: \(messageId)")
-                                            state.currentTargetMessageId = messageId
-                                        } else {
-                                            state.currentTargetMessageId = nil
+                                        // Navigate using selections
+                                        DispatchQueue.main.async {
+                                            state.selectServer(withId: serverId)
+                                            state.selectChannel(inServer: serverId, withId: channelId)
+                                            state.path = []
+                                            state.path.append(NavigationDestination.maybeChannelView)
                                         }
                                         
-                                        // Navigate to the channel view
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                            // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
-                                            // This ensures that when user presses back, they go to server list instead of previous channel
-                                            print("🔄 RevoltApp: Clearing navigation path to prevent back to previous channel")
+                                        // Proactively fetch target context
+                                        NetworkSyncService.shared.syncTargetMessage(
+                                            messageId: messageId,
+                                            channelId: channelId,
+                                            viewState: state
+                                        )
+                                    } else {
+                                        // No target message; just open server channel
+                                        DispatchQueue.main.async {
+                                            state.selectServer(withId: serverId)
+                                            state.selectChannel(inServer: serverId, withId: channelId)
                                             state.path = []
                                             state.path.append(NavigationDestination.maybeChannelView)
                                         }
                                     }
                                 } else {
-                                    print("📱 UNIVERSAL_LINK: Server not found: \(serverId)")
+                                    // No channel in path; still select server to land on its default/last channel
+                                    DispatchQueue.main.async {
+                                        state.selectServer(withId: serverId)
+                                    }
                                 }
                             }
                         case "invite":
                             // Handle invite links: /invite/INVITE_CODE
                             if let inviteCode = url.pathComponents[safe: 2] {
-                                print("📱 UNIVERSAL_LINK: Opening invite: \(inviteCode)")
+                                
                                 
                                 // Navigate to invite view directly without clearing path
                                 state.path.append(NavigationDestination.invite(inviteCode))
                             }
                         default:
-                            print("📱 UNIVERSAL_LINK: Unhandled path: \(url.pathComponents[safe: 1] ?? "nil")")
+                            break
                         }
                     case "revoltchat":
                         var queryItems: [String: String] = [:]
@@ -159,14 +161,13 @@ struct RevoltApp: App {
                             }
                         case "channels":
                             if let id = queryItems["channel"] {
-                                // Navigate to a specific channel by its ID
-                                if let channel = state.channels[id] {
-                                    if let server = channel.server {
-                                        state.currentSelection = .server(server)  // Navigate to server view
-                                    } else {
-                                        state.currentSelection = .dms  // Default to direct messages
-                                    }
-                                    state.currentChannel = .channel(id)  // Set the current channel
+                                // Navigate to a specific channel by its ID using helpers
+                                DispatchQueue.main.async {
+                                    state.selectDm(withId: id)
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    state.path = []
+                                    state.path.append(NavigationDestination.maybeChannelView)
                                 }
                             }
                         default:

@@ -774,6 +774,19 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         if let targetFromViewState = viewModel.viewState.currentTargetMessageId {
             targetMessageId = targetFromViewState
             targetMessageProcessed = false
+            
+            // Proactively fetch target message and context
+            DispatchQueue.main.async {
+                NetworkSyncService.shared.syncTargetMessage(
+                    messageId: targetFromViewState,
+                    channelId: self.viewModel.channel.id,
+                    viewState: self.viewModel.viewState
+                )
+            }
+
+            Task { @MainActor in
+                await self.loadTargetDirectlyBypassDB(targetFromViewState)
+            }
         } else {
             // Check if we already have messages in the database
             let channelId = viewModel.channel.id
@@ -1039,12 +1052,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             // IMMEDIATE CLEANUP: Do NOT clear messages if returning from search; otherwise clean up
             if !wasInSearch {
                 performInstantMemoryCleanup()
-            } else {
-                print("🔍 Skipping instant cleanup because we navigated to search; preserving channel state")
             }
+            // Always clear target when leaving this channel's controller
+            viewModel.viewState.currentTargetMessageId = nil
+            targetMessageId = nil
+            targetMessageProcessed = false
         } else {
-            // We're being covered by a push; skip cleanup to preserve messages
-            print("➡️ Skipping cleanup on push to preserve chat state")
+            // Covered by a push; preserve chat state
         }
         
         let cleanupEndTime = CFAbsoluteTimeGetCurrent()
@@ -1739,10 +1753,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     // DATABASE REACTIVE ARCHITECTURE: Handle messages loaded from database
     @objc private func messagesDidChangeFromDatabase(_ notification: Notification) {
         // Channel-scope filtering for database updates
-        if let info = notification.userInfo, let ids = info["channelIds"] as? [String], !ids.contains(viewModel.channel.id) {
+        // Only filter if ids provided and non-empty; otherwise refresh
+        if let info = notification.userInfo, let ids = info["channelIds"] as? [String], !ids.isEmpty, !ids.contains(viewModel.channel.id) {
             return
         }
-        print("📬 MessageableChannelViewController: Received DatabaseMessagesUpdated notification for channel \(viewModel.channel.id)")
         
         // Load messages from database via ViewModel
         Task {
@@ -1754,21 +1768,30 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     private func loadMessagesFromDatabase() async {
         let channelId = viewModel.channel.id
         
-        print("💾 ViewController: Loading messages from database for channel \(channelId)")
-        
         // Fetch enough messages to also include any newly stored older page.
         let currentShown = max(self.localMessages.count, self.viewModel.messages.count)
         let baseLimit = max(50, currentShown)
         let limit = min(baseLimit + 100, 1000)
         let dbMessages = await MessageRepository.shared.fetchLatestMessages(forChannel: channelId, limit: limit)
         
-        print("💾 ViewController: Fetched \(dbMessages.count) messages from database")
-        
         // FIXED: Don't return early - always update UI even if empty
         // This ensures the view updates when database transitions from empty to populated
         await MainActor.run {
+            // If DB is empty and we have a target, proactively trigger DB-first target load (which triggers network sync)
+            if dbMessages.isEmpty {
+                if let pendingTarget = self.targetMessageId ?? self.viewModel.viewState.currentTargetMessageId {
+                    Task { @MainActor in
+                        _ = await self.viewModel.loadTargetMessage(pendingTarget)
+                        // Fallback: if still empty shortly after, bypass DB and render directly
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        let check = await MessageRepository.shared.fetchLatestMessages(forChannel: channelId, limit: 5)
+                        if check.isEmpty {
+                            await self.loadTargetDirectlyBypassDB(pendingTarget)
+                        }
+                    }
+                }
+            }
             if !dbMessages.isEmpty {
-                print("✅ ViewController: Updating UI with \(dbMessages.count) messages")
                 // Update ViewState from database
                 for message in dbMessages {
                     viewModel.viewState.messages[message.id] = message
@@ -1802,6 +1825,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 MessageableChannelViewController.loadingMutex.unlock()
                 
                 messageLoadingState = .notLoading
+
+                // If we have a pending target that just became available, jump to it once
+                if let targetId = self.targetMessageId ?? self.viewModel.viewState.currentTargetMessageId {
+                    if self.viewModel.viewState.messages[targetId] != nil,
+                       self.localMessages.contains(targetId),
+                       self.targetMessageProcessed == false {
+                        self.scrollToTargetMessage()
+                    }
+                }
             }
         }
     }
@@ -3153,13 +3185,30 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     lastTargetMessageHighlightTime = Date()
             
             // Let ViewModel handle loading
-            let foundInDB = await viewModel.loadTargetMessage(targetId)
+            var foundInDB = await viewModel.loadTargetMessage(targetId)
+            
+            // If not found in DB, wait for network fetch to complete and retry
+            if !foundInDB {
+                print("🔄 ViewController: Target not in DB yet, waiting for network fetch...")
+                // Wait up to 2 seconds for network fetch to populate DB
+                for attempt in 1...4 {
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                    foundInDB = await viewModel.loadTargetMessage(targetId)
+                    if foundInDB {
+                        print("✅ ViewController: Target found in DB after \(attempt * 500)ms")
+                        break
+                    }
+                }
+            }
             
             if foundInDB {
                 await MainActor.run {
                     self.refreshMessages()
                     self.scrollToTargetMessage()
                 }
+            } else {
+                print("⚠️ ViewController: Target message not found after waiting - using direct fallback")
+                await loadTargetDirectlyBypassDB(targetId)
             }
         }
         
@@ -3339,6 +3388,65 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     self.updateEmptyStateVisibility()
                 }
             }
+        }
+    }
+    
+    // MARK: - Direct fallback (search-like) to bypass DB when needed
+    @MainActor
+    private func loadTargetDirectlyBypassDB(_ targetId: String) async {
+        let channelId = viewModel.channel.id
+        print("🚀 Fallback: Directly fetching nearby for target \(targetId) in channel \(channelId)")
+        do {
+            let result = try await viewModel.viewState.http.fetchHistory(
+                channel: channelId,
+                limit: 100,
+                nearby: targetId
+            ).get()
+            
+            // Update in-memory caches
+            for user in result.users {
+                viewModel.viewState.users[user.id] = user
+            }
+            if let members = result.members {
+                for member in members {
+                    if viewModel.viewState.members[member.id.server] == nil {
+                        viewModel.viewState.members[member.id.server] = [:]
+                    }
+                    viewModel.viewState.members[member.id.server]?[member.id.user] = member
+                }
+            }
+            for msg in result.messages {
+                viewModel.viewState.messages[msg.id] = msg
+            }
+            
+            // Build sorted ids (newest first)
+            let sortedIds = result.messages.map { $0.id }.sorted { a, b in
+                viewModel.createdAt(id: a) > viewModel.createdAt(id: b)
+            }
+            
+            // Update data sources
+            viewModel.viewState.channelMessages[channelId] = sortedIds
+            viewModel.messages = sortedIds
+            localMessages = sortedIds
+            
+            if let localDS = dataSource as? LocalMessagesDataSource {
+                localDS.updateMessages(sortedIds)
+            }
+            
+            // Reload UI and scroll
+            tableView.reloadData()
+            scrollToTargetMessage()
+            
+            // Persist to DB in background
+            Task.detached {
+                await NetworkRepository.shared.saveFetchHistoryResponse(
+                    messages: result.messages,
+                    users: result.users,
+                    members: result.members
+                )
+            }
+        } catch {
+            print("❌ Fallback fetch failed: \(error)")
         }
     }
     
@@ -4332,10 +4440,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // Debug: Check if target message is in any of the loaded messages
             
-            // Check if the target message exists in viewState.messages but not in reference messages
-            if viewModel.viewState.messages[targetId] != nil {
-            } else {
-            }
             // Debug: Print first and last 3 message IDs to help diagnose ordering issues
             if referenceMessages.count > 0 {
                 let firstMessages = Array(referenceMessages.prefix(3))
@@ -6956,7 +7060,6 @@ extension MessageableChannelViewController {
         // If we're just pushing another screen on top, DO NOT clean up; preserve chat state
         let isLeavingStack = self.isMovingFromParent || self.isBeingDismissed
         if !isLeavingStack {
-            print("➡️ viewDidDisappear: Skipping final cleanup (covered by push)")
             return
         }
 
@@ -6980,6 +7083,11 @@ extension MessageableChannelViewController {
             }
         }
         
+        // Ensure target is cleared when this VC is finally disappearing
+        viewModel.viewState.currentTargetMessageId = nil
+        targetMessageId = nil
+        targetMessageProcessed = true
+
         // IMMEDIATE FINAL CLEANUP: No delays, no async operations
         performFinalInstantCleanup()
         

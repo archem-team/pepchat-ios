@@ -118,22 +118,23 @@ extension MessageableChannelViewController: UITextViewDelegate {
                         // Clear existing messages for this channel
                         viewModel.viewState.channelMessages[channelId] = []
                         
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
-                            // This ensures that when user presses back, they go to server list instead of previous channel
-                            self.viewModel.viewState.path = []
-                            
-                            // Navigate to the server and channel
-                            self.viewModel.viewState.selectServer(withId: serverId)
-                            self.viewModel.viewState.selectChannel(inServer: serverId, withId: channelId)
-                            
-                            if let messageId = messageId {
-                                self.viewModel.viewState.currentTargetMessageId = messageId
+                        DispatchQueue.main.async {
+                            // Prepare state and navigate without relying on helpers
+                            if let mid = messageId {
+                                self.viewModel.viewState.currentTargetMessageId = mid
+                                self.viewModel.viewState.channelMessages[channelId] = []
+                                self.viewModel.viewState.atTopOfChannel.remove(channelId)
+                                self.viewModel.viewState.selectServer(withId: serverId)
+                                self.viewModel.viewState.selectChannel(inServer: serverId, withId: channelId)
+                                self.viewModel.viewState.path = []
+                                self.viewModel.viewState.path.append(NavigationDestination.maybeChannelView)
+                                NetworkSyncService.shared.syncTargetMessage(messageId: mid, channelId: channelId, viewState: self.viewModel.viewState)
                             } else {
-                                self.viewModel.viewState.currentTargetMessageId = nil
+                                self.viewModel.viewState.selectServer(withId: serverId)
+                                self.viewModel.viewState.selectChannel(inServer: serverId, withId: channelId)
+                                self.viewModel.viewState.path = []
+                                self.viewModel.viewState.path.append(NavigationDestination.maybeChannelView)
                             }
-                            
-                            self.viewModel.viewState.path.append(NavigationDestination.maybeChannelView)
                         }
                     } else {
                         // User is not a member - navigate to Discover
@@ -171,21 +172,21 @@ extension MessageableChannelViewController: UITextViewDelegate {
                             // Clear existing messages for this channel
                             viewModel.viewState.channelMessages[channelId] = []
                             
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
-                                // This ensures that when user presses back, they go to server list instead of previous channel
-                                self.viewModel.viewState.path = []
-                                
-                                // Navigate to the channel
-                                self.viewModel.viewState.selectDm(withId: channelId)
-                                
-                                if let messageId = messageId {
-                                    self.viewModel.viewState.currentTargetMessageId = messageId
+                            DispatchQueue.main.async {
+                                if let mid = messageId {
+                                    self.viewModel.viewState.currentTargetMessageId = mid
+                                    self.viewModel.viewState.channelMessages[channelId] = []
+                                    self.viewModel.viewState.atTopOfChannel.remove(channelId)
+                                    self.viewModel.viewState.selectDm(withId: channelId)
+                                    self.viewModel.viewState.path = []
+                                    self.viewModel.viewState.path.append(NavigationDestination.maybeChannelView)
+                                    NetworkSyncService.shared.syncTargetMessage(messageId: mid, channelId: channelId, viewState: self.viewModel.viewState)
                                 } else {
+                                    self.viewModel.viewState.path = []
+                                    self.viewModel.viewState.selectDm(withId: channelId)
                                     self.viewModel.viewState.currentTargetMessageId = nil
+                                    self.viewModel.viewState.path.append(NavigationDestination.maybeChannelView)
                                 }
-                                
-                                self.viewModel.viewState.path.append(NavigationDestination.maybeChannelView)
                             }
                         } else {
                             // User doesn't have access - navigate to Discover
@@ -204,21 +205,19 @@ extension MessageableChannelViewController: UITextViewDelegate {
                             // Clear existing messages for this channel
                             viewModel.viewState.channelMessages[channelId] = []
                             
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
-                                // This ensures that when user presses back, they go to server list instead of previous channel
-                                self.viewModel.viewState.path = []
-                                
-                                // Navigate to the channel
-                                self.viewModel.viewState.selectDm(withId: channelId)
-                                
+                            DispatchQueue.main.async {
                                 if let messageId = messageId {
-                                    self.viewModel.viewState.currentTargetMessageId = messageId
+                                    self.viewModel.viewState.navigateToChannelMessage(
+                                        serverId: nil,
+                                        channelId: channelId,
+                                        messageId: messageId
+                                    )
                                 } else {
+                                    self.viewModel.viewState.path = []
+                                    self.viewModel.viewState.selectDm(withId: channelId)
                                     self.viewModel.viewState.currentTargetMessageId = nil
+                                    self.viewModel.viewState.path.append(NavigationDestination.maybeChannelView)
                                 }
-                                
-                                self.viewModel.viewState.path.append(NavigationDestination.maybeChannelView)
                             }
                         } else {
                             // User doesn't have access - navigate to Discover
@@ -231,21 +230,21 @@ extension MessageableChannelViewController: UITextViewDelegate {
                         // Clear existing messages for this channel
                         viewModel.viewState.channelMessages[channelId] = []
                         
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
-                            // This ensures that when user presses back, they go to server list instead of previous channel
-                            self.viewModel.viewState.path = []
-                            
-                            // Navigate to the channel
-                            self.viewModel.viewState.selectDm(withId: channelId)
-                            
-                            if let messageId = messageId {
-                                self.viewModel.viewState.currentTargetMessageId = messageId
+                        DispatchQueue.main.async {
+                            if let mid = messageId {
+                                self.viewModel.viewState.currentTargetMessageId = mid
+                                self.viewModel.viewState.channelMessages[channelId] = []
+                                self.viewModel.viewState.atTopOfChannel.remove(channelId)
+                                self.viewModel.viewState.selectDm(withId: channelId)
+                                self.viewModel.viewState.path = []
+                                self.viewModel.viewState.path.append(NavigationDestination.maybeChannelView)
+                                NetworkSyncService.shared.syncTargetMessage(messageId: mid, channelId: channelId, viewState: self.viewModel.viewState)
                             } else {
+                                self.viewModel.viewState.path = []
+                                self.viewModel.viewState.selectDm(withId: channelId)
                                 self.viewModel.viewState.currentTargetMessageId = nil
+                                self.viewModel.viewState.path.append(NavigationDestination.maybeChannelView)
                             }
-                            
-                            self.viewModel.viewState.path.append(NavigationDestination.maybeChannelView)
                         }
                     }
                 } else {
