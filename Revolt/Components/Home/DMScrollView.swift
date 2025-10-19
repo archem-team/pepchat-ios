@@ -260,6 +260,8 @@ struct DMScrollView: View {
             
             // DATABASE-FIRST: Trigger background sync for channels
             NetworkSyncService.shared.syncAllChannels()
+            // Prefetch recipient users so names are ready before list renders
+            viewState.prefetchVisibleDmUsers()
         }
         // CRITICAL FIX: Listen for DM updates from WebSocket
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DMListNeedsUpdate"))) { notification in

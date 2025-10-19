@@ -2141,14 +2141,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     message: lastMessageId
                 ).get()
                 
-                // Update local unread state if needed
-                if var unread = viewModel.viewState.unreads[viewModel.channel.id] {
-                    unread.last_id = lastMessageId
-                    viewModel.viewState.unreads[viewModel.channel.id] = unread
-                } else if let currentUserId = viewModel.viewState.currentUser?.id {
-                    // Create a new unread entry if one doesn't exist
-                    let unreadId = Unread.Id(channel: viewModel.channel.id, user: currentUserId)
-                    viewModel.viewState.unreads[viewModel.channel.id] = Unread(id: unreadId, last_id: lastMessageId)
+                // Persist ack to Realm (Database-first). Observer will update ViewState.unreads
+                if let currentUserId = viewModel.viewState.currentUser?.id {
+                    await UnreadRepository.shared.updateAck(channelId: viewModel.channel.id, lastId: lastMessageId, userId: currentUserId)
                 }
                 
                 DispatchQueue.main.async {

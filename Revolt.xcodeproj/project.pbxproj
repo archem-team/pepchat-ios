@@ -288,6 +288,9 @@
 		8564AA9D2E6C5A98004C849C /* FileMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA7B2E6C5A98004C849C /* FileMappers.swift */; };
 		8564AA9E2E6C5A98004C849C /* ServerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA8A2E6C5A98004C849C /* ServerModels.swift */; };
 		8564AA9F2E6C5A98004C849C /* ServerMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AA802E6C5A98004C849C /* ServerMappers.swift */; };
+		859EEDBD2EA5108D0024B86E /* UnreadMappers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 859EEDBC2EA5108D0024B86E /* UnreadMappers.swift */; };
+		859EEDBF2EA510BA0024B86E /* UnreadModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 859EEDBE2EA510BA0024B86E /* UnreadModels.swift */; };
+		859EEDC12EA510D00024B86E /* UnreadRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 859EEDC02EA510D00024B86E /* UnreadRepository.swift */; };
 		85A81F292E9017520017BBCF /* DatabaseObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F282E9017520017BBCF /* DatabaseObserver.swift */; };
 		85A81F352E901DE60017BBCF /* MessageRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F302E901DE60017BBCF /* MessageRepository.swift */; };
 		85A81F362E901DE60017BBCF /* NetworkRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A81F312E901DE60017BBCF /* NetworkRepository.swift */; };
@@ -679,6 +682,9 @@
 		8564AA892E6C5A98004C849C /* PermissionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionModels.swift; sourceTree = "<group>"; };
 		8564AA8A2E6C5A98004C849C /* ServerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerModels.swift; sourceTree = "<group>"; };
 		8564AA8B2E6C5A98004C849C /* UserModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserModels.swift; sourceTree = "<group>"; };
+		859EEDBC2EA5108D0024B86E /* UnreadMappers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnreadMappers.swift; sourceTree = "<group>"; };
+		859EEDBE2EA510BA0024B86E /* UnreadModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnreadModels.swift; sourceTree = "<group>"; };
+		859EEDC02EA510D00024B86E /* UnreadRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnreadRepository.swift; sourceTree = "<group>"; };
 		85A81F282E9017520017BBCF /* DatabaseObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseObserver.swift; sourceTree = "<group>"; };
 		85A81F2E2E901DE60017BBCF /* ChannelRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelRepository.swift; sourceTree = "<group>"; };
 		85A81F2F2E901DE60017BBCF /* MemberRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberRepository.swift; sourceTree = "<group>"; };
@@ -1574,6 +1580,7 @@
 			isa = PBXGroup;
 			children = (
 				85FD19192E932A6F00DDF989 /* DiscoverMappers.swift */,
+				859EEDBC2EA5108D0024B86E /* UnreadMappers.swift */,
 				8564AA782E6C5A98004C849C /* ApiMappers.swift */,
 				8564AA792E6C5A98004C849C /* ChannelMappers.swift */,
 				8564AA7A2E6C5A98004C849C /* EmbedMappers.swift */,
@@ -1591,6 +1598,7 @@
 		8564AA8C2E6C5A98004C849C /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				859EEDBE2EA510BA0024B86E /* UnreadModels.swift */,
 				8564AA832E6C5A98004C849C /* ApiModels.swift */,
 				8564AA842E6C5A98004C849C /* ChannelModels.swift */,
 				8564AA852E6C5A98004C849C /* EmbedModels.swift */,
@@ -1608,6 +1616,7 @@
 		85A81F342E901DE60017BBCF /* Repository */ = {
 			isa = PBXGroup;
 			children = (
+				859EEDC02EA510D00024B86E /* UnreadRepository.swift */,
 				85FD19312E9458CB00DDF989 /* FriendsRepository.swift */,
 				85A81F2E2E901DE60017BBCF /* ChannelRepository.swift */,
 				85FD19172E9329A200DDF989 /* DiscoverRepository.swift */,
@@ -2113,6 +2122,7 @@
 				912BBA612D4FB65C00BB8FC3 /* ShowRecoveryCodesView.swift in Sources */,
 				17429D972B4C91170036105A /* ChannelSettings.swift in Sources */,
 				91BD33EE2D64898E00A0EDC3 /* FriendOptionsSheet.swift in Sources */,
+				859EEDBF2EA510BA0024B86E /* UnreadModels.swift in Sources */,
 				91E43ADB2D65C5CB00486ABC /* NewEmojiSheet.swift in Sources */,
 				17BC476B2B9CB51200A593DA /* ShareInviteSheet.swift in Sources */,
 				85A81F352E901DE60017BBCF /* MessageRepository.swift in Sources */,
@@ -2195,6 +2205,7 @@
 				050E93312D04DA01006B2330 /* MessageOptionSheet.swift in Sources */,
 				05EEF20F2CFCB77E002E5255 /* UIFont.swift in Sources */,
 				05E478662CD2DC8C00CE8B18 /* PeptideIconButton.swift in Sources */,
+				859EEDC12EA510D00024B86E /* UnreadRepository.swift in Sources */,
 				059381CE2D295E2A00A49BD5 /* DeleteCategorySheet.swift in Sources */,
 				17E019D72AF1998300AB4663 /* MessageAttachment.swift in Sources */,
 				DAAA4BFB29F2518900F41E52 /* MessageView.swift in Sources */,
@@ -2275,6 +2286,7 @@
 				0570B5282DC4D0BA0029105C /* MessageableChannelViewController.swift in Sources */,
 				17E019D52AF1937400AB4663 /* Theme.swift in Sources */,
 				05F3043E2DCF48A90058E80E /* HTTPError.swift in Sources */,
+				859EEDBD2EA5108D0024B86E /* UnreadMappers.swift in Sources */,
 				1788F96E2C3CA19800A385A8 /* MessageEmbed.swift in Sources */,
 				05358AA82CCEB85F00B16635 /* TextStyle.swift in Sources */,
 				056929292D16CD16003BDC7B /* NotificationSettingSheet.swift in Sources */,

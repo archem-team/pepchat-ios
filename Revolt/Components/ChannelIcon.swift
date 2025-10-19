@@ -617,7 +617,10 @@ struct HomeChannelOnlyIcon : View {
                            withPresence: withUserPresence,
                            showNameIcon: true)
                         .frame(width: frameSize, height: frameSize)
-                    
+                } else {
+                    // Fallback placeholder until profile loads from DB
+                    HomeChannelNameIconView(name: "", frameSize: frameSize)
+                        .frame(width: frameSize, height: frameSize)
                 }
                 
 

@@ -440,6 +440,11 @@ class NetworkSyncService {
                 
                 await self.logger.info("💾 User saved to database")
                 
+                // Update in-memory cache so UI can reflect immediately without waiting for DB observers
+                await MainActor.run {
+                    viewState.users[userId] = user
+                }
+                
             } catch {
                 await self.logger.error("❌ User sync failed: \(error.localizedDescription)")
             }

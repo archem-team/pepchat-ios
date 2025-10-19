@@ -25,6 +25,17 @@ struct DiscoverScrollView: View {
         content
             .background(backgroundView)
             .onAppear(perform: loadData)
+            .onReceive(NotificationCenter.default.publisher(for: .DiscoverItemsUpdated)) { _ in
+                // Refresh items when database updates arrive
+                Task {
+                    let dbItems = await DiscoverRepository.shared.fetchDiscoverItems()
+                    await MainActor.run {
+                        self.discoverItems = dbItems.sorted(by: { $0.sortOrder < $1.sortOrder })
+                        self.isLoading = false
+                    }
+                    await self.checkMembershipForAllItems()
+                }
+            }
     }
     
     // MARK: - View Components

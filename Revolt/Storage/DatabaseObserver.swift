@@ -26,6 +26,7 @@ class DatabaseObserver: ObservableObject {
     @Published var servers: [ServerRealm] = []
     @Published var friends: [UserRealm] = []
     @Published var members: [MemberRealm] = []
+    @Published var unreads: [UnreadRealm] = []
     
     private let processingQueue = DispatchQueue(label: "com.revolt.database.observer", qos: .utility)
     
@@ -50,6 +51,7 @@ class DatabaseObserver: ObservableObject {
             await observeMessages() 
             await observeChannels()
             await observeServers()
+            await observeUnreads()
             
         }
     }
@@ -208,6 +210,41 @@ class DatabaseObserver: ObservableObject {
         let convertedChannels = self.channels.compactMap { $0.toOriginal() as Types.Channel? }
         let channelsDictionary = Dictionary(uniqueKeysWithValues: convertedChannels.map { ($0.id, $0) })
         self.viewState?.updateChannelsFromDatabase(channelsDictionary)
+    }
+
+    // MARK: - Unread Observation
+    private func observeUnreads() async {
+        do {
+            let realm = try await Realm()
+            let unreads = realm.objects(UnreadRealm.self)
+            let token = unreads.observe { [weak self] changes in
+                Task { @MainActor in
+                    await self?.handleUnreadsChange(changes)
+                }
+            }
+            tokens.append(token)
+            await MainActor.run { self.unreads = Array(unreads) }
+        } catch {
+        }
+    }
+    
+    private func handleUnreadsChange(_ changes: RealmCollectionChange<Results<UnreadRealm>>) async {
+        switch changes {
+        case .initial(let results):
+            unreads = Array(results)
+            notifyViewStateUnreadsChanged()
+        case .update(let results, _, _, _):
+            unreads = Array(results)
+            notifyViewStateUnreadsChanged()
+        case .error:
+            break
+        }
+    }
+    
+    private func notifyViewStateUnreadsChanged() {
+        let converted = self.unreads.map { $0.toOriginal() }
+        let dict = Dictionary(uniqueKeysWithValues: converted.map { ($0.id.channel, $0) })
+        self.viewState?.updateUnreadsFromDatabase(dict)
     }
     
     // MARK: - Server Observation
@@ -445,5 +482,25 @@ extension ViewState {
             name: NSNotification.Name("DatabaseMembersUpdated"),
             object: nil
         )
+    }
+
+    // MARK: - Unreads (Database-first)
+    func updateUnreadsFromDatabase(_ unreadsByChannel: [String: Unread]) {
+        for (channelId, unread) in unreadsByChannel {
+            self.unreads[channelId] = unread
+        }
+        NotificationCenter.default.post(
+            name: NSNotification.Name("DatabaseUnreadsUpdated"),
+            object: nil
+        )
+    }
+
+    @MainActor
+    func loadUnreadsFromDatabase() async {
+        guard let currentUserId = currentUser?.id else { return }
+        let dbUnreads = await UnreadRepository.shared.fetchAll(forUser: currentUserId)
+        for unread in dbUnreads {
+            self.unreads[unread.id.channel] = unread
+        }
     }
 }

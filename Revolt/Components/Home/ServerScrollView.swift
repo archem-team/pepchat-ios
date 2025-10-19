@@ -266,6 +266,15 @@ struct ServerScrollView: View {
             NetworkSyncService.shared.syncAllServers()
             NetworkSyncService.shared.syncAllChannels()
         }
+        // React to DM updates posted by ViewState/WebSocket so the sidebar refreshes immediately
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DMListNeedsUpdate"))) { notification in
+            // Force a UI refresh by notifying that ViewState changed
+            viewState.objectWillChange.send()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DatabaseChannelsUpdated"))) { _ in
+            // Database wrote new/updated channels (including DMs) – refresh sidebar list
+            viewState.objectWillChange.send()
+        }
     }
 }
 

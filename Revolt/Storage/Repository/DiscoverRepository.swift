@@ -9,6 +9,11 @@ import Foundation
 import RealmSwift
 import OSLog
 
+// Notification used to inform UI that Discover items have been updated in the database
+extension Notification.Name {
+    static let DiscoverItemsUpdated = Notification.Name("DiscoverItemsUpdated")
+}
+
 /// Repository for managing Discover servers data between Network and Realm
 class DiscoverRepository {
     
@@ -30,6 +35,11 @@ class DiscoverRepository {
         let realmItems = items.map { $0.toRealm() }
         await realmManager.writeBatch(realmItems)
         logger.debug("✅ Saved \(items.count) discover items")
+
+        // Notify UI that discover items have been updated
+        await MainActor.run {
+            NotificationCenter.default.post(name: .DiscoverItemsUpdated, object: nil)
+        }
     }
     
     /// Save server chat data to Realm (from CSV)
@@ -39,6 +49,11 @@ class DiscoverRepository {
         let realmChats = serverChats.map { $0.toRealm() }
         await realmManager.writeBatch(realmChats)
         logger.debug("✅ Saved \(serverChats.count) server chats")
+
+        // Also notify after saving server chats, as the UI depends on the derived Discover items
+        await MainActor.run {
+            NotificationCenter.default.post(name: .DiscoverItemsUpdated, object: nil)
+        }
     }
     
     // MARK: - Fetch Operations

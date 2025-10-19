@@ -3075,56 +3075,63 @@ public class ViewState: ObservableObject {
     
     // Load users for the first batch of DMs (called during processDMs)
     private func loadUsersForFirstDmBatch() {
-        var loadedCount = 0
-        let maxUsersToLoad = 50 // Limit to prevent memory issues
-        
-        // Get first set of DMs (database-first, no batching)
+        // Prefetch recipients for the first visible set of DMs from DB first, then network
+        let maxUsersToLoad = 50
         let visibleDmIds = Array(dms.prefix(15).map { $0.id })
         
-        for dmId in visibleDmIds {
-            if loadedCount >= maxUsersToLoad {
-                break
-            }
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self = self else { return }
+            var candidateUserIds: [String] = []
             
-            if let channel = channels[dmId] {
-                var recipientIds: [String] = []
-                
-                switch channel {
-                case .dm_channel(let dm):
-                    recipientIds = dm.recipients
-                case .group_dm_channel(let group):
-                    recipientIds = group.recipients
-                default:
-                    continue
-                }
-                
-                // Load actual users from stored event data
-                for userId in recipientIds {
-                    if loadedCount >= maxUsersToLoad {
-                        break
+            for dmId in visibleDmIds {
+                if candidateUserIds.count >= maxUsersToLoad { break }
+                if let channel = await MainActor.run(body: { self.channels[dmId] }) {
+                    var recipientIds: [String] = []
+                    switch channel {
+                    case .dm_channel(let dm):
+                        recipientIds = dm.recipients
+                    case .group_dm_channel(let group):
+                        recipientIds = group.recipients
+                    default:
+                        continue
                     }
-                    
-                    if users[userId] == nil {
-                        if let actualUser = allEventUsers[userId] {
-                            // Load the real user data
-                            users[userId] = actualUser
-                            loadedCount += 1
-                        } else {
-                            // Create placeholder only if we can't find the real user
-                            let placeholderUser = Types.User(
-                                id: userId,
-                                username: "Unknown User",
-                                discriminator: "0000",
-                                relationship: .None
-                            )
-                            users[userId] = placeholderUser
-                            loadedCount += 1
+                    for userId in recipientIds {
+                        if candidateUserIds.count >= maxUsersToLoad { break }
+                        // Skip if already in memory
+                        let inMemory = await MainActor.run(body: { self.users[userId] != nil })
+                        if !inMemory {
+                            candidateUserIds.append(userId)
                         }
                     }
                 }
             }
+            
+            if candidateUserIds.isEmpty { return }
+            
+            // 1) Try to resolve from Database in batch
+            let dbUsers = await UserRepository.shared.fetchUsers(ids: candidateUserIds)
+            if !dbUsers.isEmpty {
+                await MainActor.run {
+                    for (userId, user) in dbUsers {
+                        self.users[userId] = user
+                    }
+                }
+            }
+            
+            // 2) For any missing, trigger network sync which will also update memory
+            let resolvedIds = Set(dbUsers.keys)
+            let remaining = candidateUserIds.filter { !resolvedIds.contains($0) }
+            if !remaining.isEmpty {
+                for userId in remaining {
+                    await NetworkSyncService.shared.syncUser(userId: userId, viewState: self)
+                }
+            }
         }
-        
+    }
+
+    // Public wrapper to prefetch users for visible DM items
+    func prefetchVisibleDmUsers() {
+        loadUsersForFirstDmBatch()
     }
     
     
@@ -4191,14 +4198,35 @@ public class ViewState: ObservableObject {
             return storedUser
         }
         
-        // Create placeholder user to prevent empty spaces
+        // Create placeholder user to prevent empty spaces (will be replaced asynchronously)
         let placeholderUser = Types.User(
             id: otherUserId,
-            username: "Unknown User",
+            username: "Loading...",
             discriminator: "0000",
             relationship: .None
         )
         users[otherUserId] = placeholderUser
+
+        // Asynchronously resolve from Database, then Network, and persist
+        Task { [weak self] in
+            guard let self = self else { return }
+            // 1) Try database first
+            if let dbUser = await UserRepository.shared.fetchUser(id: otherUserId) {
+                await MainActor.run {
+                    self.users[otherUserId] = dbUser
+                }
+                return
+            }
+            // 2) Fetch from network, then save to DB and update memory
+            let result = await self.http.fetchUser(user: otherUserId)
+            if case .success(let remoteUser) = result {
+                await UserRepository.shared.saveUser(remoteUser)
+                await MainActor.run {
+                    self.users[otherUserId] = remoteUser
+                }
+            }
+        }
+        
         return placeholderUser
     }
     
@@ -5022,12 +5050,10 @@ extension ViewState {
         // MEMORY FIX: Fetch unreads separately to prevent memory spike
         Task {
             if let remoteUnreads = try? await http.fetchUnreads().get() {
+                // Save unreads to Realm; DatabaseObserver will update ViewState.unreads
+                await UnreadRepository.shared.saveAll(remoteUnreads)
                 await MainActor.run {
-                    for unread in remoteUnreads {
-                        unreads[unread.id.channel] = unread
-                    }
-                    
-                    // Update app badge count after loading unreads from server
+                    // Update app badge count after loading unreads from server (will also be triggered by observer)
                     updateAppBadgeCount()
                 }
             }
