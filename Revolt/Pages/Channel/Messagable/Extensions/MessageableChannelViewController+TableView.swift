@@ -13,10 +13,7 @@ extension MessageableChannelViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
         // For reversed table view: last row (bottom) is the oldest message
-        // Mark as loading when we reach the last row (bottom) where older messages should load
-        if !localMessages.isEmpty && indexPath.row == localMessages.count - 1 {
-            isLoadingMore = true
-        }
+        // Do NOT pre-set isLoadingMore here; let loadMoreMessagesIfNeeded decide and set it
         
         // Safety check for localMessages count
         guard !localMessages.isEmpty, indexPath.row < localMessages.count else {

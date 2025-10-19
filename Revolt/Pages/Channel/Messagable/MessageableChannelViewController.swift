@@ -479,7 +479,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
               let channelId = userInfo["channelId"] as? String,
               channelId == viewModel.channel.id else { return }
         
-        // print debug info for socket message
+        // Ensure data source reflects the latest channel messages before any scroll logic
+        if let channelMessages = viewModel.viewState.channelMessages[channelId] {
+            if localMessages.count != channelMessages.count || localMessages.first != channelMessages.first {
+                localMessages = channelMessages
+                if let localDS = dataSource as? LocalMessagesDataSource {
+                    localDS.updateMessages(channelMessages)
+                }
+                reloadTableViewMaintainingScrollPosition(messagesForDataSource: localMessages)
+            }
+        }
         
         let hasManuallyScrolledUp = lastManualScrollUpTime != nil &&
                                     Date().timeIntervalSince(lastManualScrollUpTime!) < 10.0
@@ -563,6 +572,17 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Prevent auto-scrolls during pagination or data source updates
         if suppressAutoScroll || isLoadingMore || isDataSourceUpdating {
             return
+        }
+
+        // Ensure data source is synced with latest messages for the current channel
+        if let channelMessages = viewModel.viewState.channelMessages[viewModel.channel.id] {
+            if localMessages.count != channelMessages.count || localMessages.first != channelMessages.first {
+                localMessages = channelMessages
+                if let localDS = dataSource as? LocalMessagesDataSource {
+                    localDS.updateMessages(channelMessages)
+                }
+                reloadTableViewMaintainingScrollPosition(messagesForDataSource: localMessages)
+            }
         }
         
         let currentMessageCount = viewModel.messages.count
@@ -2323,20 +2343,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                                 let newMessages = Array(self.viewModel.messages)
                                 self.localMessages = newMessages
                                 
+                                // Ensure data source reflects the updated messages
+                                if let existingDataSource = self.dataSource as? LocalMessagesDataSource {
+                                    existingDataSource.updateMessages(newMessages)
+                                }
+                                
                                 print("📊 New localMessages count: \(self.localMessages.count)")
                                 
-                                // Reload the table to display new rows
-                                self.tableView.reloadData()
-                                self.tableView.layoutIfNeeded()
-                                
-                                // Maintain visual position by compensating the growth in content height
-                                let newContentHeight = self.tableView.contentSize.height
-                                let heightDelta = newContentHeight - previousContentHeight
-                                let adjustedOffset = CGPoint(x: previousOffset.x, y: previousOffset.y + heightDelta)
-                                self.tableView.setContentOffset(adjustedOffset, animated: false)
-                                print("📍 Adjusted offset by \(heightDelta), old: \(previousOffset.y) new: \(adjustedOffset.y)")
-                                
-                                print("🔄 Table view reloaded with \(self.localMessages.count) total messages")
+                                // Reload the table while maintaining scroll position
+                                self.reloadTableViewMaintainingScrollPosition(messagesForDataSource: self.localMessages)
+                                print("🔄 Table view reloaded (anchored) with \(self.localMessages.count) total messages")
                             } else {
                                 // No new messages, mark channel as at top
                                 self.viewModel.viewState.atTopOfChannel.insert(self.viewModel.channel.id)
@@ -4148,7 +4164,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     if success {
                         self.scrollToTargetMessage() // Recursive call after loading
                     } else {
-                        self.scrollToBottom(animated: false) // Fallback
+                        // No fallback scroll to prevent jumping to first message
                     }
                 }
             }
@@ -4166,7 +4182,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         } else if !self.localMessages.isEmpty {
             referenceMessages = self.localMessages
         } else {
-            self.scrollToBottom(animated: false)
+            // No fallback scroll to prevent jumping to first message
             return
         }
         
@@ -4393,7 +4409,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         if success {
                             self.scrollToTargetMessage() // Try again after loading
                         } else {
-                            self.scrollToBottom(animated: false) // Fallback
+                            // No fallback scroll to prevent jumping to first message
                         }
                     }
                 }

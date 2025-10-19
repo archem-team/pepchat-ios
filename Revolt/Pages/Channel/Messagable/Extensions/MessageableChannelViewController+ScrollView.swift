@@ -37,7 +37,7 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
         let offsetY = scrollView.contentOffset.y
         let frameHeight = scrollView.frame.size.height
         let distanceFromBottom = contentHeight - (offsetY + frameHeight)
-        let triggerThreshold: CGFloat = 100.0 // Same threshold as in scrollViewDidScroll
+        let triggerThreshold: CGFloat = 150.0 // Slightly relaxed to trigger more reliably
         
         // If user has dragged near the bottom, load more messages
         if distanceFromBottom <= triggerThreshold && !isLoadingMore && scrollView == tableView {
@@ -131,7 +131,7 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
             
             // IMPROVED: Trigger loading when approaching the bottom (within 100px), since table is reversed
             let offsetY = scrollView.contentOffset.y
-            let triggerThreshold: CGFloat = 100.0
+            let triggerThreshold: CGFloat = 150.0
             let contentHeight = scrollView.contentSize.height
             let frameHeight = scrollView.frame.size.height
             let distanceFromBottom = contentHeight - (offsetY + frameHeight)
@@ -203,7 +203,7 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
         // Check if user is very close to the bottom (within 100 points)
         let distanceFromBottom = contentHeight - (offsetY + frameHeight)
         
-        if distanceFromBottom <= 100 {
+        if distanceFromBottom <= 150 {
             // User is near bottom - check if we should load newer messages
             if let lastMessageId = localMessages.last {
                 loadNewerMessages(after: lastMessageId)

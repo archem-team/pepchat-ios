@@ -25,8 +25,8 @@ class DatabaseCleanupService {
     /// Keep messages for 30 days
     private let messageTTLDays: Int = 30
     
-    /// Maximum messages per channel to keep
-    private let maxMessagesPerChannel: Int = 500
+    /// Maximum messages per channel to keep (disabled)
+    private let maxMessagesPerChannel: Int = Int.max
     
     /// How often to run cleanup (in seconds)
     private let cleanupInterval: TimeInterval = 3600 // 1 hour
