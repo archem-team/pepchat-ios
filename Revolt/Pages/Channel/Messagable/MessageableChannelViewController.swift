@@ -2149,7 +2149,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
         
         // Only mark as seen if there are messages and we're not already doing it
-        guard let lastMessageId = viewModel.messages.last, !isAcknowledgingMessage else {
+        // Messages array is sorted newest first, so .first is the newest message
+        guard let lastMessageId = viewModel.messages.first, !isAcknowledgingMessage else {
             return
         }
         
