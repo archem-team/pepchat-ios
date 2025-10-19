@@ -259,7 +259,11 @@ extension MessageableChannelViewModel {
     }
 
     func notifyMessagesDidChange() {
-        NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: self)
+        NotificationCenter.default.post(
+            name: NSNotification.Name("MessagesDidChange"),
+            object: nil,
+            userInfo: ["channelId": channel.id]
+        )
     }
 //    
     // New method to force synchronization between viewState and viewModel messages

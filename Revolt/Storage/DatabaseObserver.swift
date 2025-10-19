@@ -127,18 +127,29 @@ class DatabaseObserver: ObservableObject {
         switch changes {
         case .initial(let results):
             messages = Array(results)
-            notifyViewStateMessagesChanged()
+            notifyViewStateMessagesChanged(affectedChannelIds: Array(Set(messages.map { $0.channel })))
             
         case .update(let results, let deletions, let insertions, let modifications):
             messages = Array(results)
-            notifyViewStateMessagesChanged()
+            // Compute affected channelIds using indexes
+            var channelIds = Set<String>()
+            for index in deletions {
+                if index < results.count { channelIds.insert(results[index].channel) }
+            }
+            for index in insertions {
+                if index < results.count { channelIds.insert(results[index].channel) }
+            }
+            for index in modifications {
+                if index < results.count { channelIds.insert(results[index].channel) }
+            }
+            notifyViewStateMessagesChanged(affectedChannelIds: Array(channelIds))
             
         case .error(let error):
             break
         }
     }
     
-    private func notifyViewStateMessagesChanged() {
+    private func notifyViewStateMessagesChanged(affectedChannelIds: [String]) {
         let convertedMessages = self.messages.compactMap { $0.toOriginal() as Types.Message? }
         let messagesDictionary = Dictionary(uniqueKeysWithValues: convertedMessages.map { ($0.id, $0) })
         self.viewState?.updateMessagesFromDatabase(messagesDictionary)
@@ -148,7 +159,8 @@ class DatabaseObserver: ObservableObject {
         DispatchQueue.main.async {
             NotificationCenter.default.post(
                 name: NSNotification.Name("DatabaseMessagesUpdated"),
-                object: nil
+                object: nil,
+                userInfo: ["channelIds": affectedChannelIds]
             )
         }
     }

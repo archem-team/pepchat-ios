@@ -131,7 +131,11 @@ class MessageableChannelViewModel: ObservableObject {
         
         // Send initial notification only after initialization
         DispatchQueue.main.async {
-            NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: nil)
+            NotificationCenter.default.post(
+                name: NSNotification.Name("MessagesDidChange"),
+                object: nil,
+                userInfo: ["channelId": self.channel.id]
+            )
         }
         
         // We can't use sink on Binding directly
@@ -204,7 +208,11 @@ class MessageableChannelViewModel: ObservableObject {
         
         // Notify that messages have changed
         DispatchQueue.main.async {
-            NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: nil)
+            NotificationCenter.default.post(
+                name: NSNotification.Name("MessagesDidChange"),
+                object: nil,
+                userInfo: ["channelId": self.channel.id]
+            )
         }
         
         return result

@@ -2392,7 +2392,8 @@ public class ViewState: ObservableObject {
                     DispatchQueue.main.async {
                         NotificationCenter.default.post(
                             name: NSNotification.Name("MessagesDidChange"), 
-                            object: ["channelId": e.channel_id, "messageId": e.id, "type": "reaction_added"]
+                            object: ["channelId": e.channel_id, "messageId": e.id, "type": "reaction_added"],
+                            userInfo: ["channelId": e.channel_id]
                         )
                     }
                 } else {
@@ -2416,12 +2417,13 @@ public class ViewState: ObservableObject {
                         
                         
                         // Post notification to update UI
-                        DispatchQueue.main.async {
-                            NotificationCenter.default.post(
-                                name: NSNotification.Name("MessagesDidChange"), 
-                                object: ["channelId": e.channel_id, "messageId": e.id, "type": "reaction_removed"]
-                            )
-                        }
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("MessagesDidChange"), 
+                            object: ["channelId": e.channel_id, "messageId": e.id, "type": "reaction_removed"],
+                            userInfo: ["channelId": e.channel_id]
+                        )
+                    }
                     } else {
                     }
                 } else {

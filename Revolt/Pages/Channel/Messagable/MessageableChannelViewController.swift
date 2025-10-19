@@ -1636,6 +1636,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // SUPER FAST: Simplified message change handler
     @objc private func messagesDidChange(_ notification: Notification) {
+        // Channel-scope filtering: only handle updates for this channel
+        if let info = notification.userInfo, let channelId = info["channelId"] as? String, channelId != viewModel.channel.id {
+            return
+        }
         // Debounce rapid notifications
         let now = Date()
         guard now.timeIntervalSince(lastMessageChangeNotificationTime) >= 0.1 else { return }
@@ -1718,8 +1722,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
         
         // Skip if wrong channel (for regular message updates)
-        if let sender = notification.object as? MessageableChannelViewModel,
-           sender.channel.id != viewModel.channel.id { return }
+        if let info = notification.userInfo, let chId = info["channelId"] as? String, chId != viewModel.channel.id { return }
         
         // Skip if no actual change (for regular message updates)
         let newCount = viewModel.viewState.channelMessages[viewModel.channel.id]?.count ?? 0
@@ -1735,6 +1738,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // DATABASE REACTIVE ARCHITECTURE: Handle messages loaded from database
     @objc private func messagesDidChangeFromDatabase(_ notification: Notification) {
+        // Channel-scope filtering for database updates
+        if let info = notification.userInfo, let ids = info["channelIds"] as? [String], !ids.contains(viewModel.channel.id) {
+            return
+        }
         print("📬 MessageableChannelViewController: Received DatabaseMessagesUpdated notification for channel \(viewModel.channel.id)")
         
         // Load messages from database via ViewModel

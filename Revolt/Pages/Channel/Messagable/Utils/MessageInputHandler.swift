@@ -107,7 +107,11 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                     
                     // Post notification again after successful API response
                     DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: nil)
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("MessagesDidChange"),
+                            object: nil,
+                            userInfo: ["channelId": self.viewModel.channel.id]
+                        )
                         // Note: No additional scroll here - handleNewMessageSent() already handled it
                     }
                 } catch {
@@ -203,7 +207,11 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                     
                     // Post notification again after successful API response
                     DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: nil)
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("MessagesDidChange"),
+                            object: nil,
+                            userInfo: ["channelId": self.viewModel.channel.id]
+                        )
                         // Note: No additional scroll here - handleNewMessageSent() already handled it
                         
                         // Clear attachments after successful upload
@@ -645,7 +653,11 @@ extension MessageInputHandler: MessageInputViewDelegate {
             self.viewModel.viewState.messages[nonce] = queuedMessage.toTemporaryMessage()
             
             // Post notification to refresh UI
-            NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: nil)
+            NotificationCenter.default.post(
+                name: NSNotification.Name("MessagesDidChange"),
+                object: nil,
+                userInfo: ["channelId": channelId]
+            )
         }
     }
 }
