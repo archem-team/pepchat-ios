@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftUI
 import Alamofire
 import ULID
@@ -419,8 +420,11 @@ public class ViewState: ObservableObject {
         }
     }
     
-    // MEMORY MANAGEMENT: Add debouncing for UserDefaults saves
+    // MEMORY MANAGEMENT: Add debouncing for UserDefaults saves (main-actor only)
     private var saveWorkItems: [String: DispatchWorkItem] = [:]
+    #if DEBUG
+    private let saveLogger = Logger(subsystem: "chat.revolt.app", category: "UserDefaultsSave")
+    #endif
     private let saveDebounceInterval: TimeInterval = 2.0 // Save after 2 seconds of no changes
     private let cleanupTriggeredAt = 800 // Start cleanup when 80% full (legacy, not used)
     private let maxChannelsInMemory = 2000 // Maximum channels to keep in memory (increased to load all servers)
@@ -549,32 +553,42 @@ public class ViewState: ObservableObject {
     private let enableAutomaticPreloading = false // DISABLED: No automatic preloading
     
     // MEMORY MANAGEMENT: Helper methods
+    @MainActor
     private func debouncedSave(key: String, data: Data) {
+        #if DEBUG
+        saveLogger.debug("Scheduling debounced save for key=\(key, privacy: .public) on main thread")
+        #endif
         // Cancel any existing save operation for this key
         saveWorkItems[key]?.cancel()
-        
-        // Create a new work item
+
+        // Create a new work item that writes on main (we are already on main)
         let workItem = DispatchWorkItem { [weak self] in
+            #if DEBUG
+            self?.saveLogger.debug("Writing defaults for key=\(key, privacy: .public) on main thread")
+            #endif
             UserDefaults.standard.set(data, forKey: key)
             self?.saveWorkItems.removeValue(forKey: key)
         }
-        
-        // Store and schedule the work item
+
+        // Store and schedule the work item on main after debounce interval
         saveWorkItems[key] = workItem
-        DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + saveDebounceInterval, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + saveDebounceInterval, execute: workItem)
     }
     
     /// Force immediate save of users data without debouncing
     /// Used when app is terminating to ensure data is persisted
+    @MainActor
     public func forceSaveUsers() {
         // Cancel any pending save for users
         saveWorkItems["users"]?.cancel()
         saveWorkItems.removeValue(forKey: "users")
-        
-        // Immediately encode and save users data
+
         if let data = try? JSONEncoder().encode(users) {
+            #if DEBUG
+            saveLogger.debug("Force saving users on main thread")
+            #endif
             UserDefaults.standard.set(data, forKey: "users")
-            UserDefaults.standard.synchronize() // Force synchronization
+            UserDefaults.standard.synchronize()
         }
     }
     

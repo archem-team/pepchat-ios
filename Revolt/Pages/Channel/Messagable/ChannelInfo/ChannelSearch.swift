@@ -52,6 +52,11 @@ struct ChannelSearch: View {
                             name: NSNotification.Name("ChannelSearchClosing"),
                             object: ["channelId": channel.id, "isReturning": true]
                         )
+                        // Also send a second notification that search was closed (compat flag)
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("ChannelSearchClosed"),
+                            object: channel.id
+                        )
                         
                         viewState.path.removeLast()
                         

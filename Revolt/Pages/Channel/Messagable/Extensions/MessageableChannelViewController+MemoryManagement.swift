@@ -77,8 +77,10 @@ extension MessageableChannelViewController {
         self.localMessages.removeAll()
         viewModel.messages.removeAll()
         
-        // Clear preloaded status to allow reloading
-        viewModel.viewState.preloadedChannels.remove(channelId)
+        // Clear preloaded status to allow reloading only when fully leaving the controller (popped)
+        if self.isMovingFromParent || self.isBeingDismissed {
+            viewModel.viewState.preloadedChannels.remove(channelId)
+        }
         
         // For light cleanup, preserve ViewState messages but clear channel message list
         // This allows the messages to be reloaded when returning to the channel

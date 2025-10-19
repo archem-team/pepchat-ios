@@ -85,8 +85,15 @@ class MessageRepository {
         let startTime = CFAbsoluteTimeGetCurrent()
         let realms = await realmManager.getListOfObjects(type: MessageRealm.self)
         
-        // Filter by channel and messages older than beforeId
-        let filtered = realms.filter { $0.channel == channelId && $0.id < beforeId }
+        // Filter by channel
+        let channelMessages = realms.filter { $0.channel == channelId }
+        
+        // ULID is time-based, so comparing IDs is equivalent to comparing timestamps
+        // We want messages older than beforeId (with smaller timestamp)
+        let filtered = channelMessages.filter { $0.id < beforeId }
+        
+        // Log what we found
+        logger.debug("🔍 Found \(filtered.count) messages before \(beforeId) in channel \(channelId)")
         
         // Sort by ID descending (newest first)
         let sorted = filtered.sorted { $0.id > $1.id }

@@ -51,27 +51,29 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
             let messages = !viewModel.messages.isEmpty ? viewModel.messages : localMessages
             
             // Only load if we have messages and not already at the top of channel history
-            if !messages.isEmpty && !viewModel.viewState.atTopOfChannel.contains(viewModel.channel.id) {
-                if let firstMessageId = messages.first {
-                    
-                    // Set loading state
-                    isLoadingMore = true
-                    
-                    // Show loading indicator immediately
-                    DispatchQueue.main.async {
-                        // Add footer if not already added
-                        if self.tableView.tableFooterView == nil {
-                            self.tableView.tableFooterView = self.loadingHeaderView
+                if !messages.isEmpty && !viewModel.viewState.atTopOfChannel.contains(viewModel.channel.id) {
+                    // In a reversed table view, the first message is the newest one
+                    // We need the oldest message ID to load older messages
+                    if let oldestMessageId = messages.last {
+                        
+                        // Set loading state
+                        isLoadingMore = true
+                        
+                        // Show loading indicator immediately
+                        DispatchQueue.main.async {
+                            // Add footer if not already added
+                            if self.tableView.tableFooterView == nil {
+                                self.tableView.tableFooterView = self.loadingHeaderView
+                            }
+                            self.loadingHeaderView.isHidden = false
+                            // Force layout update to ensure indicator is visible
+                            self.view.layoutIfNeeded()
                         }
-                        self.loadingHeaderView.isHidden = false
-                        // Force layout update to ensure indicator is visible
-                        self.view.layoutIfNeeded()
+                        
+                        // Load older messages
+                        loadMoreMessages(before: oldestMessageId)
                     }
-                    
-                    // Load older messages
-                    loadMoreMessages(before: firstMessageId)
                 }
-            }
         }
     }
     
@@ -163,7 +165,7 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
                             }
                             self.loadingHeaderView.isHidden = false
                             // Force layout update to ensure indicator is visible
-                            //self.view.layoutIfNeeded()
+                            self.view.layoutIfNeeded()
                         }
                         
                         // Load older messages

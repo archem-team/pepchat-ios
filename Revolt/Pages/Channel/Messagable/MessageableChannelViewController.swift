@@ -813,6 +813,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Check if we're returning from search - if so, just refresh UI without reloading from database
         if isReturningFromSearch {
+            // Ensure dataSource is set back to our LocalMessagesDataSource
+            let current = localMessages
+            self.dataSource = LocalMessagesDataSource(viewModel: viewModel, viewController: self, localMessages: current)
+            self.tableView.dataSource = self.dataSource
             
             // Re-register observer
             NotificationCenter.default.removeObserver(self, name: NSNotification.Name("MessagesDidChange"), object: nil)
@@ -823,16 +827,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 object: nil
             )
             
-            // Just refresh the UI with existing messages, don't reload from database
+            // Refresh the UI with existing messages
             refreshMessages()
+            tableView.reloadData()
             
-            // Scroll to bottom if messages exist
             if !localMessages.isEmpty {
                 scrollToBottom(animated: false)
             }
             
-            // Reset the flag after processing
             isReturningFromSearch = false
+            wasInSearch = false
             
             return
         }
@@ -962,6 +966,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Dismiss keyboard if visible
         view.endEditing(true)
+
+        // If we're navigating to ChannelSearch, set the search-return flags here
+        if wasInSearch {
+            isReturningFromSearch = true
+        }
         
         let cleanupStartTime = CFAbsoluteTimeGetCurrent()
         
@@ -1003,8 +1012,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             return
         }
         
-        // IMMEDIATE CLEANUP: Always perform instant cleanup regardless of navigation
-        performInstantMemoryCleanup()
+        // Only clean up if this controller is being popped or dismissed.
+        // When we PUSH to another screen, we want to KEEP the chat state in memory.
+        let isLeavingStack = self.isMovingFromParent || self.isBeingDismissed
+        if isLeavingStack {
+            // IMMEDIATE CLEANUP: Do NOT clear messages if returning from search; otherwise clean up
+            if !wasInSearch {
+                performInstantMemoryCleanup()
+            } else {
+                print("🔍 Skipping instant cleanup because we navigated to search; preserving channel state")
+            }
+        } else {
+            // We're being covered by a push; skip cleanup to preserve messages
+            print("➡️ Skipping cleanup on push to preserve chat state")
+        }
         
         let cleanupEndTime = CFAbsoluteTimeGetCurrent()
         let cleanupDuration = (cleanupEndTime - cleanupStartTime) * 1000
@@ -1708,9 +1729,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         print("💾 ViewController: Loading messages from database for channel \(channelId)")
         
-        // PERFORMANCE: Fetch only latest 50 messages initially for faster loading
-        // Older messages will be loaded on scroll
-        let dbMessages = await MessageRepository.shared.fetchLatestMessages(forChannel: channelId, limit: 50)
+        // Fetch enough messages to also include any newly stored older page.
+        let currentShown = max(self.localMessages.count, self.viewModel.messages.count)
+        let baseLimit = max(50, currentShown)
+        let limit = min(baseLimit + 100, 1000)
+        let dbMessages = await MessageRepository.shared.fetchLatestMessages(forChannel: channelId, limit: limit)
         
         print("💾 ViewController: Fetched \(dbMessages.count) messages from database")
         
@@ -1736,8 +1759,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 viewModel.messages = sortedIds
                 localMessages = sortedIds
                 
-                // Refresh the table view - FORCE update since we're loading from database
-                refreshMessages(forceUpdate: true)
+                // Refresh the table view while maintaining the scroll position
+                if let localDS = dataSource as? LocalMessagesDataSource {
+                    localDS.updateMessages(sortedIds)
+                }
+                reloadTableViewMaintainingScrollPosition(messagesForDataSource: sortedIds)
                 
                 // Hide loading indicators
                 hideSkeletonView()
@@ -2240,22 +2266,22 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             return
             
         case .notLoading:
-            // If less than 1.5 seconds since last load, ignore
+            // If less than 0.5 seconds since last load, ignore
             let timeSinceLastLoad = Date().timeIntervalSince(lastSuccessfulLoadTime)
             if timeSinceLastLoad < 0.5 {
                 return
             }
             
-            
             // CRITICAL FIX: Set flag to prevent memory cleanup during older message loading
             isLoadingOlderMessages = true
             
-            // Show loading indicator
+            // Show loading indicator immediately
             DispatchQueue.main.async {
                 if self.tableView.tableFooterView == nil {
                     self.tableView.tableFooterView = self.loadingHeaderView
                 }
                 self.loadingHeaderView.isHidden = false
+                self.view.layoutIfNeeded() // Force layout update to ensure indicator is visible
             }
             
             // Save count of messages before loading
@@ -2263,30 +2289,69 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // Create a new Task for loading messages
             let loadTask = Task<Void, Never>(priority: .userInitiated) {
-                    // DATABASE REACTIVE ARCHITECTURE: Trigger background sync via NetworkSyncService
+                do {
+                    print("🔄 Loading older messages before: \(messageId ?? "unknown")")
                     
-                    await NetworkSyncService.shared.syncMoreMessages(
+                    // First, check if we already have messages in database
+                    let dbMessages = await MessageRepository.shared.fetchMessagesBeforeId(
                         channelId: self.viewModel.channel.id,
-                        before: messageId ?? "",
-                        viewState: self.viewModel.viewState
+                        beforeId: messageId ?? "",
+                        limit: 50
                     )
                     
+                    print("💾 Found \(dbMessages.count) messages in local database")
                     
-                    // Wait a moment for database to update
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                    // Load directly via ViewModel instead of NetworkSyncService for immediate response
+                    let result = await self.viewModel.loadMoreMessages(before: messageId, sort: "Latest")
                     
                     // Update UI on main thread
                     await MainActor.run {
+                        if let fetchHistory = result {
+                            let newMessageCount = fetchHistory.messages.count
+                            print("✅ Loaded \(newMessageCount) new messages from API")
+                            
+                            if newMessageCount > 0 {
+                                // Capture content metrics BEFORE updating data
+                                let previousOffset = self.tableView.contentOffset
+                                let previousContentHeight = self.tableView.contentSize.height
+                                
+                                // ViewModel already updated messages, now update UI
+                                print("📊 ViewModel now has \(self.viewModel.messages.count) messages")
+                                print("📊 Previous localMessages count: \(initialMessagesCount)")
+                                
+                                // Update localMessages with new messages from viewModel
+                                let newMessages = Array(self.viewModel.messages)
+                                self.localMessages = newMessages
+                                
+                                print("📊 New localMessages count: \(self.localMessages.count)")
+                                
+                                // Reload the table to display new rows
+                                self.tableView.reloadData()
+                                self.tableView.layoutIfNeeded()
+                                
+                                // Maintain visual position by compensating the growth in content height
+                                let newContentHeight = self.tableView.contentSize.height
+                                let heightDelta = newContentHeight - previousContentHeight
+                                let adjustedOffset = CGPoint(x: previousOffset.x, y: previousOffset.y + heightDelta)
+                                self.tableView.setContentOffset(adjustedOffset, animated: false)
+                                print("📍 Adjusted offset by \(heightDelta), old: \(previousOffset.y) new: \(adjustedOffset.y)")
+                                
+                                print("🔄 Table view reloaded with \(self.localMessages.count) total messages")
+                            } else {
+                                // No new messages, mark channel as at top
+                                self.viewModel.viewState.atTopOfChannel.insert(self.viewModel.channel.id)
+                                self.lastEmptyResponseTime = Date()
+                                print("⚠️ No new messages returned from API - reached top of channel")
+                            }
+                        } else {
+                            print("❌ Failed to load messages from API")
+                        }
+                        
                         // Hide loading indicator
                         self.loadingHeaderView.isHidden = true
                         
                         // Always update lastSuccessfulLoadTime to prevent repeated calls
                         self.lastSuccessfulLoadTime = Date()
-                        
-                        // DATABASE REACTIVE: No need to process API response manually
-                        // DatabaseObserver automatically updates ViewState when messages are saved
-                        
-                        // Just clean up loading states (DatabaseObserver handles UI updates)
                         
                         // Change state to not loading
                         self.messageLoadingState = .notLoading
@@ -2299,6 +2364,18 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         self.isLoadingOlderMessages = false
                         // Also clear suppression in case no batch occurred
                         self.suppressAutoScroll = false
+                    }
+                } catch {
+                    print("❌ Error loading messages: \(error)")
+                    // Handle errors
+                    await MainActor.run {
+                        self.loadingHeaderView.isHidden = true
+                        self.messageLoadingState = .notLoading
+                        self.isLoadingMore = false
+                        self.isLoadingOlderMessages = false
+                        self.suppressAutoScroll = false
+                        self.updateTableViewBouncing()
+                    }
                 }
             }
             
@@ -2330,10 +2407,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     self.isLoadingOlderMessages = false
                     // Ensure suppression is cleared on timeout
                     self.suppressAutoScroll = false
-                    
-                    // Show timeout message
-//                    let banner = NotificationBanner(message: "Loading time exceeded. Please try again.")
-//                    banner.show(duration: 2.0)
                 }
             }
         }
@@ -6862,6 +6935,13 @@ extension MessageableChannelViewController {
         
         let finalCleanupStartTime = CFAbsoluteTimeGetCurrent()
         
+        // If we're just pushing another screen on top, DO NOT clean up; preserve chat state
+        let isLeavingStack = self.isMovingFromParent || self.isBeingDismissed
+        if !isLeavingStack {
+            print("➡️ viewDidDisappear: Skipping final cleanup (covered by push)")
+            return
+        }
+
         // Check if we're returning from search - if so, don't cleanup
         if isReturningFromSearch {
             return
