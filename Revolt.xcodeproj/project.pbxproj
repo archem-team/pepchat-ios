@@ -1773,7 +1773,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 			shellPath = /bin/sh;
-			shellScript = "  export SENTRY_ORG=archem\n  export SENTRY_PROJECT=pepchat-ios\n  export SENTRY_URL=https://archem.sentry.io/\n  export SENTRY_AUTH_TOKEN=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\n  /opt/homebrew/bin/sentry-cli debug-files upload --include-sources \"$DWARF_DSYM_FOLDER_PATH\" --force-foreground\n";
+			shellScript = "  export SENTRY_ORG=archem\n  export SENTRY_PROJECT=pepchat-ios\n  export SENTRY_URL=https://archem.sentry.io/\n  export SENTRY_AUTH_TOKEN=REDACTED\n  /opt/homebrew/bin/sentry-cli debug-files upload --include-sources \"$DWARF_DSYM_FOLDER_PATH\" --force-foreground\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

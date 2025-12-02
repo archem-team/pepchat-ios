@@ -1,5 +1,7 @@
-/DerivedData
-./build
-./Pods
-./Rebuild.sh
-./Rebuild.sh
+.DS_Store
+*.xcuserstate
+*.xcuserdata/
+*.xcworkspace/xcuserdata/
+build/
+.build/
+DerivedData/
