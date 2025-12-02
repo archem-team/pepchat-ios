@@ -6,6 +6,25 @@ import UIKit
 import Types
 import SwiftUI
 import PhotosUI
+import Network
+
+class InternetMonitor: ObservableObject {
+    static let shared = InternetMonitor()
+
+    @Published private(set) var isConnected: Bool = false
+
+    private let monitor = NWPathMonitor()
+    private let queue = DispatchQueue(label: "InternetMonitor")
+
+    private init() {
+        monitor.pathUpdateHandler = { path in
+            DispatchQueue.main.async {
+                self.isConnected = (path.status == .satisfied)
+            }
+        }
+        monitor.start(queue: queue)
+    }
+}
 
 @MainActor
 class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate, PHPickerViewControllerDelegate {
@@ -20,6 +39,29 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         super.init()
     }
     
+    func queueMessage(_ convertedText: String) {
+        guard let currentUser = viewModel.viewState.currentUser else { return }
+
+        let messageNonce = UUID().uuidString
+
+        let queued = QueuedMessage(
+            nonce: messageNonce,
+            replies: [],
+            content: convertedText,
+            author: currentUser.id,
+            channel: viewModel.channel.id,
+            timestamp: Date(),
+            hasAttachments: false
+        )
+
+        // Add to ViewState storage
+        viewModel.viewState.queuedMessages[viewModel.channel.id, default: []].append(queued)
+
+        // Also show in UI as pending message
+        viewModel.viewState.channelMessages[viewModel.channel.id, default: []].append(messageNonce)
+        viewModel.viewState.messages[messageNonce] = queued.toTemporaryMessage()
+    }
+    
     // MARK: - Message Sending
     
     func sendMessage(_ text: String) {
@@ -31,6 +73,23 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         print("📝 MESSAGE_INPUT_HANDLER: User sent message: \"\(text)\"")
         print("📝 MESSAGE_INPUT_HANDLER: Converted message: \"\(convertedText)\"")
         
+        if InternetMonitor.shared.isConnected {
+            print("Internet Monitor: ❤️ ❤️ ❤️ ❤️ ❤️ Internet is available")
+        } else {
+            print("Internet Monitor: 😭 😭 😭 😭 😭 Internet not available")
+            queueMessage(convertedText)
+            print("Message sent to Queue: ✅ ✅ ✅ ✅ ✅")
+            viewController.showErrorAlert(message: "You're offline. Will send when internet comes back.")
+            print("Alert Sent to user: ⚠️ ⚠️ ⚠️ ⚠️ ⚠️")
+            return
+        }
+        let socketConnnected = (viewModel.viewState.ws?.currentState == .connected)
+        
+        if !socketConnnected {
+            print("Web Socket: 😭 😭 😭 😭 😭 Websocket is not connected")
+        } else {
+            print("Web Socket: ❤️ ❤️ ❤️ ❤️ ❤️ Websocket is connected")
+        }
         // Create a queued message immediately for local display (no attachments)
         if let currentUser = viewModel.viewState.currentUser {
             let messageNonce = UUID().uuidString

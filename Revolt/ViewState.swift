@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import SwiftUI
 import Alamofire
 import ULID
@@ -8,7 +9,7 @@ import Sentry
 import UserNotifications
 import KeychainAccess
 import Darwin
-
+import Network
 
 
 enum UserStateError: Error {
@@ -278,6 +279,7 @@ class QueuedMessage: ObservableObject {
 
 @MainActor
 public class ViewState: ObservableObject {
+    var cancellables = Set<AnyCancellable>()
     static var shared: ViewState? = nil
     
 #if os(iOS)
@@ -334,6 +336,7 @@ public class ViewState: ObservableObject {
                     }
                 }
             }
+            saveUsersToSharedContainer()
         }
     }
     
@@ -1271,6 +1274,7 @@ public class ViewState: ObservableObject {
                 self?.cleanupStaleUnreads()
             }
         }
+        self.setupInternetObservation()
     }
     
     // MARK: - Channel Preloading
@@ -5493,6 +5497,78 @@ public class ViewState: ObservableObject {
         }
         
         return result
+    }
+    // MARK: - Message ordering is still incorrect (delivered out of original sequence) and will be fixed in a follow up PR.
+    // Check the internet status
+    func setupInternetObservation() {
+        InternetMonitor.shared.$isConnected
+            .sink { isConnected in
+                if isConnected {
+                    print("🌐 Internet restored → trying to flush queue")
+                    print("👍🏻 Entering trySendingQueuedMessages")
+                    self.trySendingQueuedMessages()
+                    print("👍🏻 Exited trySendingQueuedMessages")
+                }
+            }
+            .store(in: &cancellables)
+        }
+    
+    // Function to send the queuing of messages
+    func trySendingQueuedMessages() {
+        print("👍🏻 Entered trySendingQueuedMessages")
+        guard InternetMonitor.shared.isConnected else { return }
+
+        print("📌 queuedMessages:", queuedMessages)
+        for (channelId, queued) in queuedMessages {
+            for msg in queued {
+                print("📌 For channel:", channelId, "queued count:", queued.count)
+                Task {
+                    print("📌 For channel:", channelId, "queued count:", queued.count)
+                    do {
+                        print("📌 For channel:", channelId, "queued count:", queued.count)
+                        print("👍🏻 Trying to send sendMessage is called")
+                        print("👍🏻 Going to send this replies\(msg.replies)")
+                        print("👍🏻 Going to senf this msg content \(msg.content)")
+                        let result = try await http.sendMessage(
+                            channel: channelId,
+                            replies: msg.replies,
+                            content: msg.content,
+                            attachments: [],
+                            nonce: msg.nonce
+                        ).get()
+                        print("📤 Sent queued message:", result)
+                    } catch {
+                        print("❌ Failed to send queued message:", error)
+                    }
+                }
+            }
+            
+            print("👍🏻 Clearing queue after try")
+            // Clear queue after try
+            queuedMessages[channelId] = []
+            print("👍🏻 Cleared queue after try")
+        }
+        print("👍🏻 Exiting trySendingQueueMessage")
+    }
+}
+
+// This is used for notifications @mention issue fetches the corresponding @mention user from users.json. Testing is pending.
+extension ViewState {
+    func saveUsersToSharedContainer() {
+        guard let sharedURL = FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared")?
+            .appendingPathComponent("users.json") else {
+            print("❌ Failed to get App Group container URL")
+            return
+        }
+
+        do {
+            let data = try JSONEncoder().encode(self.users)
+            try data.write(to: sharedURL, options: .atomic)
+            print("✅ Shared users.json updated")
+        } catch {
+            print("❌ Failed to write users.json:", error)
+        }
     }
 }
 

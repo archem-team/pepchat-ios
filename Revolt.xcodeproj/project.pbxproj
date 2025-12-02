@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		004FF9AB5C4843CC9D6A6B914038854B /* PlatformConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */; };
 		0500FC572CD0F98B00203470 /* PeptideTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0500FC562CD0F98B00203470 /* PeptideTextField.swift */; };
 		0501E1452D676469009071DA /* ServerChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0501E1442D676469009071DA /* ServerChannel.swift */; };
 		0505E7D02D022EE900B12713 /* ChannelInfoMoreSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0505E7CF2D022EE900B12713 /* ChannelInfoMoreSheet.swift */; };
@@ -142,9 +143,7 @@
 		05F3043C2DCF48A00058E80E /* RepliesContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F3043B2DCF489F0058E80E /* RepliesContainerView.swift */; };
 		05F3043E2DCF48A90058E80E /* HTTPError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F3043D2DCF48A80058E80E /* HTTPError.swift */; };
 		05F304402DCF48DE0058E80E /* FullScreenImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F3043F2DCF48DD0058E80E /* FullScreenImageViewController.swift */; };
-		004FF9AB5C4843CC9D6A6B914038854B /* PlatformConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */; };
 		05FA823E2CDC05A000928ECC /* IntroScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FA823D2CDC05A000928ECC /* IntroScreen.swift */; };
-		5C950CA0787B4F15B7A6C6E9922080C7 /* PlatformConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */; };
 		05FA82422CDC13DE00928ECC /* IntroPlatformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FA82412CDC13DE00928ECC /* IntroPlatformView.swift */; };
 		05FAF1B42CE33A110067B7E3 /* PeptideAuthHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FAF1B32CE33A110067B7E3 /* PeptideAuthHeaderView.swift */; };
 		05FAF1B62CE3529F0067B7E3 /* ForgotPassword_Reset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FAF1B52CE3529F0067B7E3 /* ForgotPassword_Reset.swift */; };
@@ -263,6 +262,7 @@
 		17F9D7632C9208B500D0BB6F /* MessageReactionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F9D7622C9208B500D0BB6F /* MessageReactionsSheet.swift */; };
 		285F7581BAD6234593D2394F /* RoleDeleteSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958F5095BC835EFD976D8A1F /* RoleDeleteSheet.swift */; };
 		36D461CF77D84B97B94929A9 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 03268FCCFC7D4D1F8B6E9F6F /* Sentry */; };
+		5C950CA0787B4F15B7A6C6E9922080C7 /* PlatformConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */; };
 		7031993BD3D264C895FFB466 /* CreateServerRoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F75CCC5D94FA80B2DCBD7821 /* CreateServerRoleView.swift */; };
 		911131412D8807F500667031 /* DeleteMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911131402D8807F500667031 /* DeleteMessageView.swift */; };
 		911A24B72D5B83C200ADD85D /* BlockUserPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */; };
@@ -510,8 +510,6 @@
 		05F3043D2DCF48A80058E80E /* HTTPError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPError.swift; sourceTree = "<group>"; };
 		05F3043F2DCF48DD0058E80E /* FullScreenImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreenImageViewController.swift; sourceTree = "<group>"; };
 		05FA823D2CDC05A000928ECC /* IntroScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroScreen.swift; sourceTree = "<group>"; };
-		96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformConfig.swift; sourceTree = "<group>"; };
-		E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformConfigService.swift; sourceTree = "<group>"; };
 		05FA82412CDC13DE00928ECC /* IntroPlatformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroPlatformView.swift; sourceTree = "<group>"; };
 		05FAF1B32CE33A110067B7E3 /* PeptideAuthHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeptideAuthHeaderView.swift; sourceTree = "<group>"; };
 		05FAF1B52CE3529F0067B7E3 /* ForgotPassword_Reset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForgotPassword_Reset.swift; sourceTree = "<group>"; };
@@ -646,6 +644,7 @@
 		91E44EE42D4DF70300269A01 /* BlockedUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedUsersView.swift; sourceTree = "<group>"; };
 		91FD56E82D5237F600BA58D5 /* RemoveAuthenticatorAppSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoveAuthenticatorAppSheet.swift; sourceTree = "<group>"; };
 		958F5095BC835EFD976D8A1F /* RoleDeleteSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleDeleteSheet.swift; sourceTree = "<group>"; };
+		96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformConfig.swift; sourceTree = "<group>"; };
 		D49B704F29C4D3FE009494A5 /* Revolt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Revolt.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D49B705229C4D3FE009494A5 /* RevoltApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevoltApp.swift; sourceTree = "<group>"; };
 		D49B705629C4D3FE009494A5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -657,6 +656,7 @@
 		DAAA4C0829F2974300F41E52 /* Http.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Http.swift; sourceTree = "<group>"; };
 		DAAA4C0A29F2CF1200F41E52 /* Websocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Websocket.swift; sourceTree = "<group>"; };
 		DAAA4C0C29F2D16B00F41E52 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformConfigService.swift; sourceTree = "<group>"; };
 		F545878C2E1504BB00797AC1 /* AttachmentPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentPreviewView.swift; sourceTree = "<group>"; };
 		F57D4C052E27D735004B7EF6 /* ChannelLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelLoadingView.swift; sourceTree = "<group>"; };
 		F57D4C092E2E49BA004B7EF6 /* EmojiParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiParser.swift; sourceTree = "<group>"; };
@@ -1071,22 +1071,6 @@
 				05FA823D2CDC05A000928ECC /* IntroScreen.swift */,
 			);
 			path = Intro;
-			sourceTree = "<group>";
-		};
-		EC1C2E5828BF41B3BF97A880AA48A762 /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */,
-			);
-			path = Models;
-			sourceTree = "<group>";
-		};
-		F84639A872BB42B2AA42991176F7A383 /* Services */ = {
-			isa = PBXGroup;
-			children = (
-				E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */,
-			);
-			path = Services;
 			sourceTree = "<group>";
 		};
 		05FA82402CDC139F00928ECC /* Components */ = {
@@ -1525,6 +1509,14 @@
 			path = "Preview Content";
 			sourceTree = "<group>";
 		};
+		EC1C2E5828BF41B3BF97A880AA48A762 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		F57D4C042E27D729004B7EF6 /* Loading */ = {
 			isa = PBXGroup;
 			children = (
@@ -1543,6 +1535,14 @@
 				F5F8E4022E127E6B00D0D201 /* VideoPlayerView.swift */,
 			);
 			path = AudioPlayer;
+			sourceTree = "<group>";
+		};
+		F84639A872BB42B2AA42991176F7A383 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -2119,7 +2119,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = R8387T64JW;
+				DEVELOPMENT_TEAM = 3W4H6VC6AG;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -2134,7 +2134,7 @@
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.peptide.chat.notification;
+				PRODUCT_BUNDLE_IDENTIFIER = com.peptide.chat.notification.testing;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = NO;
@@ -2157,7 +2157,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = R8387T64JW;
+				DEVELOPMENT_TEAM = 3W4H6VC6AG;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -2172,7 +2172,7 @@
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.peptide.chat.notification;
+				PRODUCT_BUNDLE_IDENTIFIER = com.peptide.chat.notification.testing;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = NO;
@@ -2193,11 +2193,10 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_USE_OPTIMIZATION_PROFILE = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = R8387T64JW;
+				DEVELOPMENT_TEAM = 3W4H6VC6AG;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
@@ -2217,7 +2216,7 @@
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = com.peptide.chat.types;
+				PRODUCT_BUNDLE_IDENTIFIER = com.peptide.chat.types.testing;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
@@ -2243,11 +2242,10 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_USE_OPTIMIZATION_PROFILE = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = R8387T64JW;
+				DEVELOPMENT_TEAM = 3W4H6VC6AG;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
@@ -2267,7 +2265,7 @@
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = com.peptide.chat.types;
+				PRODUCT_BUNDLE_IDENTIFIER = com.peptide.chat.types.testing;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
@@ -2423,7 +2421,7 @@
 				CURRENT_PROJECT_VERSION = 0.0.26;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
-				DEVELOPMENT_TEAM = R8387T64JW;
+				DEVELOPMENT_TEAM = 3W4H6VC6AG;
 				EMBED_ASSET_PACKS_IN_PRODUCT_BUNDLE = YES;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_ON_DEMAND_RESOURCES = NO;
@@ -2432,8 +2430,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Revolt/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = ZekoChat;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app needs access to camera to take photos for sharing in messages.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "We need access to your photo library to save images.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to photo library to select photos for sharing in messages.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -2450,7 +2450,7 @@
 				NEW_SETTING = "";
 				NEW_SETTING1 = "";
 				ON_DEMAND_RESOURCES_INITIAL_INSTALL_TAGS = Resources;
-				PRODUCT_BUNDLE_IDENTIFIER = com.peptide.chat;
+				PRODUCT_BUNDLE_IDENTIFIER = com.peptide.chat.testing;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -2481,7 +2481,7 @@
 				CURRENT_PROJECT_VERSION = 0.0.26;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
-				DEVELOPMENT_TEAM = R8387T64JW;
+				DEVELOPMENT_TEAM = 3W4H6VC6AG;
 				EMBED_ASSET_PACKS_IN_PRODUCT_BUNDLE = YES;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_ON_DEMAND_RESOURCES = NO;
@@ -2489,8 +2489,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Revolt/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = ZekoChat;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app needs access to camera to take photos for sharing in messages.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "We need access to your photo library to save images.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to photo library to select photos for sharing in messages.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -2507,7 +2509,7 @@
 				NEW_SETTING = "";
 				NEW_SETTING1 = "";
 				ON_DEMAND_RESOURCES_INITIAL_INSTALL_TAGS = Resources;
-				PRODUCT_BUNDLE_IDENTIFIER = com.peptide.chat;
+				PRODUCT_BUNDLE_IDENTIFIER = com.peptide.chat.testing;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
