@@ -36,7 +36,7 @@ Follow these instructions to get a copy of the project up and running on your lo
    `git clone https://github.com/revoltchat/ios.git`
 
 2. **Open the project in Xcode:** \
-   Open `Revolt.xcworkspace` in Xcode.
+   Open `ZekoChat.xcworkspace` in Xcode (or `ZekoChat.xcodeproj` if not using CocoaPods).
 
 3. **Build and run the app:** \
    Select your target device or simulator and hit the run button.

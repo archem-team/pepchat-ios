@@ -1,13 +1,13 @@
 {
-  "originHash" : "bf67e084d0866fa562761c008dd91efbe5d2eaccb4caa4d2d8128ec9bbe978b4",
+  "originHash" : "f6e114c663c5158deb2de005065403ae236fb46cbcd4be8f7501bbbf52434a1e",
   "pins" : [
     {
       "identity" : "alamofire",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Alamofire/Alamofire",
       "state" : {
-        "revision" : "513364f870f6bfc468f9d2ff0a95caccc10044c5",
-        "version" : "5.10.2"
+        "revision" : "f455c2975872ccd2d9c81594c658af65716e9b9a",
+        "version" : "5.9.1"
       }
     },
     {
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/livekit/client-sdk-swift",
       "state" : {
-        "revision" : "9a1eaf94754b051f4ace6fd0c7b0a5aaf3f54218",
-        "version" : "2.5.1"
+        "revision" : "471a1b3d97d59de80027f44c975cd40bb72e67e0",
+        "version" : "2.0.16"
       }
     },
     {
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/winddpan/CodableWrapper",
       "state" : {
-        "revision" : "eb90d37dbdf4ea437d6f86b874bac1e6da75f1b4",
-        "version" : "1.1.2"
+        "revision" : "ab56ff6eef7294af03b973a161a6a6724c4e79a7",
+        "version" : "1.1.1"
       }
     },
     {
@@ -60,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/hCaptcha/HCaptcha-ios-sdk",
       "state" : {
-        "revision" : "82f5df17789c24f0a5230adc4830d6c295b3e7c2",
-        "version" : "2.9.4"
+        "revision" : "a4f7bc11bf7c0e42ab83ef6c46d821abe2676c3c",
+        "version" : "2.9.0"
       }
     },
     {
@@ -101,6 +101,15 @@
       }
     },
     {
+      "identity" : "oggdecoder",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/arkasas/OggDecoder.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "e94c8ca23cf2a66feab53d795117ae513c273db8"
+      }
+    },
+    {
       "identity" : "popupview",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/exyte/PopupView",
@@ -114,8 +123,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ReactiveX/RxSwift",
       "state" : {
-        "revision" : "5dd1907d64f0d36f158f61a466bab75067224893",
-        "version" : "6.9.0"
+        "revision" : "b06a8c8596e4c3e8e7788e08e720e3248563ce6a",
+        "version" : "6.7.1"
       }
     },
     {
@@ -123,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/getsentry/sentry-cocoa/",
       "state" : {
-        "revision" : "491c87a32af58414bd03825b3029526640d3e73d",
-        "version" : "8.50.0"
+        "revision" : "5575af93efb776414f243e93d6af9f6258dc539a",
+        "version" : "8.36.0"
       }
     },
     {
@@ -159,8 +168,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-case-paths",
       "state" : {
-        "revision" : "41b89b8b68d8c56c622dbb7132258f1a3e638b25",
-        "version" : "1.7.0"
+        "revision" : "642e6aab8e03e5f992d9c83e38c5be98cfad5078",
+        "version" : "1.5.5"
       }
     },
     {
@@ -177,8 +186,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log.git",
       "state" : {
-        "revision" : "3d8596ed08bd13520157f0355e35caed215ffbfa",
-        "version" : "1.6.3"
+        "revision" : "9cb486020ebf03bfa5b5df985387a14a98744537",
+        "version" : "1.6.1"
       }
     },
     {
@@ -186,8 +195,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-parsing/",
       "state" : {
-        "revision" : "3432cb81164dd3d69a75d0d63205be5fbae2c34b",
-        "version" : "0.14.1"
+        "revision" : "a0e7d73f462c1c38c59dc40a3969ac40cea42950",
+        "version" : "0.13.0"
       }
     },
     {
@@ -195,8 +204,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-protobuf.git",
       "state" : {
-        "revision" : "d72aed98f8253ec1aa9ea1141e28150f408cf17f",
-        "version" : "1.29.0"
+        "revision" : "edb6ed4919f7756157fe02f2552b7e3850a538e5",
+        "version" : "1.28.1"
       }
     },
     {
@@ -204,8 +213,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax",
       "state" : {
-        "revision" : "0687f71944021d616d34d922343dcef086855920",
-        "version" : "600.0.1"
+        "revision" : "64889f0c732f210a935a0ad7cda38f77f876262d",
+        "version" : "509.1.1"
       }
     },
     {
@@ -286,7 +295,7 @@
       "location" : "https://github.com/benedom/SwiftyCrop",
       "state" : {
         "branch" : "master",
-        "revision" : "ef27522c4850ccc899b0f4f745bfcc3aee892dfc"
+        "revision" : "6ee0b98647d8068066b8c77876acb868ad2294a5"
       }
     },
     {
@@ -303,8 +312,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/livekit/webrtc-xcframework.git",
       "state" : {
-        "revision" : "70bbd9b51f2c46333a91469c8a8be8303b0797b7",
-        "version" : "125.6422.28"
+        "revision" : "9b8d54b203247a84d5f2a9f682d75f4129d0b09b",
+        "version" : "125.6422.7"
       }
     },
     {
@@ -312,8 +321,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
       "state" : {
-        "revision" : "39de59b2d47f7ef3ca88a039dff3084688fe27f4",
-        "version" : "1.5.2"
+        "revision" : "27d767d643fa2cf083d0a73d74fa84cacb53e85c",
+        "version" : "1.4.1"
       }
     }
   ],

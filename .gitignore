@@ -3,9 +3,21 @@
 ./Pods
 ./Rebuild.sh
 ./Rebuild.sh
+
+# Swift Package Manager build artifacts
+.build/
+.swiftpm/
+
+# Xcode user-specific files
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+*.xcbkptlist
+*.xcscmblueprint
+
 # Xcode user-specific scheme files
-Revolt.xcodeproj/xcshareddata/xcschemes/Revolt.xcscheme
+ZekoChat.xcodeproj/xcshareddata/xcschemes/ZekoChat.xcscheme
 
 # Xcode project files (contain build settings)
-Revolt.xcodeproj/project.pbxproj
-Revolt.xcodeproj/project.pbxproj.bak
+ZekoChat.xcodeproj/project.pbxproj
+ZekoChat.xcodeproj/project.pbxproj.bak

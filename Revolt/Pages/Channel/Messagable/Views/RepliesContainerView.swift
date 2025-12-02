@@ -9,7 +9,7 @@ import Kingfisher
 import Types
 
 // Import ReplyMessage from MessageableChannelViewController
-@_implementationOnly import Revolt
+@_implementationOnly import ZekoChat
 
 // MARK: - RepliesContainerViewDelegate
 protocol RepliesContainerViewDelegate: AnyObject {

@@ -34,7 +34,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         // Create a queued message immediately for local display (no attachments)
         if let currentUser = viewModel.viewState.currentUser {
             let messageNonce = UUID().uuidString
-            let apiReplies = repliesManager.getCurrentReplies().map { Revolt.ApiReply(id: $0.message.id, mention: $0.mention) }
+            let apiReplies = repliesManager.getCurrentReplies().map { ZekoChat.ApiReply(id: $0.message.id, mention: $0.mention) }
             
             let queuedMessage = QueuedMessage(
                 nonce: messageNonce,
@@ -148,7 +148,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         // For messages with attachments, show optimistic update with upload progress
         if let currentUser = viewModel.viewState.currentUser {
             let messageNonce = UUID().uuidString
-            let apiReplies = repliesManager.getCurrentReplies().map { Revolt.ApiReply(id: $0.message.id, mention: $0.mention) }
+            let apiReplies = repliesManager.getCurrentReplies().map { ZekoChat.ApiReply(id: $0.message.id, mention: $0.mention) }
             
             let queuedMessage = QueuedMessage(
                 nonce: messageNonce,
@@ -285,7 +285,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                 let _ = try await viewModel.viewState.http.editMessage(
                     channel: viewModel.channel.id,
                     message: message.id,
-                    edits: Revolt.MessageEdit(content: newText)
+                    edits: ZekoChat.MessageEdit(content: newText)
                 ).get()
                 
                 print("✅ MESSAGE_INPUT_HANDLER: Successfully edited message")

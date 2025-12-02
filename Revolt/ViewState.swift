@@ -167,7 +167,7 @@ struct UserMaybeMember: Identifiable {
 
 class QueuedMessage: ObservableObject {
     let nonce: String
-    let replies: [Revolt.ApiReply]
+    let replies: [ZekoChat.ApiReply]
     let content: String
     let author: String // User ID of the sender
     let channel: String // Channel ID
@@ -177,7 +177,7 @@ class QueuedMessage: ObservableObject {
     @Published var uploadProgress: [String: Double] = [:] // Progress per attachment (filename -> progress 0.0-1.0)
     @Published var isUploading: Bool = false // Whether currently uploading
     
-    init(nonce: String, replies: [Revolt.ApiReply], content: String, author: String, channel: String, timestamp: Date, hasAttachments: Bool, attachmentData: [(Data, String)] = []) {
+    init(nonce: String, replies: [ZekoChat.ApiReply], content: String, author: String, channel: String, timestamp: Date, hasAttachments: Bool, attachmentData: [(Data, String)] = []) {
         self.nonce = nonce
         self.replies = replies
         self.content = content
@@ -2155,8 +2155,8 @@ public class ViewState: ObservableObject {
         
         let nonce = UUID().uuidString
         
-        let r: [Revolt.ApiReply] = replies.map { reply in
-            Revolt.ApiReply(id: reply.message.id, mention: reply.mention)
+        let r: [ZekoChat.ApiReply] = replies.map { reply in
+            ZekoChat.ApiReply(id: reply.message.id, mention: reply.mention)
         }
         
         queue?.append(QueuedMessage(nonce: nonce, replies: r, content: content, author: currentUser?.id ?? "", channel: channel, timestamp: Date(), hasAttachments: !attachments.isEmpty, attachmentData: attachments))
