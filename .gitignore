@@ -3,3 +3,9 @@
 ./Pods
 ./Rebuild.sh
 ./Rebuild.sh
+# Xcode user-specific scheme files
+Revolt.xcodeproj/xcshareddata/xcschemes/Revolt.xcscheme
+
+# Xcode project files (contain build settings)
+Revolt.xcodeproj/project.pbxproj
+Revolt.xcodeproj/project.pbxproj.bak

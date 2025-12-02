@@ -28,7 +28,8 @@ enum MessageableChannelConstants {
     static let toastSideMargin: CGFloat = 40.0
     
     // Message loading constants
-    static let messageLoadLimit = 50
+    static let initialMessageLoadLimit = 20  // Initial load for fast channel opening
+    static let messageLoadLimit = 50         // Standard batch size for additional loads  
     static let retryMaxAttempts = 3
     static let retryBaseDelay: TimeInterval = 1.0
 }
