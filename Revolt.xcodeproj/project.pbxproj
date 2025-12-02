@@ -142,7 +142,9 @@
 		05F3043C2DCF48A00058E80E /* RepliesContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F3043B2DCF489F0058E80E /* RepliesContainerView.swift */; };
 		05F3043E2DCF48A90058E80E /* HTTPError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F3043D2DCF48A80058E80E /* HTTPError.swift */; };
 		05F304402DCF48DE0058E80E /* FullScreenImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F3043F2DCF48DD0058E80E /* FullScreenImageViewController.swift */; };
+		004FF9AB5C4843CC9D6A6B914038854B /* PlatformConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */; };
 		05FA823E2CDC05A000928ECC /* IntroScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FA823D2CDC05A000928ECC /* IntroScreen.swift */; };
+		5C950CA0787B4F15B7A6C6E9922080C7 /* PlatformConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */; };
 		05FA82422CDC13DE00928ECC /* IntroPlatformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FA82412CDC13DE00928ECC /* IntroPlatformView.swift */; };
 		05FAF1B42CE33A110067B7E3 /* PeptideAuthHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FAF1B32CE33A110067B7E3 /* PeptideAuthHeaderView.swift */; };
 		05FAF1B62CE3529F0067B7E3 /* ForgotPassword_Reset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05FAF1B52CE3529F0067B7E3 /* ForgotPassword_Reset.swift */; };
@@ -509,6 +511,8 @@
 		05F3043D2DCF48A80058E80E /* HTTPError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPError.swift; sourceTree = "<group>"; };
 		05F3043F2DCF48DD0058E80E /* FullScreenImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreenImageViewController.swift; sourceTree = "<group>"; };
 		05FA823D2CDC05A000928ECC /* IntroScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroScreen.swift; sourceTree = "<group>"; };
+		96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformConfig.swift; sourceTree = "<group>"; };
+		E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformConfigService.swift; sourceTree = "<group>"; };
 		05FA82412CDC13DE00928ECC /* IntroPlatformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroPlatformView.swift; sourceTree = "<group>"; };
 		05FAF1B32CE33A110067B7E3 /* PeptideAuthHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeptideAuthHeaderView.swift; sourceTree = "<group>"; };
 		05FAF1B52CE3529F0067B7E3 /* ForgotPassword_Reset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForgotPassword_Reset.swift; sourceTree = "<group>"; };
@@ -1064,9 +1068,27 @@
 			isa = PBXGroup;
 			children = (
 				05FA82402CDC139F00928ECC /* Components */,
+				EC1C2E5828BF41B3BF97A880AA48A762 /* Models */,
+				F84639A872BB42B2AA42991176F7A383 /* Services */,
 				05FA823D2CDC05A000928ECC /* IntroScreen.swift */,
 			);
 			path = Intro;
+			sourceTree = "<group>";
+		};
+		EC1C2E5828BF41B3BF97A880AA48A762 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		F84639A872BB42B2AA42991176F7A383 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 		05FA82402CDC139F00928ECC /* Components */ = {
@@ -1818,7 +1840,9 @@
 				053847DE2D53A1E9001D92B3 /* DeleteChannelSheet.swift in Sources */,
 				F5E8570D2E10FD9900E8655F /* DownloadProgressView.swift in Sources */,
 				17BF54CD2B1785E200178866 /* HomeWelcome.swift in Sources */,
+				004FF9AB5C4843CC9D6A6B914038854B /* PlatformConfig.swift in Sources */,
 				05FA823E2CDC05A000928ECC /* IntroScreen.swift in Sources */,
+				5C950CA0787B4F15B7A6C6E9922080C7 /* PlatformConfigService.swift in Sources */,
 				05BA2FF32D316ADB005D307D /* BotSetting.swift in Sources */,
 				05BA2FF42D316ADB005D307D /* BotSettings.swift in Sources */,
 				05BA2FF52D316ADB005D307D /* PresenceSheet.swift in Sources */,
@@ -2411,7 +2435,7 @@
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Revolt/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Pepchat;
+				INFOPLIST_KEY_CFBundleDisplayName = ZekoChat;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app needs access to camera to take photos for sharing in messages.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to photo library to select photos for sharing in messages.";
@@ -2468,7 +2492,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Revolt/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Pepchat;
+				INFOPLIST_KEY_CFBundleDisplayName = ZekoChat;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app needs access to camera to take photos for sharing in messages.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to photo library to select photos for sharing in messages.";

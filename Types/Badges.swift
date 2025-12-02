@@ -69,10 +69,10 @@ public  enum Badges: Int, CaseIterable {
     public func getRemoteURL() -> String {
         switch self{
         case .developer: return "https://peptide.chat/assets/badges/developer.png"
-        case .translator: return "https://peptide.chat/assets/badges/first_100_members.svg"
+        case .translator: return "https://peptide.chat/assets/badges/first_100_members.png"
         case .supporter: return "https://peptide.chat/assets/badges/supporter.png"
         case .responsible_disclosure: return "https://peptide.chat/assets/badges/trusted-seller.png"
-        case .founder: return "https://peptide.chat/assets/badges/founder.svg"
+        case .founder: return "https://peptide.chat/assets/badges/founder.png"
         case .moderation: return "https://peptide.chat/assets/badges/administrator.png"
         case .active_supporter: return "https://peptide.chat/assets/badges/supporter.png" // same as supporter
         case .paw: return "https://peptide.chat/assets/badges/clown.png"

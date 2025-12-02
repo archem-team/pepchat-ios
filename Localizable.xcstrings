@@ -321,7 +321,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Join endless chats and connections; PepChat is your place to vibe with friends!"
+            "value" : "Join endless chats and connections; ZekoChat is your place to vibe with friends!"
           }
         }
       }
@@ -341,6 +341,9 @@
 
     },
     "Light" : {
+
+    },
+    "Loading platforms..." : {
 
     },
     "Log In" : {
@@ -702,13 +705,13 @@
     "Welcome to" : {
 
     },
-    "Welcome to PepChat!" : {
+    "Welcome to ZekoChat!" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Welcome to PepChat!"
+            "value" : "Welcome to ZekoChat!"
           }
         }
       }

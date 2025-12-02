@@ -1611,17 +1611,26 @@ class EmojiParser {
     /// Find emoji by shortcode (like :smile:, :1234:, etc.)
     static func findEmojiByShortcode(_ shortcode: String) -> String? {
         let cleanShortcode = shortcode.trimmingCharacters(in: CharacterSet(charactersIn: ":"))
-        
-        // First check Unicode emoji dictionary
+
+        // First check exact match
         if let unicodeEmoji = emojiDictionary[cleanShortcode] {
             return unicodeEmoji
         }
-        
-        // Then check custom emoji dictionary
         if let customEmoji = customEmojiDictionary[cleanShortcode] {
             return customEmoji
         }
         
+        // Then try with normalized underscores
+        let collapsedUnderscores = cleanShortcode.replacingOccurrences(of: "_{2,}", with: "_", options: .regularExpression)
+        if collapsedUnderscores != cleanShortcode {
+            if let unicodeEmoji = emojiDictionary[collapsedUnderscores] {
+                return unicodeEmoji
+            }
+            if let customEmoji = customEmojiDictionary[collapsedUnderscores] {
+                return customEmoji
+            }
+        }
+
         return nil
     }
     
@@ -1718,4 +1727,5 @@ class EmojiParser {
         print("✅ EmojiParser test completed")
     }
 }
+ 
  

@@ -205,7 +205,7 @@ struct ApplicationSwitcher: View {
                 .fillMaxSize()
                 .overlay(alignment: .bottom){
                     
-                    PeptideText(text: "PepChat v\(Bundle.main.releaseVersionNumber)",
+                    PeptideText(text: "ZekoChat v\(Bundle.main.releaseVersionNumber)",
                                 font: .peptideFootnote,
                                 textColor: .textGray06,
                                 alignment: .center)

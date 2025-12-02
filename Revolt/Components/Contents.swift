@@ -1736,8 +1736,11 @@ struct InnerContents: UIViewRepresentable {
         // FIXED: Collect matches first and process safely
         let namedEmojiMatches = Array(attrString.string.matches(of: /:([a-zA-Z0-9_+-]+):/))
         
+        print("🔍 Found \(namedEmojiMatches.count) emoji matches in text")
+        
         for match in namedEmojiMatches.reversed() {
-            let emojiName = match.output.1
+            let emojiName = String(match.output.1)
+            print("📝 Processing emoji: '\(emojiName)'")
             
             // Safely calculate the offset using NSRange instead of utf16Offset
             let nsRange = NSRange(match.range, in: attrString.string)
@@ -1753,7 +1756,7 @@ struct InnerContents: UIViewRepresentable {
             attrString.deleteCharacters(in: nsRange)
             
             // First try to find emoji using the new EmojiParser
-            if let emoji = EmojiParser.findEmojiByShortcode(String(emojiName)) {
+            if let emoji = EmojiParser.findEmojiByShortcode(emojiName) {
                 if emoji.hasPrefix("custom:") {
                     // Handle custom emoji with image attachment
                     let attachment = NSTextAttachment()
@@ -1787,14 +1790,17 @@ struct InnerContents: UIViewRepresentable {
                 }
             } else {
                 // Fallback to the existing method using viewState.findEmojiBase
-            let finalForegroundColor: UIColor = foregroundColor ?? .textDefaultGray01
-            let emojiAttributedString = NSAttributedString(string: String(String.UnicodeScalarView(viewState.findEmojiBase(by: ":\(emojiName):").compactMap(Unicode.Scalar.init))),
-                                                           attributes: [
-                                                            .font: currentFont,
-                                                            .foregroundColor: finalForegroundColor
-                                                           ])
-            
-            attrString.insert(emojiAttributedString, at: nsRange.location)
+                let finalForegroundColor: UIColor = foregroundColor ?? .textDefaultGray01
+                let emojiBase = viewState.findEmojiBase(by: emojiName)
+                let emojiString = String(String.UnicodeScalarView(emojiBase.compactMap(Unicode.Scalar.init)))
+                
+                let emojiAttributedString = NSAttributedString(string: emojiString,
+                                                               attributes: [
+                                                                .font: currentFont,
+                                                                .foregroundColor: finalForegroundColor
+                                                               ])
+                
+                attrString.insert(emojiAttributedString, at: nsRange.location)
             }
         }
     }
