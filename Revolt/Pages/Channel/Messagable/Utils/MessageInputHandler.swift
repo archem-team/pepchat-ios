@@ -62,6 +62,15 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         viewModel.viewState.messages[messageNonce] = queued.toTemporaryMessage()
     }
     
+    func checkForCharacterLimit(text: String) {
+        guard let viewController = viewController else { return }
+        
+        guard text.count <= 2000 else {
+            viewController.showErrorAlert(message: "Your message is too long. Please limit it to 2000 characters.")
+            return
+        }
+    }
+    
     // MARK: - Message Sending
     
     func sendMessage(_ text: String) {
@@ -72,6 +81,8 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         
         print("📝 MESSAGE_INPUT_HANDLER: User sent message: \"\(text)\"")
         print("📝 MESSAGE_INPUT_HANDLER: Converted message: \"\(convertedText)\"")
+        
+        checkForCharacterLimit(text: convertedText)
         
         if InternetMonitor.shared.isConnected {
             print("Internet Monitor: ❤️ ❤️ ❤️ ❤️ ❤️ Internet is available")
@@ -203,6 +214,8 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         
         print("📝 MESSAGE_INPUT_HANDLER: User sent message with attachments: \"\(text)\", attachments count: \(attachments.count)")
         print("📝 MESSAGE_INPUT_HANDLER: Converted message: \"\(convertedText)\"")
+        
+        checkForCharacterLimit(text: convertedText)
         
         // For messages with attachments, show optimistic update with upload progress
         if let currentUser = viewModel.viewState.currentUser {
@@ -336,6 +349,8 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             print("⚠️ MESSAGE_INPUT_HANDLER: Message content hasn't changed, no need to update")
             return
         }
+        
+        checkForCharacterLimit(text: newText)
         
         // Start a Task to edit the message
         Task {

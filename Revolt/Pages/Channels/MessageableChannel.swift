@@ -61,7 +61,8 @@ class MessageableChannelViewModel: ObservableObject {
 
         if let members = result.members {
             for member in members {
-                viewState.members[member.id.server]![member.id.user] = member
+                // Ensure server entry exists and safely assign member
+                viewState.members[member.id.server, default: [:]][member.id.user] = member
             }
         }
 

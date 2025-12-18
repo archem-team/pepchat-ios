@@ -4279,15 +4279,34 @@ public class ViewState: ObservableObject {
         } })
         
         if channel == nil {
-            channel = try! await http.openDm(user: user).get()
-            await MainActor.run {
-                dms.append(channel!)
+            // Try to open DM without force-unwrapping to avoid crashes when the API fails
+            let openDmResult = await http.openDm(user: user)
+            switch openDmResult {
+            case .success(let openedChannel):
+                channel = openedChannel
+                await MainActor.run {
+                    dms.append(openedChannel)
+                }
+            case .failure(let error):
+                // Log and show a safe error to the user instead of crashing
+                print("⚠️ openDm failed for user \(user): \(error)")
+                await MainActor.run {
+                    showAlert(message: "Failed to open DM.", icon: .peptideWarningCircle)
+                }
+                // Keep channel as nil and continue gracefully
             }
         }
         
-        await MainActor.run {
-            currentSelection = .dms
-            currentChannel = .channel(channel!.id)
+        if let safeChannel = channel {
+            await MainActor.run {
+                currentSelection = .dms
+                currentChannel = .channel(safeChannel.id)
+            }
+        } else {
+            // Failed to open DM — avoid force-unwrapping and crash.
+            await MainActor.run {
+                showAlert(message: "Failed to open DM.", icon: .peptideWarningCircle)
+            }
         }
     }
     
@@ -5498,16 +5517,16 @@ public class ViewState: ObservableObject {
         
         return result
     }
-    // MARK: - Message ordering is still incorrect (delivered out of original sequence) and will be fixed in a follow up PR.
+    // MARK: - Message queue processing state
+    private var isProcessingQueue: [String: Bool] = [:] // Prevent concurrent processing per channel
+    
     // Check the internet status
     func setupInternetObservation() {
         InternetMonitor.shared.$isConnected
             .sink { isConnected in
                 if isConnected {
                     print("🌐 Internet restored → trying to flush queue")
-                    print("👍🏻 Entering trySendingQueuedMessages")
                     self.trySendingQueuedMessages()
-                    print("👍🏻 Exited trySendingQueuedMessages")
                 }
             }
             .store(in: &cancellables)
@@ -5516,37 +5535,88 @@ public class ViewState: ObservableObject {
     // Function to send the queuing of messages
     func trySendingQueuedMessages() {
         print("👍🏻 Entered trySendingQueuedMessages")
-        guard InternetMonitor.shared.isConnected else { return }
+        guard InternetMonitor.shared.isConnected else { 
+            print("❌ Not connected, aborting queue send")
+            return 
+        }
 
-        print("📌 queuedMessages:", queuedMessages)
-        for (channelId, queued) in queuedMessages {
-            for msg in queued {
-                print("📌 For channel:", channelId, "queued count:", queued.count)
-                Task {
-                    print("📌 For channel:", channelId, "queued count:", queued.count)
+        print("📌 queuedMessages count:", queuedMessages.count)
+        
+        // Get a snapshot of channels to process (avoid concurrent modification)
+        let channelsToProcess = Array(queuedMessages.keys)
+        
+        // Process each channel sequentially with concurrency guard
+        for channelId in channelsToProcess {
+            // Skip if already processing this channel
+            if isProcessingQueue[channelId] == true {
+                print("⏭️ Skipping channel \(channelId) - already processing")
+                continue
+            }
+            
+            // Create a task for this channel to maintain message order
+            Task {
+                // Mark channel as being processed
+                await MainActor.run {
+                    self.isProcessingQueue[channelId] = true
+                }
+                
+                defer {
+                    // Always clear the processing flag when done
+                    Task { @MainActor in
+                        self.isProcessingQueue[channelId] = false
+                    }
+                }
+                
+                var sentCount = 0
+                
+                // Keep sending from the front of the queue until it's empty or send fails
+                while await MainActor.run(body: { self.queuedMessages[channelId]?.isEmpty == false }) {
+                    // Safely get and remove the first message atomically
+                    let msg = await MainActor.run { () -> QueuedMessage? in
+                        guard let first = self.queuedMessages[channelId]?.first else {
+                            return nil
+                        }
+                        // Remove it immediately to prevent duplicate sends
+                        self.queuedMessages[channelId]?.removeFirst()
+                        return first
+                    }
+                    
+                    guard let msg = msg else {
+                        break
+                    }
+                    
+                    sentCount += 1
+                    print("📌 Sending queued message \(sentCount) for channel \(channelId) - nonce: \(msg.nonce)")
+                    
                     do {
-                        print("📌 For channel:", channelId, "queued count:", queued.count)
-                        print("👍🏻 Trying to send sendMessage is called")
-                        print("👍🏻 Going to send this replies\(msg.replies)")
-                        print("👍🏻 Going to senf this msg content \(msg.content)")
-                        let result = try await http.sendMessage(
+                        print("👍🏻 Sending message: \(msg.content)")
+                        let _ = try await http.sendMessage(
                             channel: channelId,
                             replies: msg.replies,
                             content: msg.content,
                             attachments: [],
                             nonce: msg.nonce
                         ).get()
-                        print("📤 Sent queued message:", result)
+                        print("📤 Sent queued message \(sentCount) successfully - nonce: \(msg.nonce)")
                     } catch {
-                        print("❌ Failed to send queued message:", error)
+                        print("❌ Failed to send queued message - nonce: \(msg.nonce), error: \(error)")
+                        // Re-add the message back to the front of the queue on failure
+                        await MainActor.run {
+                            self.queuedMessages[channelId]?.insert(msg, at: 0)
+                        }
+                        // Stop trying to send remaining messages in this channel if one fails
+                        break
                     }
                 }
+                
+                // Clean up empty queue entries
+                await MainActor.run {
+                    if self.queuedMessages[channelId]?.isEmpty == true {
+                        self.queuedMessages.removeValue(forKey: channelId)
+                    }
+                    print("👍🏻 Finished processing channel \(channelId) - sent \(sentCount) messages")
+                }
             }
-            
-            print("👍🏻 Clearing queue after try")
-            // Clear queue after try
-            queuedMessages[channelId] = []
-            print("👍🏻 Cleared queue after try")
         }
         print("👍🏻 Exiting trySendingQueueMessage")
     }
@@ -5556,7 +5626,7 @@ public class ViewState: ObservableObject {
 extension ViewState {
     func saveUsersToSharedContainer() {
         guard let sharedURL = FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared")?
+            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared.data")?
             .appendingPathComponent("users.json") else {
             print("❌ Failed to get App Group container URL")
             return

@@ -4900,18 +4900,18 @@ class MessageOptionViewController: UIViewController {
         let commonOptionsStack = createOptionsGroup()
         
         // Mention option (only if not author)
-        if !isMessageAuthor {
-            let mentionOption = createOptionButton(
-                title: "Mention",
-                iconName: "at",
-                action: { [weak self] in
-                    self?.onOptionSelected(.mention)
-                    self?.dismiss(animated: true)
-                }
-            )
-            commonOptionsStack.addArrangedSubview(mentionOption)
-            addDividerToGroup(group: commonOptionsStack)
-        }
+//        if !isMessageAuthor {
+//            let mentionOption = createOptionButton(
+//                title: "Mention",
+//                iconName: "at",
+//                action: { [weak self] in
+//                    self?.onOptionSelected(.mention)
+//                    self?.dismiss(animated: true)
+//                }
+//            )
+//            commonOptionsStack.addArrangedSubview(mentionOption)
+//            addDividerToGroup(group: commonOptionsStack)
+//        }
         
         // Mark unread option
         let markUnreadOption = createOptionButton(
@@ -4926,16 +4926,18 @@ class MessageOptionViewController: UIViewController {
         addDividerToGroup(group: commonOptionsStack)
         
         // Copy text option
-        let copyOption = createOptionButton(
-            title: "Copy Text",
-            iconName: "doc.on.doc",
-            action: { [weak self] in
-                self?.onOptionSelected(.copy)
-                self?.dismiss(animated: true)
-            }
-        )
-        commonOptionsStack.addArrangedSubview(copyOption)
-        addDividerToGroup(group: commonOptionsStack)
+        if let content = message.content, !content.isEmpty {
+            let copyOption = createOptionButton(
+                title: "Copy Text",
+                iconName: "doc.on.doc",
+                action: { [weak self] in
+                    self?.onOptionSelected(.copy)
+                    self?.dismiss(animated: true)
+                }
+            )
+            commonOptionsStack.addArrangedSubview(copyOption)
+            addDividerToGroup(group: commonOptionsStack)
+        }
         
         // Copy link option
         let copyLinkOption = createOptionButton(

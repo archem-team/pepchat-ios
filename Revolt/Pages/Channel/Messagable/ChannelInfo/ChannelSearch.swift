@@ -403,7 +403,8 @@ struct ChannelSearch: View {
                     if let members = response.members {
                         for member in members {
                             if !(viewState.members[member.id.server]?.keys.contains(member.id.user) ?? false) {
-                                viewState.members[member.id.server]![member.id.user] = member
+                                // Ensure the server map exists to avoid unexpected nil unwrap
+                                viewState.members[member.id.server, default: [:]][member.id.user] = member
                             }
                         }
                     }
