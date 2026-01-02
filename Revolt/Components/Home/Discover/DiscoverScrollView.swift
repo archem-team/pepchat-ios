@@ -364,8 +364,11 @@ struct DiscoverScrollView: View {
             
             let isMember = viewState.getMember(byServerId: serverId, userId: currentUser.id) != nil
             
-            // Cache the result
-            membershipCache[serverId] = isMember
+            // Cache the result after the view update to avoid mutating state during rendering
+            DispatchQueue.main.async {
+                self.membershipCache[serverId] = isMember
+            }
+
             return isMember
         }
         

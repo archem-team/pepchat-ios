@@ -668,7 +668,9 @@ public class ViewState: ObservableObject {
         // Create a new work item
         let workItem = DispatchWorkItem { [weak self] in
             UserDefaults.standard.set(data, forKey: key)
-            self?.saveWorkItems.removeValue(forKey: key)
+            DispatchQueue.main.async {
+                self?.saveWorkItems.removeValue(forKey: key)
+            }
         }
         
         // Store and schedule the work item
@@ -5626,7 +5628,7 @@ public class ViewState: ObservableObject {
 extension ViewState {
     func saveUsersToSharedContainer() {
         guard let sharedURL = FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared.data")?
+            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared")?
             .appendingPathComponent("users.json") else {
             print("❌ Failed to get App Group container URL")
             return

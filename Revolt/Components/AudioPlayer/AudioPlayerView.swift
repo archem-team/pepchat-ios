@@ -905,11 +905,34 @@ class AudioPlayerView: UIView {
         }
         
         let downloadTask = URLSession.shared.downloadTask(with: request) { [weak self] location, response, error in
+            var preservedLocation: URL? = nil
+
+            if let location = location {
+                let fm = FileManager.default
+                let tempDir = fm.temporaryDirectory
+                let uniqueTemp = tempDir.appendingPathComponent(UUID().uuidString + "_" + location.lastPathComponent)
+
+                do {
+                    try fm.moveItem(at: location, to: uniqueTemp)
+                    preservedLocation = uniqueTemp
+                } catch {
+                    // Move might fail for cross-volume or other reasons, fall back to copy
+                    do {
+                        let data = try Data(contentsOf: location)
+                        try data.write(to: uniqueTemp, options: .atomic)
+                        preservedLocation = uniqueTemp
+                    } catch {
+                        print("⚠️ [AudioPlayer] Failed to preserve download temp file: \(error)")
+                        preservedLocation = location
+                    }
+                }
+            }
+
             DispatchQueue.main.async {
-                self?.handleDownloadCompletion(location: location, response: response, error: error, filename: downloadFilename)
+                self?.handleDownloadCompletion(location: preservedLocation, response: response, error: error, filename: downloadFilename)
             }
         }
-        
+
         downloadTask.resume()
     }
     
@@ -917,35 +940,68 @@ class AudioPlayerView: UIView {
         defer {
             resetDownloadState()
         }
-        
+
         if let error = error {
             showAlert(title: "Download Failed", message: "Failed to download file: \(error.localizedDescription)")
             return
         }
-        
+
         guard let location = location else {
             showAlert(title: "Download Failed", message: "Download location not found")
             return
         }
-        
-        // Save file to Documents directory
+
+        // Robust save: ensure Documents exists, try move, fallback to copy, and generate a unique filename if needed
         do {
-            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            let destinationURL = documentsPath.appendingPathComponent(filename)
-            
-            // Remove existing file if it exists
-            if FileManager.default.fileExists(atPath: destinationURL.path) {
-                try FileManager.default.removeItem(at: destinationURL)
+            let fm = FileManager.default
+            let documentsPath = fm.urls(for: .documentDirectory, in: .userDomainMask).first!
+
+            // Ensure the Documents directory exists
+            try fm.createDirectory(at: documentsPath, withIntermediateDirectories: true)
+
+            var destinationURL = documentsPath.appendingPathComponent(filename)
+
+            // If destination exists try to remove it
+            if fm.fileExists(atPath: destinationURL.path) {
+                do {
+                    try fm.removeItem(at: destinationURL)
+                } catch {
+                    let base = destinationURL.deletingPathExtension().lastPathComponent
+                    let ext = destinationURL.pathExtension
+                    var counter = 1
+                    var newURL = destinationURL
+                    repeat {
+                        let newName = "\(base) (\(counter))" + (ext.isEmpty ? "" : ".\(ext)")
+                        newURL = documentsPath.appendingPathComponent(newName)
+                        counter += 1
+                    } while fm.fileExists(atPath: newURL.path)
+                    destinationURL = newURL
+                }
             }
-            
-            // Move downloaded file to destination
-            try FileManager.default.moveItem(at: location, to: destinationURL)
-            
-            // Show success message with option to open in Files app
-            showDownloadSuccessAlert(fileURL: destinationURL, filename: filename)
-            
+
+            // First attempt to move
+            do {
+                try fm.moveItem(at: location, to: destinationURL)
+            } catch let moveError {
+                print("⚠️ [AudioPlayer] moveItem failed: \(moveError)")
+
+                do {
+                    let data = try Data(contentsOf: location)
+                    try data.write(to: destinationURL, options: .atomic)
+
+                    // Attempt to remove the temporary file if it still exists
+                    try? fm.removeItem(at: location)
+                } catch let copyError {
+                    print("❌ [AudioPlayer] Copy fallback failed: \(copyError)")
+                    throw copyError
+                }
+            }
+
+            showDownloadSuccessAlert(fileURL: destinationURL, filename: destinationURL.lastPathComponent)
+
         } catch {
             showAlert(title: "Save Failed", message: "Failed to save file: \(error.localizedDescription)")
+            print("❌ [AudioPlayer] Save failed: \(error)")
         }
     }
     
@@ -1015,9 +1071,7 @@ class AudioPlayerView: UIView {
         
         // Add action to open in Files app
         alert.addAction(UIAlertAction(title: "Open in Files", style: .default) { _ in
-            if UIApplication.shared.canOpenURL(fileURL) {
-                UIApplication.shared.open(fileURL)
-            }
+            self.openInFiles(at: fileURL)
         })
         
         // Add action to share file
@@ -1041,6 +1095,19 @@ class AudioPlayerView: UIView {
         }
     }
     
+    private func openInFiles(at fileURL: URL) {
+        DispatchQueue.main.async {
+            let picker = UIDocumentPickerViewController(forExporting: [fileURL])
+            picker.modalPresentationStyle = .formSheet
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first,
+               var root = window.rootViewController {
+                while let presented = root.presentedViewController { root = presented }
+                root.present(picker, animated: true)
+            }
+        }
+    }
+
     private func shareFile(at fileURL: URL) {
         let activityViewController = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
         

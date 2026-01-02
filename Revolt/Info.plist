@@ -35,5 +35,7 @@
 		<string>voip</string>
 		<string>push-to-talk</string>
 	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 </dict>
 </plist>
