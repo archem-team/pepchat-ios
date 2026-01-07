@@ -5628,7 +5628,7 @@ public class ViewState: ObservableObject {
 extension ViewState {
     func saveUsersToSharedContainer() {
         guard let sharedURL = FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared")?
+            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared.data")?
             .appendingPathComponent("users.json") else {
             print("❌ Failed to get App Group container URL")
             return

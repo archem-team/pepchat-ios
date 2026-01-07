@@ -210,8 +210,27 @@ struct DiscoverScrollView: View {
             return
         }
         
+        DispatchQueue.global(qos: .background).async {
+            if let cached = ServerChatDataFetcher.shared.loadCache() {
+                let items = cached.items
+                    .map { DiscoverItem(id: $0.id,
+                                        code: $0.inviteCode,
+                                        title: $0.name,
+                                        description: $0.description,
+                                        isNew: $0.isNew,
+                                        sortOrder: $0.sortOrder,
+                                        disabled: $0.disabled,
+                                        color: $0.color) }
+                    .sorted(by: { $0.sortOrder < $1.sortOrder })
+                DispatchQueue.main.async {
+                    print("📥 Using cached discover: \(items.count) items, updated \(cached.timestamp)")
+                    self.discoverItems = items
+                }
+            }
+        }
         self.isLoading = true
         print("🌐 [DiscoverScrollView] Loading server list from CSV...")
+        
         ServerChatDataFetcher.shared.fetchData { result in
                 DispatchQueue.main.async {
                     
@@ -236,6 +255,8 @@ struct DiscoverScrollView: View {
                                              color: $0.color)
                             }
                             .sorted(by: { $0.sortOrder < $1.sortOrder })
+                        let cache = ServerChatCache(timestamp: Date(), items: fetchedServerChats)
+                        ServerChatDataFetcher.shared.saveCache(cache)
                     
                     // Log all discovered servers and their invite codes
                     print("📋 [DiscoverScrollView] Displaying \(self.discoverItems.count) servers:")
@@ -403,11 +424,36 @@ struct ServerChat: Codable {
     let color: String?
 }
 
+struct ServerChatCache: Codable {
+    let timestamp: Date
+    let items: [ServerChat]
+}
 
 class ServerChatDataFetcher {
     static let shared = ServerChatDataFetcher()
     
     let csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRY41D-NgTE6bC3kTN3dRpisI-DoeHG8Eg7n31xb1CdydWjOLaphqYckkTiaG9oIQSWP92h3NE-7cpF/pub?gid=0&single=true&output=csv"
+    
+    private let cacheFileName = "discover_server_cache.json"
+    private var cacheURL: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(cacheFileName)
+    }
+    
+    func loadCache() -> ServerChatCache? {
+        if let data = try? Data(contentsOf: cacheURL) {
+            return try? JSONDecoder().decode(ServerChatCache.self, from: data)
+        }
+        return nil
+    }
+    
+    func saveCache(_ cache: ServerChatCache) {
+        DispatchQueue.global(qos: .background).async {
+            if let data = try? JSONEncoder().encode(cache) {
+                try? data.write(to: self.cacheURL, options: .atomic)
+            }
+        }
+    }
     
     func fetchData(completion: @escaping (Result<[ServerChat], Error>) -> Void) {
         print("🌐 [ServerChatDataFetcher] Fetching CSV from URL: \(csvUrl)")
@@ -445,6 +491,9 @@ class ServerChatDataFetcher {
                             color: row["showcolor"]
                         )
                     }
+                    let cache = ServerChatCache(timestamp: Date(), items: serverChats)
+                    self.saveCache(cache)
+//                    completion(.success(serverChats))
                     print("📋 [ServerChatDataFetcher] Parsed \(serverChats.count) valid servers from CSV")
                     completion(.success(serverChats))
                 } catch {

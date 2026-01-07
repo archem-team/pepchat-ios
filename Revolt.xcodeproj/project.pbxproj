@@ -130,7 +130,7 @@
 		05F2854B2CF714A30071746A /* PeptideTabItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F2854A2CF714A30071746A /* PeptideTabItem.swift */; };
 		05F2854E2CF733A50071746A /* DiscoverScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F2854D2CF733A50071746A /* DiscoverScrollView.swift */; };
 		05F285502CF735BB0071746A /* DiscoverItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F2854F2CF735BB0071746A /* DiscoverItemView.swift */; };
-		05F285522CF735D50071746A /* Discover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F285512CF735D50071746A /* Discover.swift */; };
+		05F285522CF735D50071746A /* DiscoverItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F285512CF735D50071746A /* DiscoverItem.swift */; };
 		05F304272DCF48470058E80E /* MessagesReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F304262DCF48440058E80E /* MessagesReply.swift */; };
 		05F304292DCF48530058E80E /* ULID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F304282DCF484E0058E80E /* ULID.swift */; };
 		05F3042B2DCF485C0058E80E /* MarkdownProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F3042A2DCF485A0058E80E /* MarkdownProcessor.swift */; };
@@ -496,7 +496,7 @@
 		05F2854A2CF714A30071746A /* PeptideTabItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeptideTabItem.swift; sourceTree = "<group>"; };
 		05F2854D2CF733A50071746A /* DiscoverScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverScrollView.swift; sourceTree = "<group>"; };
 		05F2854F2CF735BB0071746A /* DiscoverItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverItemView.swift; sourceTree = "<group>"; };
-		05F285512CF735D50071746A /* Discover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Discover.swift; sourceTree = "<group>"; };
+		05F285512CF735D50071746A /* DiscoverItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverItem.swift; sourceTree = "<group>"; };
 		05F304262DCF48440058E80E /* MessagesReply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesReply.swift; sourceTree = "<group>"; };
 		05F304282DCF484E0058E80E /* ULID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ULID.swift; sourceTree = "<group>"; };
 		05F3042A2DCF485A0058E80E /* MarkdownProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownProcessor.swift; sourceTree = "<group>"; };
@@ -990,7 +990,7 @@
 			children = (
 				05F2854D2CF733A50071746A /* DiscoverScrollView.swift */,
 				05F2854F2CF735BB0071746A /* DiscoverItemView.swift */,
-				05F285512CF735D50071746A /* Discover.swift */,
+				05F285512CF735D50071746A /* DiscoverItem.swift */,
 			);
 			path = Discover;
 			sourceTree = "<group>";
@@ -1982,7 +1982,7 @@
 				1782F5E62B08F60B00759D40 /* Discovery.swift in Sources */,
 				17BB78B52CA4C45C000CAD87 /* ChannelPermissionsSettings.swift in Sources */,
 				17772C182C30AF83000D1EDA /* AppDelegate.swift in Sources */,
-				05F285522CF735D50071746A /* Discover.swift in Sources */,
+				05F285522CF735D50071746A /* DiscoverItem.swift in Sources */,
 				05523E0A2CE7497F003F4607 /* MfaRecovery.swift in Sources */,
 				17C444582B06CC5400F97E4A /* ForgotPassword.swift in Sources */,
 				05F3042F2DCF486E0058E80E /* UIViewExtensions.swift in Sources */,
@@ -2401,7 +2401,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
 				DEVELOPMENT_TEAM = "";
@@ -2466,7 +2466,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
 				DEVELOPMENT_TEAM = "";
