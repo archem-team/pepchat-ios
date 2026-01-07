@@ -4,7 +4,4 @@
    <FileRef
       location = "self:">
    </FileRef>
-   <FileRef
-      location = "group:__request_project_context.md">
-   </FileRef>
 </Workspace>
