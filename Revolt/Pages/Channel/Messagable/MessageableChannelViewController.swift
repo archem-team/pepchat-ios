@@ -68,6 +68,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     var lastManualScrollTime: Date?
     var lastManualScrollUpTime: Date?
     var scrollProtectionTimer: Timer?
+    private var scrollCheckTimer: Timer?
+    private var contentSizeObserverRegistered = false
     var lastScrollToBottomTime: Date?
     let scrollDebounceInterval: TimeInterval = 2.0
     var networkErrorCooldown: TimeInterval = 5.0
@@ -408,7 +410,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Add a timer to periodically check for scroll needed, but with a longer interval
         // This reduces unnecessary checks that could cause unwanted scrolling
-        Timer.scheduledTimer(timeInterval: 10.0, target: self, selector: #selector(checkForScrollNeeded), userInfo: nil, repeats: true)
+        // CRITICAL FIX: Store timer to prevent memory leak
+        scrollCheckTimer = Timer.scheduledTimer(timeInterval: 10.0, target: self, selector: #selector(checkForScrollNeeded), userInfo: nil, repeats: true)
         
         // Start automatic memory cleanup timer to prevent memory crashes
         startMemoryCleanupTimer()
@@ -800,6 +803,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             object: nil // Set to nil to receive all notifications with this name
         )
        // // print("🔄 VIEW_DID_APPEAR: Re-registered MessagesDidChange observer")
+
+        if !contentSizeObserverRegistered {
+            tableView.addObserver(self, forKeyPath: "contentSize", options: [.new, .old], context: nil)
+            contentSizeObserverRegistered = true
+        }
         
         // Check if we're already loading this channel
         let channelId = viewModel.channel.id
@@ -963,6 +971,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Dismiss keyboard if visible
         view.endEditing(true)
+
+        // Safety: remove MessagesDidChange observer (re-added in viewDidAppear)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("MessagesDidChange"), object: nil)
+
+        // Safety: remove tableView contentSize observer and re-register on appear
+        if contentSizeObserverRegistered {
+            tableView.removeObserver(self, forKeyPath: "contentSize")
+            contentSizeObserverRegistered = false
+        }
         
         print("🚀 IMMEDIATE_CLEANUP: Starting INSTANT memory cleanup for channel \(viewModel.channel.id)")
         let cleanupStartTime = CFAbsoluteTimeGetCurrent()
@@ -1781,6 +1798,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Add a direct observer to watch the tableView contentSize
         // This helps detect when new content is added
         tableView.addObserver(self, forKeyPath: "contentSize", options: [.new, .old], context: nil)
+        contentSizeObserverRegistered = true
         
         // Initial reload
         refreshMessages()
@@ -1827,6 +1845,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         memoryCleanupTimer?.invalidate()
         memoryCleanupTimer = nil
         
+        // CRITICAL FIX: Invalidate scroll check timer to prevent memory leak
+        scrollCheckTimer?.invalidate()
+        scrollCheckTimer = nil
+        
         // Cancel any pending scroll operations
         scrollToBottomWorkItem?.cancel()
         scrollToBottomWorkItem = nil
@@ -1839,8 +1861,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         pendingAPICall = nil
         
         // Add contentSize observer removal if it exists
-        if let tableView = tableView {
+        if contentSizeObserverRegistered {
             tableView.removeObserver(self, forKeyPath: "contentSize")
+            contentSizeObserverRegistered = false
         }
         
         // CRITICAL MEMORY FIX: Clear all message arrays to prevent memory leaks
@@ -1887,6 +1910,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         // Clear skeleton view if it exists
         skeletonView?.removeFromSuperview()
         skeletonView = nil
+        
+        // CRITICAL FIX: Cleanup MessageInputView to clear strong references
+        messageInputView?.cleanup()
+        messageInputView = nil
         
         // Clear managers that might hold references
         // (Note: These are lazy vars, so they'll be cleared automatically if not accessed)
@@ -7897,6 +7924,13 @@ extension MessageableChannelViewController {
                 return
             }
         }
+        
+        // CRITICAL FIX: Invalidate scroll check timer to prevent memory leak
+        scrollCheckTimer?.invalidate()
+        scrollCheckTimer = nil
+        
+        // CRITICAL FIX: Cleanup MessageInputView references to prevent memory leaks
+        messageInputView?.cleanup()
         
         // IMMEDIATE FINAL CLEANUP: No delays, no async operations
         performFinalInstantCleanup()

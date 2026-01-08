@@ -293,6 +293,48 @@ class MentionInputView: UIView {
         }
     }
     
+    // MARK: - Cleanup Methods
+    
+    // CRITICAL FIX: Cleanup method to clear references and prevent memory leaks
+    func cleanup() {
+        print("DEBUG: MentionInputView cleanup called")
+        
+        // Cancel any pending search work
+        searchWorkItem?.cancel()
+        searchWorkItem = nil
+        
+        // Hide and cleanup popup window
+        if popupWindow != nil {
+            hidePopup()
+        }
+        
+        // Clear delegate to break retain cycles
+        delegate = nil
+        
+        // Clear references
+        currentChannel = nil
+        currentServer = nil
+        users.removeAll()
+        filteredUsers.removeAll()
+    }
+    
+    deinit {
+        print("DEBUG: MentionInputView deinit called")
+        
+        // CRITICAL FIX: Ensure popup window is cleaned up
+        if let window = popupWindow {
+            window.isHidden = true
+            popupWindow = nil
+        }
+        
+        // Cancel search work item
+        searchWorkItem?.cancel()
+        searchWorkItem = nil
+        
+        // Clear delegate
+        delegate = nil
+    }
+    
     // MARK: - Private Methods
     private func setupViews() {
         // Setup container view with modern styling

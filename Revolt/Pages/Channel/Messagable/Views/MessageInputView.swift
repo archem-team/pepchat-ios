@@ -269,6 +269,35 @@ class MessageInputView: UIView {
         mentionInputView?.hidePopup()
     }
     
+    // MARK: - Cleanup Methods
+    
+    // CRITICAL FIX: Cleanup method to clear strong references and prevent memory leaks
+    func cleanup() {
+        print("DEBUG: MessageInputView cleanup called")
+        
+        NotificationCenter.default.removeObserver(self, name: UITextView.textDidChangeNotification, object: nil)
+        
+        // Hide and cleanup mention view
+        mentionInputView?.hidePopup()
+        mentionInputView?.cleanup()
+        mentionInputView = nil
+        
+        // Clear strong references to prevent memory leaks
+        currentViewState = nil
+        currentChannel = nil
+        currentServer = nil
+        
+        // Clear delegate to break any potential retain cycles
+        delegate = nil
+        
+        // Clear mention data
+        clearMentionData()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self, name: UITextView.textDidChangeNotification, object: nil)
+    }
+    
     // Set text in the input field
     func setText(_ text: String?) {
         textView.text = text
@@ -1034,4 +1063,3 @@ extension MessageInputView: MentionInputViewDelegate {
         print("DEBUG: Cleared mention data")
     }
 }
-
