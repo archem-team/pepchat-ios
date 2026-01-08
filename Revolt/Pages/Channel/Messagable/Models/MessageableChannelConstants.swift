@@ -31,5 +31,5 @@ enum MessageableChannelConstants {
     static let messageLoadLimit = 50
     static let retryMaxAttempts = 3
     static let retryBaseDelay: TimeInterval = 1.0
+    static let maxMessagesInMemory = 100
 }
-

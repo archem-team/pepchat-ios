@@ -13,6 +13,9 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
         scrollToBottomWorkItem?.cancel()
         scrollToBottomWorkItem = nil
         // print("👆 USER_DRAG_START: Cancelled all auto-scroll operations")
+
+        isUserScrolling = true
+        replyFetchDebounceTask?.cancel()
         
         // Start scroll protection timer
         startScrollProtection()
@@ -35,6 +38,10 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
             print("🛡️ DRAG_END: Protection maintained regardless of scroll gesture - user can scroll freely")
         }
         
+        if !decelerate {
+            handleScrollEndForReplyPrefetch()
+        }
+
         // Check if we've reached near the top and trigger message loading
         let offsetY = scrollView.contentOffset.y
         let triggerThreshold: CGFloat = 100.0 // Same threshold as in scrollViewDidScroll
@@ -189,6 +196,8 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
         // Stop scroll protection after deceleration ends
         scrollProtectionTimer?.invalidate()
         scrollProtectionTimer = nil
+
+        handleScrollEndForReplyPrefetch()
     }
     
     // MARK: - Scroll Helper Methods
@@ -357,4 +366,3 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
         updateTableViewBouncing()
     }
 }
-

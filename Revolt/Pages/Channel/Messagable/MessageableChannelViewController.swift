@@ -59,7 +59,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     private var cacheLoadTask: Task<Void, Never>? = nil
     private var replyFetchTask: Task<Void, Never>? = nil
     private var cachedMessageTotal: Int = 0
+    private var cachedMessageOffset: Int = 0
     private let cachePageSize: Int = 25
+    var replyFetchDebounceTask: Task<Void, Never>? = nil
+    private var pendingReplyFetchMessages: [Types.Message] = []
+    private var pendingMissingReplyCheck: Bool = false
+    var isUserScrolling: Bool = false
     
     // Variable to track the time of last successful request
     var lastSuccessfulLoadTime: Date = .distantPast
@@ -263,11 +268,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // Track if returning from search to prevent unwanted scrolling
     private var wasInSearch = false
-    
-    // CRITICAL MEMORY MANAGEMENT: Add message count limits to prevent memory issues
-    private let maxLocalMessagesInMemory = 400
-    private let maxViewStateMessagesPerChannel = 400
-    private let memoryCleanupThreshold = 400
     
     // Add this property to track the last before message id
     private var lastBeforeMessageId: String? = nil
@@ -2665,6 +2665,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                                 // print("⚠️ BEFORE_CALL: Tried to sync but channelMessages was empty, skipping sync to avoid clearing arrays")
                             }
                             
+                            self.enforceMessageWindow(keepingMostRecent: false)
+                            
                             // CRITICAL: Make sure we're using the correct messages array
                             let messagesForDataSource = !self.viewModel.messages.isEmpty ? 
                                 self.viewModel.messages : 
@@ -3353,6 +3355,54 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
     }
 
+    func handleScrollEndForReplyPrefetch() {
+        isUserScrolling = false
+        
+        if pendingMissingReplyCheck {
+            pendingMissingReplyCheck = false
+            Task {
+                await checkAndFetchMissingReplies()
+            }
+        }
+        
+        if !pendingReplyFetchMessages.isEmpty {
+            scheduleReplyPrefetch(for: pendingReplyFetchMessages)
+        }
+    }
+
+    @MainActor
+    private func enforceMessageWindow(keepingMostRecent: Bool) {
+        let channelId = viewModel.channel.id
+        let currentIds = viewModel.viewState.channelMessages[channelId] ?? localMessages
+        let maxCount = MessageableChannelConstants.maxMessagesInMemory
+        guard currentIds.count > maxCount else { return }
+        
+        let kept = keepingMostRecent
+            ? Array(currentIds.suffix(maxCount))
+            : Array(currentIds.prefix(maxCount))
+        guard kept.count < currentIds.count else { return }
+        
+        let keptSet = Set(kept)
+        let removedIds = currentIds.filter { !keptSet.contains($0) }
+        if !removedIds.isEmpty {
+            for messageId in removedIds {
+                viewModel.viewState.messages.removeValue(forKey: messageId)
+            }
+        }
+        
+        viewModel.viewState.channelMessages[channelId] = kept
+        viewModel.messages = kept
+        localMessages = kept
+        
+        if let localDataSource = dataSource as? LocalMessagesDataSource {
+            localDataSource.updateMessages(kept)
+        }
+
+        let trimDirection = keepingMostRecent ? "mostRecent" : "oldest"
+        let timestamp = String(format: "%.3f", Date().timeIntervalSince1970)
+        print("CACHE_TRACE t=\(timestamp) cacheTrim channel=\(channelId) kept=\(kept.count) removed=\(removedIds.count) direction=\(trimDirection)")
+    }
+
     private func loadOlderMessagesFromCacheIfAvailable(
         channelId: String,
         oldContentOffset: CGPoint,
@@ -3369,9 +3419,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             baseURL: baseURL
         )
         cachedMessageTotal = totalCount
-        
-        let currentCount = localMessages.count
-        guard totalCount > currentCount else {
+        let currentOffset = cachedMessageOffset
+        guard totalCount > currentOffset else {
             return false
         }
         
@@ -3380,7 +3429,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             userId: userId,
             baseURL: baseURL,
             limit: cachePageSize,
-            offset: currentCount
+            offset: currentOffset
         )
         
         guard !cachedMessages.isEmpty else {
@@ -3395,6 +3444,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         )
         
         await MainActor.run {
+            print("CACHE_TRACE t=\(String(format: "%.3f", Date().timeIntervalSince1970)) cachePageLoaded channel=\(channelId) offset=\(currentOffset) count=\(cachedMessages.count) total=\(totalCount)")
             for (userId, user) in cachedUsers {
                 self.viewModel.viewState.users[userId] = user
             }
@@ -3410,14 +3460,16 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             self.viewModel.viewState.channelMessages[channelId] = merged
             self.viewModel.messages = merged
             self.localMessages = merged
+            self.enforceMessageWindow(keepingMostRecent: false)
+            self.cachedMessageOffset = min(totalCount, currentOffset + cachedMessages.count)
             
             if let localDataSource = self.dataSource as? LocalMessagesDataSource {
-                localDataSource.updateMessages(merged)
+                localDataSource.updateMessages(self.localMessages)
             } else {
                 self.dataSource = LocalMessagesDataSource(
                     viewModel: self.viewModel,
                     viewController: self,
-                    localMessages: merged
+                    localMessages: self.localMessages
                 )
                 self.tableView.dataSource = self.dataSource
             }
@@ -3446,6 +3498,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // Set active channel ID for cache loading
         activeChannelId = currentChannelId
+        cachedMessageOffset = 0
         
         // CRITICAL FIX: Reset empty response time when loading initial messages
         lastEmptyResponseTime = nil
@@ -3530,6 +3583,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         self.viewModel.viewState.channelMessages[channelId] = messageIds
                         self.viewModel.messages = messageIds
                         self.localMessages = messageIds
+                        self.enforceMessageWindow(keepingMostRecent: true)
+                        self.cachedMessageOffset = cachedMessages.count
                         
                         // Update data source
                         self.dataSource = LocalMessagesDataSource(
@@ -3894,6 +3949,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
+                self.enforceMessageWindow(keepingMostRecent: true)
                 self.tableView.tableFooterView = nil
                 
                 // Create data source with local messages
@@ -4022,6 +4078,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     self.viewModel.viewState.channelMessages[channelId] = sortedIds
                     // CRITICAL: Ensure viewModel.messages is also synced
                     self.viewModel.messages = sortedIds
+                    self.enforceMessageWindow(keepingMostRecent: true)
                     }
                     
                     // TIMING: Calculate processing duration
@@ -4285,6 +4342,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     /// Check if any messages have missing reply content and fetch them
     private func checkAndFetchMissingReplies() async {
+        if isUserScrolling {
+            pendingMissingReplyCheck = true
+            return
+        }
+
         // CRITICAL FIX: Throttle reply checks to avoid excessive API calls
         let now = Date()
         if let lastCheck = lastReplyCheckTime, now.timeIntervalSince(lastCheck) < replyCheckCooldown {
@@ -4346,22 +4408,39 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     }
 
     private func scheduleReplyPrefetch(for messages: [Types.Message]) {
-        replyFetchTask?.cancel()
+        let combinedMessages = (pendingReplyFetchMessages + messages)
+        var unique: [String: Types.Message] = [:]
+        for message in combinedMessages {
+            unique[message.id] = message
+        }
+        pendingReplyFetchMessages = Array(unique.values)
+
+        if isUserScrolling {
+            return
+        }
+
+        replyFetchDebounceTask?.cancel()
         let currentChannelId = viewModel.channel.id
-        
-        replyFetchTask = Task { [weak self] in
+        replyFetchDebounceTask = Task { [weak self] in
             guard let self = self else { return }
-            
-            let messagesWithReplies = messages.filter { ($0.replies?.isEmpty == false) }
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled, !self.isUserScrolling else { return }
+
+            let messagesWithReplies = self.pendingReplyFetchMessages.filter { ($0.replies?.isEmpty == false) }
+            self.pendingReplyFetchMessages.removeAll()
             guard !messagesWithReplies.isEmpty else { return }
-            
-            await self.fetchReplyMessagesContent(for: messagesWithReplies)
-            
-            await MainActor.run {
-                guard self.activeChannelId == currentChannelId,
-                      self.isViewLoaded,
-                      !Task.isCancelled else { return }
-                self.refreshMessages()
+
+            self.replyFetchTask?.cancel()
+            self.replyFetchTask = Task { [weak self] in
+                guard let self = self else { return }
+                await self.fetchReplyMessagesContent(for: messagesWithReplies)
+
+                await MainActor.run {
+                    guard self.activeChannelId == currentChannelId,
+                          self.isViewLoaded,
+                          !Task.isCancelled else { return }
+                    self.refreshMessages()
+                }
             }
         }
     }
@@ -5590,6 +5669,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             viewModel.messages = updatedMessages
                             localMessages = updatedMessages
                             viewModel.viewState.channelMessages[viewModel.channel.id] = updatedMessages
+                            self.enforceMessageWindow(keepingMostRecent: true)
                             
                             // Final verification
                             // print("📥📥 AFTER_CALL: Arrays updated: viewModel.messages=\(viewModel.messages.count), localMessages=\(localMessages.count)")
@@ -6870,9 +6950,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // print("⬇️⬇️⬇️ API call completed successfully, got \(result.messages.count) messages")
                 
-                // Fetch reply messages BEFORE MainActor.run
-                print("🔗 CALLING fetchReplyMessagesContent (makeDirectAPICall) with \(result.messages.count) messages")
-                await self.fetchReplyMessagesContent(for: result.messages)
+                // Defer reply fetching until scroll settles
+                self.scheduleReplyPrefetch(for: result.messages)
                 
                 // Process results on main thread
                 await MainActor.run {
@@ -7394,10 +7473,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 self.localMessages = sortedIds
                 self.viewModel.viewState.channelMessages[channelId] = sortedIds
                 self.viewModel.messages = sortedIds
+                self.enforceMessageWindow(keepingMostRecent: true)
                 
                 // Update data source immediately
                 if let localDataSource = self.dataSource as? LocalMessagesDataSource {
-                    localDataSource.updateMessages(sortedIds)
+                    localDataSource.updateMessages(self.localMessages)
                 }
                 
                 // Reload table immediately
