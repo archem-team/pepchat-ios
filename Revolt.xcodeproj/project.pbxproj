@@ -305,6 +305,7 @@
 		DAAA4C0329F2548400F41E52 /* MessageBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAA4C0229F2548400F41E52 /* MessageBox.swift */; };
 		DAAA4C0929F2974300F41E52 /* Http.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAA4C0829F2974300F41E52 /* Http.swift */; };
 		DAAA4C0B29F2CF1200F41E52 /* Websocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAA4C0A29F2CF1200F41E52 /* Websocket.swift */; };
+		F0A1B2C3D4E5F60718293A4C /* MessageCacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F60718293A4B /* MessageCacheManager.swift */; };
 		DAF84FFD2A0EFE1B00B01682 /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = DAF84FFC2A0EFE1B00B01682 /* Starscream */; };
 		F545878D2E1504BD00797AC1 /* AttachmentPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F545878C2E1504BB00797AC1 /* AttachmentPreviewView.swift */; };
 		F54587942E152E6300797AC1 /* OggDecoder in Frameworks */ = {isa = PBXBuildFile; productRef = F54587932E152E6300797AC1 /* OggDecoder */; };
@@ -590,6 +591,7 @@
 		17D5C9432B14DF500060C035 /* DMScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMScrollView.swift; sourceTree = "<group>"; };
 		17D8BACE2B211DEE005F5447 /* ChannelInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelInfo.swift; sourceTree = "<group>"; };
 		17D9D2B62B0843DE00D57812 /* PermissionsCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsCalculator.swift; sourceTree = "<group>"; };
+		F0A1B2C3D4E5F60718293A4B /* MessageCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCacheManager.swift; sourceTree = "<group>"; };
 		17DE7DB22BFAEC3F00C99188 /* Types.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Types.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		17DE7DB42BFAEC3F00C99188 /* Types.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Types.h; sourceTree = "<group>"; };
 		17DE7E032BFAFDDD00C99188 /* Channel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Channel.swift; sourceTree = "<group>"; };
@@ -1491,6 +1493,7 @@
 				D49B705229C4D3FE009494A5 /* RevoltApp.swift */,
 				17E019D42AF1937400AB4663 /* Theme.swift */,
 				DA99EC4B29D5F35500419FDA /* ViewState.swift */,
+				F0A1B2C3D4E5F60718293A4D /* 1Storage */,
 				17DFB4622AE06A3200E1D417 /* Api */,
 				175E01DC2ADAB3EA004F6431 /* Components */,
 				17772C162C30AF6D000D1EDA /* Delegates */,
@@ -1499,6 +1502,14 @@
 				173190012B754BB900B6DA49 /* Resources */,
 			);
 			path = Revolt;
+			sourceTree = "<group>";
+		};
+		F0A1B2C3D4E5F60718293A4D /* 1Storage */ = {
+			isa = PBXGroup;
+			children = (
+				F0A1B2C3D4E5F60718293A4B /* MessageCacheManager.swift */,
+			);
+			path = 1Storage;
 			sourceTree = "<group>";
 		};
 		D49B705829C4D3FE009494A5 /* Preview Content */ = {
@@ -1973,6 +1984,7 @@
 				172F2CFF2C22ED3A00948C00 /* Bundle.swift in Sources */,
 				052EE7F92D283BEC00E3A61B /* SystemMessageSheet.swift in Sources */,
 				DA99EC4C29D5F35500419FDA /* ViewState.swift in Sources */,
+				F0A1B2C3D4E5F60718293A4C /* MessageCacheManager.swift in Sources */,
 				055B33E02D310FC8006BC9EB /* PeptideSectionHeader.swift in Sources */,
 				91FD56E92D5237F600BA58D5 /* RemoveAuthenticatorAppSheet.swift in Sources */,
 				17CE78412B12AA51006C1D2C /* ServerChannelScrollView.swift in Sources */,
@@ -2093,11 +2105,9 @@
 				CLANG_USE_OPTIMIZATION_PROFILE = YES;
 				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = R8387T64JW;
+				DEVELOPMENT_TEAM = R8387T64JW;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -2115,7 +2125,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = chat.zeko.app.notifications;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Zeko_Chat_Notifications;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -2134,11 +2143,9 @@
 				CLANG_USE_OPTIMIZATION_PROFILE = YES;
 				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = R8387T64JW;
+				DEVELOPMENT_TEAM = R8387T64JW;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -2156,7 +2163,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = chat.zeko.app.notifications;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Zeko_Chat_Notifications;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -2399,13 +2405,11 @@
 				CLANG_USE_OPTIMIZATION_PROFILE = NO;
 				CODE_SIGN_ENTITLEMENTS = Revolt/Revolt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = R8387T64JW;
+				DEVELOPMENT_TEAM = R8387T64JW;
 				EMBED_ASSET_PACKS_IN_PRODUCT_BUNDLE = YES;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_ON_DEMAND_RESOURCES = NO;
@@ -2439,7 +2443,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = chat.zeko.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Chat_Zeko_App;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -2464,13 +2467,11 @@
 				CLANG_USE_OPTIMIZATION_PROFILE = NO;
 				CODE_SIGN_ENTITLEMENTS = Revolt/Revolt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = R8387T64JW;
+				DEVELOPMENT_TEAM = R8387T64JW;
 				EMBED_ASSET_PACKS_IN_PRODUCT_BUNDLE = YES;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_ON_DEMAND_RESOURCES = NO;
@@ -2503,7 +2504,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = chat.zeko.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Chat_Zeko_App;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

@@ -163,56 +163,8 @@ class MessageableChannelViewModel: ObservableObject {
     }
     
     func loadMoreMessages(before: String? = nil) async -> FetchHistory? {
-        if isPreview { return nil }
-        
-        // Create an array of message IDs to include in the request
-        let messageIds: [String] = before != nil ? [before!] : []
-        
-        // Get the server ID from the channel
-        let serverId = channel.server
-        
-        // SMART LIMIT: Use 10 for specific channel, 50 for others
-        let messageLimit = (channel.id == "01J7QTT66242A7Q26A2FH5TD48") ? 10 : 50
-        
-        let result = (try? await viewState.http.fetchHistory(
-            channel: channel.id,
-            limit: messageLimit, // Smart limit based on channel
-            before: before,
-            server: serverId,
-            messages: messageIds
-        ).get()) ?? FetchHistory(messages: [], users: [])
-        
-        for user in result.users {
-            viewState.users[user.id] = user
-        }
-        
-        if let members = result.members {
-            for member in members {
-                // Ensure server entry exists and safely assign member
-                viewState.members[member.id.server, default: [:]][member.id.user] = member
-            }
-        }
-        
-        var ids: [String] = []
-        
-        for message in result.messages {
-            viewState.messages[message.id] = message
-            ids.append(message.id)
-        }
-        
-        // Safely handle the case when channelMessages[channel.id] might be nil
-        if let existingMessages = viewState.channelMessages[channel.id] {
-            viewState.channelMessages[channel.id] = ids.reversed() + existingMessages
-        } else {
-            viewState.channelMessages[channel.id] = ids.reversed()
-        }
-        
-        // Notify that messages have changed
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: nil)
-        }
-        
-        return result
+        // Delegate to the extension version which includes caching
+        return await loadMoreMessages(before: before, after: nil, sort: nil)
     }
     
     func loadMoreMessagesIfNeeded(current: Message?) async -> FetchHistory? {

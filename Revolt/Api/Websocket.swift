@@ -717,24 +717,6 @@ class WebSocketStream: ObservableObject {
                         
                         let e = try WebSocketStream.sharedDecoder.decode(WsMessage.self, from: data)
                     
-                        // Log the decoded message type
-                        switch e {
-                        case .authenticated:
-                            print("📨 WEBSOCKET: Decoded message type: authenticated")
-                        case .ready(let event):
-                            print("📨 WEBSOCKET: Decoded message type: ready (users: \(event.users.count), servers: \(event.servers.count), channels: \(event.channels.count))")
-                        case .message(let msg):
-                            let contentLength = msg.content?.count ?? 0
-                            print("📨 WEBSOCKET: Decoded message type: message (id: \(msg.id), channel: \(msg.channel), content length: \(contentLength))")
-                        case .message_update(let event):
-                            print("📨 WEBSOCKET: Decoded message type: message_update (id: \(event.id))")
-                        case .channel_start_typing(let event):
-                            print("📨 WEBSOCKET: Decoded message type: channel_start_typing (user: \(event.user))")
-                        case .channel_stop_typing(let event):
-                            print("📨 WEBSOCKET: Decoded message type: channel_stop_typing (user: \(event.user))")
-                        default:
-                            print("📨 WEBSOCKET: Decoded message type: \(String(describing: e))")
-                        }
                         
                         // MEMORY FIX: Use weak self in Task to prevent retain cycle
                         Task { [weak self] in

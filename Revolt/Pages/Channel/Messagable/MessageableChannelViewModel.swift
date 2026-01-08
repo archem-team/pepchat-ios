@@ -19,10 +19,16 @@ extension MessageableChannelViewModel {
     // Delay in seconds before allowing before/after calls
     private static let delayAfterNearby: TimeInterval = 10.0
     
+    nonisolated private static func cacheTrace(_ message: String) {
+        let timestamp = String(format: "%.3f", Date().timeIntervalSince1970)
+        print("CACHE_TRACE t=\(timestamp) \(message)")
+    }
+
     // Combined method to load messages before or after a specific message ID
     func loadMoreMessages(before: String? = nil, after: String? = nil, sort: String? = nil) async -> FetchHistory? {
         // Exit early if in preview mode
         if isPreview { return nil }
+        Self.cacheTrace("loadMoreMessages enter channel=\(channel.id) before=\(before ?? "nil") after=\(after ?? "nil") sort=\(sort ?? "Latest")")
         
         // TIMING: Start measuring API call duration
         let apiStartTime = Date()
@@ -52,7 +58,7 @@ extension MessageableChannelViewModel {
         // Fetch messages from API with reduced limit for faster response
         let result = try? await viewState.http.fetchHistory(
             channel: channel.id,
-            limit: 100, // Reduced from 100 to 50 for faster API response
+            limit: 50, // Reduced from 100 to 50 for faster API response
             before: before,
             after: after,
             sort: sort ?? "Latest",
@@ -67,11 +73,15 @@ extension MessageableChannelViewModel {
         
         // Early return if we didn't get a result
         guard let result = result else {
+            Self.cacheTrace("loadMoreMessages - API returned nil, cannot cache")
             // print("❌ VIEW_MODEL: API request failed or returned nil after \(String(format: "%.2f", apiDuration))s")
             return nil
         }
         
+        Self.cacheTrace("loadMoreMessages - Got result with \(result.messages.count) messages, proceeding to cache")
+        
         // print("✅ VIEW_MODEL: Received \(result.messages.count) messages from API in \(String(format: "%.2f", apiDuration))s")
+        Self.cacheTrace("loadMoreMessages - Got result with \(result.messages.count) messages, proceeding to process")
         
         // TIMING: Start processing time
         let processingStartTime = Date()
@@ -254,6 +264,47 @@ extension MessageableChannelViewModel {
         let totalDuration = processingEndTime.timeIntervalSince(apiStartTime)
         // print("⏱️ TOTAL_DURATION [\(callType)]: \(String(format: "%.2f", totalDuration)) seconds")
         // print("⏱️ BREAKDOWN [\(callType)]: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s")
+        
+        Self.cacheTrace("loadMoreMessages - Finished processing, about to cache messages")
+        
+        // MARK: - Cache Messages After API Response
+        // Cache messages and users in background (non-blocking)
+        // Capture values before detached task to avoid main actor isolation issues
+        Self.cacheTrace("About to check cache params - userId=\(viewState.currentUser?.id ?? "nil") baseURL=\(viewState.baseURL ?? "nil")")
+        
+        guard let userId = viewState.currentUser?.id,
+              let baseURL = viewState.baseURL else {
+            Self.cacheTrace("cache skip in loadMoreMessages channel=\(channel.id) userId=\(viewState.currentUser?.id ?? "nil") baseURL=\(viewState.baseURL ?? "nil")")
+            // Return early if we don't have required values
+            return result
+        }
+        
+        let channelId = channel.id
+        let messagesToCache = result.messages
+        let usersToCache = result.users
+        Self.cacheTrace("Creating Task.detached to cache \(messagesToCache.count) messages for channel \(channelId)")
+        
+        Task.detached {
+            MessageableChannelViewModel.cacheTrace("Task.detached started for channel \(channelId)")
+            // Determine if this response includes newest messages (for last_message_id update)
+            // Only update when initial/latest fetch (no before/after) or when fetching with 'after' (newer messages)
+            // DO NOT update when fetching with 'before' (older messages) or 'nearby' (may not include newest)
+            let shouldUpdateLastMessageId = (before == nil && after == nil) || (after != nil)
+            
+            let serverLastMessageId = shouldUpdateLastMessageId ? messagesToCache.map({ $0.id }).max() : nil
+            MessageableChannelViewModel.cacheTrace("cacheMessagesAndUsers call channel=\(channelId) messages=\(messagesToCache.count) users=\(usersToCache.count) shouldUpdateLastMessageId=\(shouldUpdateLastMessageId)")
+            MessageCacheManager.shared.cacheMessagesAndUsers(
+                messagesToCache,
+                users: usersToCache,
+                channelId: channelId,
+                userId: userId,
+                baseURL: baseURL,
+                lastMessageId: serverLastMessageId
+            )
+            MessageableChannelViewModel.cacheTrace("Task.detached completed for channel \(channelId)")
+        }
+        
+        Self.cacheTrace("Task.detached created (fire-and-forget) for channel \(channelId)")
         
         // Return the result for caller to use
         return result

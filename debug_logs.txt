@@ -1,0 +1,533 @@
+warning: (arm64) /Users/harishvishwakarma/Library/Developer/Xcode/DerivedData/Revolt-dharrjsambcimaaziudpvzjdcigm/Build/Products/Debug-iphoneos/Revolt.app/Revolt empty dSYM file detected, dSYM was created with an executable with no debug info.
+AVAudioSessionClient_Common.mm:600   Failed to set properties, error: -50
+📱 App entering foreground - no audio playing, keeping audio session inactive to avoid interrupting other apps
+🌐 Internet restored → trying to flush queue
+👍🏻 Entered trySendingQueuedMessages
+❌ Not connected, aborting queue send
+App is being debugged, do not track this hang
+Hang detected: 0.38s (debugger attached, not reporting)
+Cache written to: file:///var/mobile/Containers/Data/Application/F5F800C8-1F44-44E6-9938-210FDDDA1334/Library/Application%20Support/chat.zeko.app/userInfoCache.json
+Authenticate(token: WHvVBx5fpfiIgAU-Bd8NXMEfdY5ZOJcOPdkmKHuIIAfELprIGeGXGcwAT6yowgWT)
+authenticated
+✅ Saved servers cache to /var/mobile/Containers/Data/Application/F5F800C8-1F44-44E6-9938-210FDDDA1334/Library/Application Support/chat.zeko.app/servers_cache.json
+App is being debugged, do not track this hang
+Hang detected: 0.36s (debugger attached, not reporting)
+🔄 ServerChannelScrollView: Clearing channel messages for channel 01J5D8NKXCN9C6674XZQF2S0ZS to ensure full history loads
+DEBUG: Mention functionality setup complete for channel: 01J5D8NKXCN9C6674XZQF2S0ZS
+🔄 targetMessageProtectionActive: false
+🔄 INIT: Reset lastEmptyResponseTime for new channel
+📜 VIEW_DID_LOAD: No target message, loading regular messages
+🔄 targetMessageProtectionActive: false
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+🔄 targetMessageProtectionActive: false
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+🔄 LOAD_INITIAL: Reset lastEmptyResponseTime for initial load
+Successfully opened message cache database
+CACHE_TRACE: hasCachedMessages channel=01J5D8NKXCN9C6674XZQF2S0ZS has=false
+🚀 VIEW_DID_APPEAR: No cached messages found, will load from API
+🚀 LOAD_INITIAL: Starting API call for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+🎯 Set messageLoadingState to .loading for initial load
+🌐 API CALL: loadMoreMessages (initial) - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS
+Settings store written to: file:///var/mobile/Containers/Data/Application/F5F800C8-1F44-44E6-9938-210FDDDA1334/Library/Application%20Support/chat.zeko.app/userSettings.json
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🚫 LOAD_INITIAL: Hidden empty state at start of loading
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+🚫 LOAD_REGULAR: Hidden empty state for regular loading
+💀 SKELETON: Showing skeleton loading view
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+📵 PRELOAD_CONTROLLED: Automatic preloading controlled by ViewState setting for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+🚀 VIEW_DID_APPEAR: No messages found, loading from API IMMEDIATELY
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+🚀 LOAD_INITIAL: Starting load for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+🔄 LOAD_INITIAL: Reset lastEmptyResponseTime for initial load
+CACHE_TRACE: hasCachedMessages channel=01J5D8NKXCN9C6674XZQF2S0ZS has=false
+🚀 VIEW_DID_APPEAR: No cached messages found, will load from API
+⚠️ Channel 01J5D8NKXCN9C6674XZQF2S0ZS is already being loaded, skipping duplicate request
+💀 SKELETON: Hiding skeleton loading view
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+🔗 VIEW_APPEARED: Checking for missing replies after delay (second case)
+🔗 CHECK_MISSING: Checking 0 messages for missing replies
+🔗 CHECK_MISSING: Summary - Total messages with replies: 0, Total reply IDs: 0, Missing reply IDs: 0
+🔗 CHECK_MISSING: All reply content is already loaded!
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 BLOCKED: messagesDidChange blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 BLOCKED: messagesDidChange blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 BLOCKED: messagesDidChange blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 BLOCKED: messagesDidChange blocked - nearby loading in progress
+✅ API RESPONSE: loadMoreMessages (initial) - Result: Success with 50 messages
+🔗 API_DEBUG: Out of 50 messages, 28 have replies
+🔗 API_DEBUG: Message 01KEE8JRFQEHKD8GYNBBX7PADR has replies: ["01KEDFXYBT7E9WZC40T2G48TJF"]
+🔗 API_DEBUG: Message 01KEDG1FQQ1GKA91Z9KHR8D2ST has replies: ["01KEDE2NRETC2X39M9P8FCYK30"]
+🔗 API_DEBUG: Message 01KEDFXYBT7E9WZC40T2G48TJF has replies: ["01KEDE2NRETC2X39M9P8FCYK30"]
+🔗 API_DEBUG: Message 01KEDE2NRETC2X39M9P8FCYK30 has replies: ["01KEDAAHGW8QEXTHENV0R1Q5B6"]
+🔗 API_DEBUG: Message 01KECTAW3KDJX5BFKH2TGDGQB4 has replies: ["01KECSYB8RDRCK66HE4EZGK0V0"]
+🔗 API_DEBUG: Message 01KEC5RK9V13K39G0RPY5DSSGK has replies: ["01KE84RGVJFVGXTZHH3Z3E66H9"]
+🔗 API_DEBUG: Message 01KEBT42KHHEFHJ0KTVDYEV609 has replies: ["01KEBG4NX7X63DXZTVD1PCWEKB"]
+🔗 API_DEBUG: Message 01KEBG4NX7X63DXZTVD1PCWEKB has replies: ["01KEBFRBS2B5S7R2456QS2S4CE"]
+🔗 API_DEBUG: Message 01KEBFYT7YXKN76Y52PYWSNV7D has replies: ["01KEBFRBS2B5S7R2456QS2S4CE"]
+🔗 API_DEBUG: Message 01KEB62KV04ZNB1WXFPNN1TARR has replies: ["01KE9RXHJY8XV0ZK01TCMEDNAQ"]
+🔗 API_DEBUG: Message 01KEB3B1KVGXJMS5TQ7X2RB4NX has replies: ["01KE9RXHJY8XV0ZK01TCMEDNAQ"]
+🔗 API_DEBUG: Message 01KEB36GNQFXQ4DKRJ3W12MRER has replies: ["01KE9245DMR11YDA402NFNX7JE"]
+🔗 API_DEBUG: Message 01KEB33D2MKPXFAZ8XMMGPC6JP has replies: ["01KE91K7HW113Y3MCJG4FYJ0TN"]
+🔗 API_DEBUG: Message 01KE92V8JB349918F4K94BXNVC has replies: ["01KE92V7TD3KCRZPF5XXCJMRMR"]
+🔗 API_DEBUG: Message 01KE9245DMR11YDA402NFNX7JE has replies: ["01KE90HM9P9Z51GQBYRRNAEEWN"]
+🔗 API_DEBUG: Message 01KE91K7HW113Y3MCJG4FYJ0TN has replies: ["01KE90HM9P9Z51GQBYRRNAEEWN"]
+🔗 API_DEBUG: Message 01KE90HM9P9Z51GQBYRRNAEEWN has replies: ["01KE9058KG0NJ8GM6D5BGF6SK2"]
+🔗 API_DEBUG: Message 01KE8YSJ9YXB9QDPS7H4JTP8W3 has replies: ["01KE84RGVJFVGXTZHH3Z3E66H9"]
+🔗 API_DEBUG: Message 01KE8TE97NMNCAJ8DBKJJJT0E6 has replies: ["01KE8REX40Y0GRZFK4A3M3WPHB"]
+🔗 API_DEBUG: Message 01KE8REX40Y0GRZFK4A3M3WPHB has replies: ["01KE7420BFQ8686YYH0RN08BE9"]
+🔗 API_DEBUG: Message 01KE8QF9R948MQEWB3YF4J4PW9 has replies: ["01K3KBG9R0XDKJ934AGYM8C5CG"]
+🔗 API_DEBUG: Message 01KE8QAGTREZ5PKPA6RJN73G1B has replies: ["01K9K47XZ5GHWZCF9BXTTP9P8Y"]
+🔗 API_DEBUG: Message 01KE85EBV4X9X9KWKKZYJ29X6P has replies: ["01KE84RGVJFVGXTZHH3Z3E66H9"]
+🔗 API_DEBUG: Message 01KE77NQAQVFE4QABNXX15Y520 has replies: ["01KE5RMC39XFP8EQ58NYQXKKR5"]
+🔗 API_DEBUG: Message 01KE6RKBWVGBCDYMGEFWD4NHJA has replies: ["01KE6E5K5GY5WM6J5EF45080D5"]
+🔗 API_DEBUG: Message 01KE6GGQFNM985YBKE0S6GQVXE has replies: ["01KE6FD8C223RJS8AKNHHAEPZK"]
+🔗 API_DEBUG: Message 01KE5XK36E5EJZWN450K09GRXP has replies: ["01KE5WD12W77GQMHEGXNKRSW6C"]
+🔗 API_DEBUG: Message 01KE5WD12W77GQMHEGXNKRSW6C has replies: ["01KE5T0VSJCFTNAM09DT6Z0RMT"]
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 BLOCKED: messagesDidChange blocked - nearby loading in progress
+🔗 FETCH_REPLIES: Processing 28 messages for reply content
+🔗 FETCH_REPLIES: Found 28 messages with replies, total 28 reply IDs
+🔗 FETCH_REPLIES: Total unique reply IDs to fetch: 4
+🔗 FETCH_REPLIES: Need to fetch 4 reply messages
+🎯 LOAD_REGULAR: Reset loading state - complete
+🎯 Reset messageLoadingState to .notLoading - loadInitialMessages complete
+🔍 FETCH_REPLY: Attempting to fetch message 01K3KBG9R0XDKJ934AGYM8C5CG for reply
+🌐 FETCH_REPLY: Fetching message from server - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS, Message: 01K3KBG9R0XDKJ934AGYM8C5CG
+🌐 FETCH_REPLY: About to call viewModel.viewState.http.fetchMessage!
+🔍 FETCH_REPLY: Attempting to fetch message 01K9K47XZ5GHWZCF9BXTTP9P8Y for reply
+🌐 FETCH_REPLY: Fetching message from server - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS, Message: 01K9K47XZ5GHWZCF9BXTTP9P8Y
+🌐 FETCH_REPLY: About to call viewModel.viewState.http.fetchMessage!
+🔍 FETCH_REPLY: Attempting to fetch message 01KE5RMC39XFP8EQ58NYQXKKR5 for reply
+🌐 FETCH_REPLY: Fetching message from server - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS, Message: 01KE5RMC39XFP8EQ58NYQXKKR5
+🌐 FETCH_REPLY: About to call viewModel.viewState.http.fetchMessage!
+🔍 FETCH_REPLY: Attempting to fetch message 01KE5T0VSJCFTNAM09DT6Z0RMT for reply
+🌐 FETCH_REPLY: Fetching message from server - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS, Message: 01KE5T0VSJCFTNAM09DT6Z0RMT
+🌐 FETCH_REPLY: About to call viewModel.viewState.http.fetchMessage!
+📊 DATA_SOURCE: Marking as updating for loadInitialMessages
+📊 LOCAL DATA SOURCE: Returning 50 rows (localMessages: 50)
+🔍 MessageCell Channel mention processing: Found 0 matches in: /timeout <@01JS3CJZ8NJAPVZ5E6CX87G2RS> 30d spam
+Abnormal number of gesture recognizer dependencies: 100. System performance may be affected. Please investigate reducing gesture recognizers and/or their dependencies.
+nw_path_necp_check_for_updates Failed to copy updated result (22)
+Abnormal number of gesture recognizer dependencies: 150. System performance may be affected. Please investigate reducing gesture recognizers and/or their dependencies.
+📊 SCROLL_PROTECTION: Ignoring scroll event during data source update
+App is being debugged, do not track this hang
+Hang detected: 0.71s (debugger attached, not reporting)
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+✅ FETCH_REPLY: Successfully fetched message from server
+✅ FETCH_REPLY: Message content: yup ordered not too long ago, took 11 days to get to canada. Ordered the RT15, sent out a sample for testing, should be about 1-1.5 weeks for results
+🔄 targetMessageProtectionActive: false
+✅ FETCH_REPLY: Successfully fetched message from server
+✅ FETCH_REPLY: Message content: On mobile you click and hold on the server image until a list pops up and you select leave server
+✅ FETCH_REPLY: Successfully fetched message from server
+✅ FETCH_REPLY: Message content: How hard are sources scrutinized by admins here? All i could find about vendor verifying was
+"Vendor Verification (Required for Seller Servers)
+If your server sells products or services, please provide the following for verification:
+• Photographic Proof:
+Clear photo or short video of your facility or large inventory, including a handwritten sign with “PepChat” and today’s date.
+• External Links:
+Website, social media, Made-in-China, Alibaba, or other public profiles."
+Previous forums i was apart of like SST seem to look at a vendor more in depth, at least from the information i found. Anyone have anything they could share about this?
+New to the community and want to gauge risks.
+📊 DATA_SOURCE: Marking as stable after loadInitialMessages
+👥 FETCH_USER: Fetching user 01K8ZN1YP9V2KM5SYHZ6634YEE for reply message
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+👥 FETCH_USER: Fetching user 01K8ZN1YP9V2KM5SYHZ6634YEE for reply message
+👥 FETCH_USER: Fetching user 01KE5PNE2S1HW1N8G4VVPMZFQA for reply message
+👥 FETCH_USER: Fetching user 01KE5PNE2S1HW1N8G4VVPMZFQA for reply message
+✅ FETCH_REPLY: Successfully fetched message from server
+✅ FETCH_REPLY: Message content: hey guys, i’m looking for a good place to buy peptides in canada. I currently got Retatrutide from growth guys and they are alright.
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+👥 FETCH_USER: Fetching user 01K3KB5XREB5CPQ82B83ZR5VV5 for reply message
+👥 FETCH_USER: Fetching user 01K3KB5XREB5CPQ82B83ZR5VV5 for reply message
+🔗 FETCH_REPLIES: Completed fetching reply messages
+🔄 targetMessageProtectionActive: false
+Response data is nil or empty for route GET /servers/01J544PT4T3WQBVBSDK3TBFZW7/members?exclude_offline=false with status code 200
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+✅ FETCH_USER: Successfully cached user dotrix
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔗 CHECK_MISSING: Checking 50 messages for missing replies
+🔗 CHECK_MISSING: Summary - Total messages with replies: 28, Total reply IDs: 28, Missing reply IDs: 0
+🔗 CHECK_MISSING: All reply content is already loaded!
+Response data is nil or empty for route PUT /channels/01J5D8NKXCN9C6674XZQF2S0ZS/ack/01KEE8SW0EX0JJM8JMNB6C3QJ7 with status code 204
+✅ FETCH_USER: Successfully cached user dotrix
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+✅ FETCH_USER: Successfully cached user Indulgent_blue
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+✅ FETCH_USER: Successfully cached user Glengarry
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+✅ FETCH_USER: Successfully cached user Indulgent_blue
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+✅ FETCH_USER: Successfully cached user Glengarry
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔍 MessageCell Channel mention processing: Found 0 matches in: /timeout <@01JS3CJZ8NJAPVZ5E6CX87G2RS> 30d spam
+Error: Non-success response 404 for route GET https://peptide.chat/api/invites/gycdiscover (bytes: 101)
+❌ [DiscoverScrollView] Failed to fetch invite gycdiscover: HTTPError(Optional("{\"type\":\"NotFound\",\"location\":\"crates/core/database/src/models/channel_invites/ops/mongodb.rs:20:64\"}"), 404)
+🌐 API CALL: loadMoreMessages (before) - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS, Before: 01KE5WD12W77GQMHEGXNKRSW6C
+⏳ BEFORE_CALL: Waiting for API response for messageId=01KE5WD12W77GQMHEGXNKRSW6C, channelId=01J5D8NKXCN9C6674XZQF2S0ZS
+⏳ BEFORE_CALL: Calling viewModel.loadMoreMessages with before=01KE5WD12W77GQMHEGXNKRSW6C
+✅ BEFORE_CALL: API call completed, result is nil? false
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 BLOCKED: messagesDidChange blocked - nearby loading in progress
+📊 DATA_SOURCE: Marking as updating for loadMoreMessages
+📊 LOCAL DATA SOURCE: Returning 100 rows (localMessages: 100)
+🔍 MessageCell Channel mention processing: Found 0 matches in: /timeout <@01KE30MXNB4ZAN0EVG6BNP5MRQ> 1m spam
+Abnormal number of gesture recognizer dependencies: 200. System performance may be affected. Please investigate reducing gesture recognizers and/or their dependencies.
+🔍 MessageCell Channel mention processing: Found 0 matches in: /timeout <@01JS3CJZ8NJAPVZ5E6CX87G2RS> 30d spam
+Abnormal number of gesture recognizer dependencies: 250. System performance may be affected. Please investigate reducing gesture recognizers and/or their dependencies.
+Abnormal number of gesture recognizer dependencies: 300. System performance may be affected. Please investigate reducing gesture recognizers and/or their dependencies.
+🔄 targetMessageProtectionActive: false
+App is being debugged, do not track this hang
+Hang detected: 1.19s (debugger attached, not reporting)
+📊 SCROLL_PROTECTION: Ignoring scroll event during data source update
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+📊 DATA_SOURCE: Marking as stable after loadMoreMessages
+🔍 MessageCell Channel mention processing: Found 0 matches in: /timeout <@01KE30MXNB4ZAN0EVG6BNP5MRQ> 1m spam
+🔙 BACK_BUTTON: Tapped - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS, Server: 01J544PT4T3WQBVBSDK3TBFZW7
+🔙 BACK_BUTTON: Channel type: Channel
+🔙 BACK_BUTTON: Current path count: 1
+🔙 BACK_BUTTON: Current path: [Revolt.NavigationDestination.maybeChannelView]
+🔙 BACK_BUTTON: lastInviteServerContext: nil
+🔙 BACK_BUTTON: currentSelection: server("01J544PT4T3WQBVBSDK3TBFZW7")
+🔙 BACK_BUTTON: currentChannel: channel("01J5D8NKXCN9C6674XZQF2S0ZS")
+🔙 BACK_BUTTON: isOnlyChannelViews: true
+🔙 BACK_BUTTON: path.isEmpty: false
+🔙 BACK_BUTTON: Detected invite-style navigation (server channel with only maybeChannelViews)
+🔙 BACK_BUTTON: ServerId: 01J544PT4T3WQBVBSDK3TBFZW7
+🔙 BACK_BUTTON: Clearing path and selecting server 01J544PT4T3WQBVBSDK3TBFZW7
+🔙 BACK_BUTTON: After selectServer - currentSelection: server("01J544PT4T3WQBVBSDK3TBFZW7")
+🔙 BACK_BUTTON: After selectServer - currentChannel: channel("01J5D8NKXCN9C6674XZQF2S0ZS")
+🔙 BACK_BUTTON: Completed invite-style back navigation for server channel
+🔄 targetMessageProtectionActive: false
+🚀 IMMEDIATE_CLEANUP: Starting INSTANT memory cleanup for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+⚡ INSTANT_CLEANUP: Starting IMMEDIATE memory cleanup for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+⚡ INSTANT_CLEANUP: Removed 100 message objects immediately
+⚡ VIEWSTATE_INSTANT_CLEANUP: Starting IMMEDIATE cleanup for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+⚡ USER_INSTANT_CLEANUP: Removed 2 users in 0.56ms (63 -> 61)
+⚡ VIEWSTATE_INSTANT_CLEANUP: Completed in 1.24ms
+⚡ FREED: 0 messages, 2 users, 0 channel messages
+⚡ INSTANT_CLEANUP: Completed in 17.32ms - IMMEDIATE cleanup done!
+🚀 IMMEDIATE_CLEANUP: Total viewWillDisappear cleanup completed in 17.37ms
+🔄 targetMessageProtectionActive: false
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+⚡ VIEW_DID_DISAPPEAR: User has completely left channel 01J5D8NKXCN9C6674XZQF2S0ZS - performing FINAL instant cleanup
+DEBUG: MessageInputView cleanup called
+DEBUG: MentionInputView cleanup called
+DEBUG: MentionInputView deinit called
+DEBUG: Cleared mention data
+⚡ FINAL_INSTANT_CLEANUP: Starting IMMEDIATE final cleanup for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+⚡ VIEWSTATE_INSTANT_CLEANUP: Starting IMMEDIATE cleanup for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+⚡ USER_INSTANT_CLEANUP: Removed 0 users in 0.51ms (61 -> 61)
+⚡ VIEWSTATE_INSTANT_CLEANUP: Completed in 1.30ms
+⚡ FREED: 0 messages, 0 users, 0 channel messages
+⚡ FORCE_INSTANT_CLEANUP: Starting IMMEDIATE memory cleanup
+⚡ FORCE_INSTANT_CLEANUP: Completed in 1.32ms
+   Messages: 108 -> 108
+   Users: 61 -> 61
+   Channels: 14 -> 3
+🎯 MessageableChannelViewController: targetMessageId changed from nil to nil
+⚡ FINAL_INSTANT_CLEANUP: Completed in 2.95ms - ALL memory freed immediately!
+⚡ FORCE_IMMEDIATE_CLEANUP: Starting INSTANT memory cleanup
+👥 INSTANT_USER_CLEANUP: Starting for channel 01J5D8NKXCN9C6674XZQF2S0ZS - DM: false, GroupDM: false
+👥 INSTANT_USER_CLEANUP: Users to keep: 24
+⚡ FORCE_IMMEDIATE_CLEANUP: Completed in 0.45ms - Users: 61 -> 61
+🧹 CLEANUP: Cleared preloaded status for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+⚡ VIEW_DID_DISAPPEAR: Total final cleanup completed in 5.59ms
+🎯 DEINIT: Clearing currentTargetMessageId to prevent re-targeting
+DEBUG: MessageInputView cleanup called
+DEBUG: Cleared mention data
+🔄 ServerChannelScrollView: Clearing channel messages for channel 01J5D8NKXCN9C6674XZQF2S0ZS to ensure full history loads
+DEBUG: Mention functionality setup complete for channel: 01J5D8NKXCN9C6674XZQF2S0ZS
+🔄 targetMessageProtectionActive: false
+🔄 INIT: Reset lastEmptyResponseTime for new channel
+📜 VIEW_DID_LOAD: No target message, loading regular messages
+🔄 targetMessageProtectionActive: false
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+🔄 targetMessageProtectionActive: false
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+🔄 LOAD_INITIAL: Reset lastEmptyResponseTime for initial load
+CACHE_TRACE: hasCachedMessages channel=01J5D8NKXCN9C6674XZQF2S0ZS has=false
+📏 Disabled scrolling - no messages
+🚀 VIEW_DID_APPEAR: No cached messages found, will load from API
+🚀 LOAD_INITIAL: Starting API call for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+🎯 Set messageLoadingState to .loading for initial load
+🌐 API CALL: loadMoreMessages (initial) - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS
+Settings store written to: file:///var/mobile/Containers/Data/Application/F5F800C8-1F44-44E6-9938-210FDDDA1334/Library/Application%20Support/chat.zeko.app/userSettings.json
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🚫 LOAD_INITIAL: Hidden empty state at start of loading
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+🚫 LOAD_REGULAR: Hidden empty state for regular loading
+💀 SKELETON: Showing skeleton loading view
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+📵 PRELOAD_CONTROLLED: Automatic preloading controlled by ViewState setting for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+🚀 VIEW_DID_APPEAR: No messages found, loading from API IMMEDIATELY
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+🚀 LOAD_INITIAL: Starting load for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+🔄 LOAD_INITIAL: Reset lastEmptyResponseTime for initial load
+CACHE_TRACE: hasCachedMessages channel=01J5D8NKXCN9C6674XZQF2S0ZS has=false
+🚀 VIEW_DID_APPEAR: No cached messages found, will load from API
+⚠️ Channel 01J5D8NKXCN9C6674XZQF2S0ZS is already being loaded, skipping duplicate request
+💀 SKELETON: Hiding skeleton loading view
+📊 LOCAL DATA SOURCE: Returning 0 rows (localMessages: 0)
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+🔗 VIEW_APPEARED: Checking for missing replies after delay (second case)
+🔗 CHECK_MISSING: Checking 0 messages for missing replies
+🔗 CHECK_MISSING: Summary - Total messages with replies: 0, Total reply IDs: 0, Missing reply IDs: 0
+🔗 CHECK_MISSING: All reply content is already loaded!
+✅ API RESPONSE: loadMoreMessages (initial) - Result: Success with 50 messages
+🔗 API_DEBUG: Out of 50 messages, 28 have replies
+🔗 API_DEBUG: Message 01KEE8JRFQEHKD8GYNBBX7PADR has replies: ["01KEDFXYBT7E9WZC40T2G48TJF"]
+🔗 API_DEBUG: Message 01KEDG1FQQ1GKA91Z9KHR8D2ST has replies: ["01KEDE2NRETC2X39M9P8FCYK30"]
+🔗 API_DEBUG: Message 01KEDFXYBT7E9WZC40T2G48TJF has replies: ["01KEDE2NRETC2X39M9P8FCYK30"]
+🔗 API_DEBUG: Message 01KEDE2NRETC2X39M9P8FCYK30 has replies: ["01KEDAAHGW8QEXTHENV0R1Q5B6"]
+🔗 API_DEBUG: Message 01KECTAW3KDJX5BFKH2TGDGQB4 has replies: ["01KECSYB8RDRCK66HE4EZGK0V0"]
+🔗 API_DEBUG: Message 01KEC5RK9V13K39G0RPY5DSSGK has replies: ["01KE84RGVJFVGXTZHH3Z3E66H9"]
+🔗 API_DEBUG: Message 01KEBT42KHHEFHJ0KTVDYEV609 has replies: ["01KEBG4NX7X63DXZTVD1PCWEKB"]
+🔗 API_DEBUG: Message 01KEBG4NX7X63DXZTVD1PCWEKB has replies: ["01KEBFRBS2B5S7R2456QS2S4CE"]
+🔗 API_DEBUG: Message 01KEBFYT7YXKN76Y52PYWSNV7D has replies: ["01KEBFRBS2B5S7R2456QS2S4CE"]
+🔗 API_DEBUG: Message 01KEB62KV04ZNB1WXFPNN1TARR has replies: ["01KE9RXHJY8XV0ZK01TCMEDNAQ"]
+🔗 API_DEBUG: Message 01KEB3B1KVGXJMS5TQ7X2RB4NX has replies: ["01KE9RXHJY8XV0ZK01TCMEDNAQ"]
+🔗 API_DEBUG: Message 01KEB36GNQFXQ4DKRJ3W12MRER has replies: ["01KE9245DMR11YDA402NFNX7JE"]
+🔗 API_DEBUG: Message 01KEB33D2MKPXFAZ8XMMGPC6JP has replies: ["01KE91K7HW113Y3MCJG4FYJ0TN"]
+🔗 API_DEBUG: Message 01KE92V8JB349918F4K94BXNVC has replies: ["01KE92V7TD3KCRZPF5XXCJMRMR"]
+🔗 API_DEBUG: Message 01KE9245DMR11YDA402NFNX7JE has replies: ["01KE90HM9P9Z51GQBYRRNAEEWN"]
+🔗 API_DEBUG: Message 01KE91K7HW113Y3MCJG4FYJ0TN has replies: ["01KE90HM9P9Z51GQBYRRNAEEWN"]
+🔗 API_DEBUG: Message 01KE90HM9P9Z51GQBYRRNAEEWN has replies: ["01KE9058KG0NJ8GM6D5BGF6SK2"]
+🔗 API_DEBUG: Message 01KE8YSJ9YXB9QDPS7H4JTP8W3 has replies: ["01KE84RGVJFVGXTZHH3Z3E66H9"]
+🔗 API_DEBUG: Message 01KE8TE97NMNCAJ8DBKJJJT0E6 has replies: ["01KE8REX40Y0GRZFK4A3M3WPHB"]
+🔗 API_DEBUG: Message 01KE8REX40Y0GRZFK4A3M3WPHB has replies: ["01KE7420BFQ8686YYH0RN08BE9"]
+🔗 API_DEBUG: Message 01KE8QF9R948MQEWB3YF4J4PW9 has replies: ["01K3KBG9R0XDKJ934AGYM8C5CG"]
+🔗 API_DEBUG: Message 01KE8QAGTREZ5PKPA6RJN73G1B has replies: ["01K9K47XZ5GHWZCF9BXTTP9P8Y"]
+🔗 API_DEBUG: Message 01KE85EBV4X9X9KWKKZYJ29X6P has replies: ["01KE84RGVJFVGXTZHH3Z3E66H9"]
+🔗 API_DEBUG: Message 01KE77NQAQVFE4QABNXX15Y520 has replies: ["01KE5RMC39XFP8EQ58NYQXKKR5"]
+🔗 API_DEBUG: Message 01KE6RKBWVGBCDYMGEFWD4NHJA has replies: ["01KE6E5K5GY5WM6J5EF45080D5"]
+🔗 API_DEBUG: Message 01KE6GGQFNM985YBKE0S6GQVXE has replies: ["01KE6FD8C223RJS8AKNHHAEPZK"]
+🔗 API_DEBUG: Message 01KE5XK36E5EJZWN450K09GRXP has replies: ["01KE5WD12W77GQMHEGXNKRSW6C"]
+🔗 API_DEBUG: Message 01KE5WD12W77GQMHEGXNKRSW6C has replies: ["01KE5T0VSJCFTNAM09DT6Z0RMT"]
+🔄 targetMessageProtectionActive: false
+🔄 BLOCKED: refreshMessages blocked - nearby loading in progress
+🔄 BLOCKED: messagesDidChange blocked - nearby loading in progress
+🔗 FETCH_REPLIES: Processing 28 messages for reply content
+🔗 FETCH_REPLIES: Found 28 messages with replies, total 28 reply IDs
+🔗 FETCH_REPLIES: Total unique reply IDs to fetch: 4
+🔗 FETCH_REPLIES: Need to fetch 4 reply messages
+🎯 LOAD_REGULAR: Reset loading state - complete
+🎯 Reset messageLoadingState to .notLoading - loadInitialMessages complete
+🔍 FETCH_REPLY: Attempting to fetch message 01KE5T0VSJCFTNAM09DT6Z0RMT for reply
+🌐 FETCH_REPLY: Fetching message from server - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS, Message: 01KE5T0VSJCFTNAM09DT6Z0RMT
+🌐 FETCH_REPLY: About to call viewModel.viewState.http.fetchMessage!
+🔍 FETCH_REPLY: Attempting to fetch message 01K9K47XZ5GHWZCF9BXTTP9P8Y for reply
+🌐 FETCH_REPLY: Fetching message from server - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS, Message: 01K9K47XZ5GHWZCF9BXTTP9P8Y
+🌐 FETCH_REPLY: About to call viewModel.viewState.http.fetchMessage!
+🔍 FETCH_REPLY: Attempting to fetch message 01KE5RMC39XFP8EQ58NYQXKKR5 for reply
+🌐 FETCH_REPLY: Fetching message from server - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS, Message: 01KE5RMC39XFP8EQ58NYQXKKR5
+🌐 FETCH_REPLY: About to call viewModel.viewState.http.fetchMessage!
+🔍 FETCH_REPLY: Attempting to fetch message 01K3KBG9R0XDKJ934AGYM8C5CG for reply
+🌐 FETCH_REPLY: Fetching message from server - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS, Message: 01K3KBG9R0XDKJ934AGYM8C5CG
+🌐 FETCH_REPLY: About to call viewModel.viewState.http.fetchMessage!
+📊 DATA_SOURCE: Marking as updating for loadInitialMessages
+📊 LOCAL DATA SOURCE: Returning 50 rows (localMessages: 50)
+🔍 MessageCell Channel mention processing: Found 0 matches in: /timeout <@01JS3CJZ8NJAPVZ5E6CX87G2RS> 30d spam
+📊 SCROLL_PROTECTION: Ignoring scroll event during data source update
+App is being debugged, do not track this hang
+Hang detected: 0.64s (debugger attached, not reporting)
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+📊 DATA_SOURCE: Marking as stable after loadInitialMessages
+✅ FETCH_REPLY: Successfully fetched message from server
+✅ FETCH_REPLY: Message content: On mobile you click and hold on the server image until a list pops up and you select leave server
+✅ FETCH_REPLY: Successfully fetched message from server
+✅ FETCH_REPLY: Message content: How hard are sources scrutinized by admins here? All i could find about vendor verifying was
+"Vendor Verification (Required for Seller Servers)
+If your server sells products or services, please provide the following for verification:
+• Photographic Proof:
+Clear photo or short video of your facility or large inventory, including a handwritten sign with “PepChat” and today’s date.
+• External Links:
+Website, social media, Made-in-China, Alibaba, or other public profiles."
+Previous forums i was apart of like SST seem to look at a vendor more in depth, at least from the information i found. Anyone have anything they could share about this?
+New to the community and want to gauge risks.
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+✅ FETCH_REPLY: Successfully fetched message from server
+✅ FETCH_REPLY: Message content: hey guys, i’m looking for a good place to buy peptides in canada. I currently got Retatrutide from growth guys and they are alright.
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+👥 FETCH_USER: Fetching user 01K3KB5XREB5CPQ82B83ZR5VV5 for reply message
+✅ FETCH_REPLY: Successfully fetched message from server
+✅ FETCH_REPLY: Message content: yup ordered not too long ago, took 11 days to get to canada. Ordered the RT15, sent out a sample for testing, should be about 1-1.5 weeks for results
+👥 FETCH_USER: Fetching user 01K3KB5XREB5CPQ82B83ZR5VV5 for reply message
+🔄 targetMessageProtectionActive: false
+👥 FETCH_USER: Fetching user 01K8ZN1YP9V2KM5SYHZ6634YEE for reply message
+👥 FETCH_USER: Fetching user 01K8ZN1YP9V2KM5SYHZ6634YEE for reply message
+🔗 FETCH_REPLIES: Completed fetching reply messages
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+Response data is nil or empty for route PUT /channels/01J5D8NKXCN9C6674XZQF2S0ZS/ack/01KEE8SW0EX0JJM8JMNB6C3QJ7 with status code 204
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔗 CHECK_MISSING: Checking 50 messages for missing replies
+🔗 CHECK_MISSING: Summary - Total messages with replies: 28, Total reply IDs: 28, Missing reply IDs: 0
+🔗 CHECK_MISSING: All reply content is already loaded!
+✅ FETCH_USER: Successfully cached user Glengarry
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+✅ FETCH_USER: Successfully cached user dotrix
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+Error: Non-success response 404 for route GET https://peptide.chat/api/invites/johnny5discover (bytes: 101)
+✅ FETCH_USER: Successfully cached user dotrix
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+❌ [DiscoverScrollView] Failed to fetch invite johnny5discover: HTTPError(Optional("{\"type\":\"NotFound\",\"location\":\"crates/core/database/src/models/channel_invites/ops/mongodb.rs:20:64\"}"), 404)
+✅ FETCH_USER: Successfully cached user Glengarry
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔙 BACK_BUTTON: Tapped - Channel: 01J5D8NKXCN9C6674XZQF2S0ZS, Server: 01J544PT4T3WQBVBSDK3TBFZW7
+🔙 BACK_BUTTON: Channel type: Channel
+🔙 BACK_BUTTON: Current path count: 1
+🔙 BACK_BUTTON: Current path: [Revolt.NavigationDestination.maybeChannelView]
+🔙 BACK_BUTTON: lastInviteServerContext: nil
+🔙 BACK_BUTTON: currentSelection: server("01J544PT4T3WQBVBSDK3TBFZW7")
+🔙 BACK_BUTTON: currentChannel: channel("01J5D8NKXCN9C6674XZQF2S0ZS")
+🔙 BACK_BUTTON: isOnlyChannelViews: true
+🔙 BACK_BUTTON: path.isEmpty: false
+🔙 BACK_BUTTON: Detected invite-style navigation (server channel with only maybeChannelViews)
+🔙 BACK_BUTTON: ServerId: 01J544PT4T3WQBVBSDK3TBFZW7
+🔙 BACK_BUTTON: Clearing path and selecting server 01J544PT4T3WQBVBSDK3TBFZW7
+🔙 BACK_BUTTON: After selectServer - currentSelection: server("01J544PT4T3WQBVBSDK3TBFZW7")
+🔙 BACK_BUTTON: After selectServer - currentChannel: channel("01J5D8NKXCN9C6674XZQF2S0ZS")
+🔙 BACK_BUTTON: Completed invite-style back navigation for server channel
+🔄 targetMessageProtectionActive: false
+🚀 IMMEDIATE_CLEANUP: Starting INSTANT memory cleanup for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+⚡ INSTANT_CLEANUP: Starting IMMEDIATE memory cleanup for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+⚡ INSTANT_CLEANUP: Removed 50 message objects immediately
+⚡ VIEWSTATE_INSTANT_CLEANUP: Starting IMMEDIATE cleanup for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+⚡ USER_INSTANT_CLEANUP: Removed 2 users in 0.50ms (63 -> 61)
+⚡ VIEWSTATE_INSTANT_CLEANUP: Completed in 0.85ms
+⚡ FREED: 0 messages, 2 users, 0 channel messages
+⚡ INSTANT_CLEANUP: Completed in 9.20ms - IMMEDIATE cleanup done!
+🚀 IMMEDIATE_CLEANUP: Total viewWillDisappear cleanup completed in 9.23ms
+🔄 targetMessageProtectionActive: false
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+📏 Disabled scrolling - no messages
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+🔄 targetMessageProtectionActive: false
+⏰ REPLY_TIMEOUT: Stopping loading indicator for reply 01KE5T0VSJCFTNAM09DT6Z0RMT - likely deleted
+⚡ VIEW_DID_DISAPPEAR: User has completely left channel 01J5D8NKXCN9C6674XZQF2S0ZS - performing FINAL instant cleanup
+DEBUG: MessageInputView cleanup called
+DEBUG: MentionInputView cleanup called
+DEBUG: MentionInputView deinit called
+DEBUG: Cleared mention data
+⚡ FINAL_INSTANT_CLEANUP: Starting IMMEDIATE final cleanup for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+⚡ VIEWSTATE_INSTANT_CLEANUP: Starting IMMEDIATE cleanup for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+⚡ USER_INSTANT_CLEANUP: Removed 0 users in 1.53ms (61 -> 61)
+⚡ VIEWSTATE_INSTANT_CLEANUP: Completed in 3.96ms
+⚡ FREED: 0 messages, 0 users, 0 channel messages
+⚡ FORCE_INSTANT_CLEANUP: Starting IMMEDIATE memory cleanup
+⚡ FORCE_INSTANT_CLEANUP: Completed in 0.12ms
+   Messages: 108 -> 108
+   Users: 61 -> 61
+   Channels: 3 -> 3
+🎯 MessageableChannelViewController: targetMessageId changed from nil to nil
+⚡ FINAL_INSTANT_CLEANUP: Completed in 4.67ms - ALL memory freed immediately!
+⚡ FORCE_IMMEDIATE_CLEANUP: Starting INSTANT memory cleanup
+👥 INSTANT_USER_CLEANUP: Starting for channel 01J5D8NKXCN9C6674XZQF2S0ZS - DM: false, GroupDM: false
+👥 INSTANT_USER_CLEANUP: Users to keep: 24
+⚡ FORCE_IMMEDIATE_CLEANUP: Completed in 1.37ms - Users: 61 -> 61
+🧹 CLEANUP: Cleared preloaded status for channel 01J5D8NKXCN9C6674XZQF2S0ZS
+⚡ VIEW_DID_DISAPPEAR: Total final cleanup completed in 7.71ms
+🎯 DEINIT: Clearing currentTargetMessageId to prevent re-targeting
+DEBUG: MessageInputView cleanup called
+DEBUG: Cleared mention data

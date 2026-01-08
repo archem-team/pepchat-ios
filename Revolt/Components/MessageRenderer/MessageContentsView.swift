@@ -73,6 +73,9 @@ class MessageContentsViewModel: ObservableObject, Equatable {
         // If the request was successful, immediately update local state
         if case .success = result {
             await MainActor.run {
+                // Add to tombstone set
+                viewState.deletedMessageIds[channel.id, default: Set<String>()].insert(message.id)
+                
                 // Remove from messages dictionary
                 viewState.messages.removeValue(forKey: message.id)
                 
@@ -80,6 +83,17 @@ class MessageContentsViewModel: ObservableObject, Equatable {
                 if var channelMessages = viewState.channelMessages[channel.id] {
                     channelMessages.removeAll { $0 == message.id }
                     viewState.channelMessages[channel.id] = channelMessages
+                }
+                
+                // Delete from cache (background, non-blocking)
+                if let userId = viewState.currentUser?.id,
+                   let baseURL = viewState.baseURL {
+                    MessageCacheManager.shared.deleteCachedMessage(
+                        id: message.id,
+                        channelId: channel.id,
+                        userId: userId,
+                        baseURL: baseURL
+                    )
                 }
             }
         }

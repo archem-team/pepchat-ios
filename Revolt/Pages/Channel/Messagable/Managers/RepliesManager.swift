@@ -370,6 +370,9 @@ class RepliesManager: NSObject {
                     case .success:
                         print("✅ Message deleted successfully: \(message.id)")
                         
+                        // Add to tombstone set
+                        viewState.deletedMessageIds[channelId, default: Set<String>()].insert(message.id)
+                        
                         // Update local state immediately
                         Task {
                             await viewState.messages.removeValue(forKey: message.id)
@@ -379,6 +382,17 @@ class RepliesManager: NSObject {
                             channelMessages.removeAll { $0 == message.id }
                                 await viewState.channelMessages[channelId] = channelMessages
                             }
+                        }
+                        
+                        // Delete from cache (background, non-blocking)
+                        if let userId = viewState.currentUser?.id,
+                           let baseURL = viewState.baseURL {
+                            MessageCacheManager.shared.deleteCachedMessage(
+                                id: message.id,
+                                channelId: channelId,
+                                userId: userId,
+                                baseURL: baseURL
+                            )
                         }
                         
                         // Show success message

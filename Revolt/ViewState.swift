@@ -390,6 +390,9 @@ public class ViewState: ObservableObject {
             }
         }
     }
+    // Tombstone tracking for deleted messages (per channel)
+    var deletedMessageIds: [String: Set<String>] = [:]
+    
     @Published var channelMessages: [String: [String]] {
         didSet {
             // MEMORY MANAGEMENT: Use debounced save for channelMessages
@@ -1255,6 +1258,9 @@ public class ViewState: ObservableObject {
         // MEMORY MANAGEMENT: Start periodic memory cleanup
         startPeriodicMemoryCleanup()
         
+        // Cache schema migration check (backup check, primary check is in MessageCacheManager.init)
+        // MessageCacheManager.shared will check schema on first access
+        
         // Log loaded data counts after all initialization is complete
         // print("📱 INIT: Loaded \(users.count) users from UserDefaults")
         // print("📱 INIT: Loaded \(servers.count) servers from UserDefaults")
@@ -1300,7 +1306,6 @@ public class ViewState: ObservableObject {
         
         // Only preload if user is authenticated and WebSocket is connected
         guard sessionToken != nil, currentUser != nil, state == .connected else {
-            print("🚀 PRELOAD: Skipping preload - user not authenticated or not connected (state: \(state))")
             return
         }
         
@@ -1319,7 +1324,6 @@ public class ViewState: ObservableObject {
             }.prefix(3) // Preload first 3 text channels
             
             channelsToPreload.append(contentsOf: textChannels)
-            print("🚀 PRELOAD: Added \(textChannels.count) channels from current server \(serverId)")
         }
         
         // Add active DM channels
@@ -1335,16 +1339,12 @@ public class ViewState: ObservableObject {
         }.prefix(5) // Preload first 5 DMs
         
         channelsToPreload.append(contentsOf: activeDMs)
-        print("🚀 PRELOAD: Added \(activeDMs.count) DM channels")
         
         // Always include the specific channel mentioned by user
         let specificChannelId = "01J7QTT66242A7Q26A2FH5TD48"
         if !channelsToPreload.contains(specificChannelId) {
             channelsToPreload.append(specificChannelId)
-            print("🚀 PRELOAD: Added specific channel \(specificChannelId)")
         }
-        
-        print("🚀 PRELOAD: Starting preload for \(channelsToPreload.count) channels")
         
         // Preload channels in parallel for better performance
         await withTaskGroup(of: Void.self) { group in
@@ -1354,8 +1354,6 @@ public class ViewState: ObservableObject {
         }
             }
         }
-        
-        print("🚀 PRELOAD: Completed preloading \(channelsToPreload.count) channels")
     }
     
     /// Public method to manually trigger preload for important channels
@@ -1383,24 +1381,19 @@ public class ViewState: ObservableObject {
     private func preloadChannel(channelId: String) async {
         // Check if channel has already been preloaded
         if preloadedChannels.contains(channelId) {
-            print("🚀 PRELOAD: Channel \(channelId) has already been preloaded, skipping")
             return
         }
         
         // Check if channel exists in our channels dictionary
         guard let channel = channels[channelId] else {
-            print("🚀 PRELOAD: Channel \(channelId) not found in channels dictionary")
             return
         }
         
         // Check if we already have messages for this channel
         if let existingMessages = channelMessages[channelId], !existingMessages.isEmpty {
-            print("🚀 PRELOAD: Channel \(channelId) already has \(existingMessages.count) messages, skipping preload")
             preloadedChannels.insert(channelId) // Mark as preloaded since it has messages
             return
         }
-        
-        print("🚀 PRELOAD: Loading messages for channel: \(channelId)")
         
         do {
             // Get server ID if this is a server channel
@@ -1417,8 +1410,6 @@ public class ViewState: ObservableObject {
                 server: serverId,
                 include_users: true
             ).get()
-            
-            print("🚀 PRELOAD: Successfully loaded \(result.messages.count) messages for channel \(channelId)")
             
             // Process users from the response
             for user in result.users {
@@ -1449,13 +1440,11 @@ public class ViewState: ObservableObject {
             // Store sorted message IDs in channelMessages
             channelMessages[channelId] = sortedIds
             
-            print("🚀 PRELOAD: Successfully stored \(sortedIds.count) messages for channel \(channelId) in memory")
-            
             // Mark channel as preloaded
             preloadedChannels.insert(channelId)
             
         } catch {
-            print("🚀 PRELOAD: Failed to load messages for channel \(channelId): \(error)")
+            // Silent failure for preload
         }
     }
     
@@ -2035,6 +2024,9 @@ public class ViewState: ObservableObject {
         // IMPORTANT: do not destroy the cache/session here. It'll cause the app to crash before it can transition to the welcome screen.
         // The cache is destroyed in RevoltApp.swift:ApplicationSwitcher
         
+        // Clear message cache on sign-out
+        MessageCacheManager.shared.clearAllCaches()
+        
         state = .signedOut
         return .success(())
     }
@@ -2306,9 +2298,6 @@ public class ViewState: ObservableObject {
                 Task {
                     await self.preloadImportantChannels()
                 }
-                print("🚀 PRELOAD_ENABLED: Started automatic preloading after Ready event")
-            } else {
-                print("📵 PRELOAD_DISABLED: Skipped automatic preloading after Ready event")
             }
             
             // CLEANUP: Clean up stale unreads after Ready event
@@ -2316,7 +2305,6 @@ public class ViewState: ObservableObject {
             Task {
                 await MainActor.run {
                     self.cleanupStaleUnreads()
-                    print("🧹 Cleaned up stale unreads after Ready event")
                 }
             }
 
@@ -2514,6 +2502,19 @@ public class ViewState: ObservableObject {
                 }
                 
                 messages[event.id] = message
+                
+                // Update cache (background, non-blocking)
+                if let userId = currentUser?.id, let baseURL = baseURL {
+                    let editedAt = ISO8601DateFormatter().date(from: event.data.edited)
+                    MessageCacheManager.shared.updateCachedMessage(
+                        id: event.id,
+                        content: event.data.content,
+                        editedAt: editedAt,
+                        channelId: message.channel,
+                        userId: userId,
+                        baseURL: baseURL
+                    )
+                }
             }
             
         case .authenticated:
@@ -2543,6 +2544,19 @@ public class ViewState: ObservableObject {
                     channel.remove(at: index)
                     channelMessages[e.channel] = channel
                 }
+            }
+            
+            // Add to tombstone set
+            deletedMessageIds[e.channel, default: Set<String>()].insert(e.id)
+            
+            // Delete from cache (background, non-blocking)
+            if let userId = currentUser?.id, let baseURL = baseURL {
+                MessageCacheManager.shared.deleteCachedMessage(
+                    id: e.id,
+                    channelId: e.channel,
+                    userId: userId,
+                    baseURL: baseURL
+                )
             }
             
         case .channel_ack(let e):
@@ -4624,9 +4638,6 @@ public class ViewState: ObservableObject {
             Task {
                 await preloadImportantChannels()
             }
-            print("🚀 PRELOAD_ENABLED: Started automatic preloading for server \(id)")
-        } else {
-            print("📵 PRELOAD_DISABLED: Skipped automatic preloading for server \(id) channels")
         }
         
         if let last = userSettingsStore.store.lastOpenChannels[id] {
@@ -4677,9 +4688,6 @@ public class ViewState: ObservableObject {
             Task {
                 await preloadSpecificChannel(channelId: id)
             }
-            print("🚀 PRELOAD_ENABLED: Started automatic preloading for selected channel \(id)")
-        } else {
-            print("📵 PRELOAD_DISABLED: Skipped automatic preloading for selected channel \(id)")
         }
         
         // CRITICAL FIX: Load users for visible messages when entering channel
@@ -4768,9 +4776,6 @@ public class ViewState: ObservableObject {
             Task {
                 await preloadSpecificChannel(channelId: id)
             }
-            print("🚀 PRELOAD_ENABLED: Started automatic preloading for selected DM \(id)")
-        } else {
-            print("📵 PRELOAD_DISABLED: Skipped automatic preloading for selected DM \(id)")
         }
         
         // CRITICAL FIX: Load users for visible messages when entering DM
@@ -5211,7 +5216,6 @@ public class ViewState: ObservableObject {
                     
                     // Debug log for group DMs
                     if case .group_dm_channel(let groupDM) = channel {
-                        print("🔔 Badge: Counting group DM '\(groupDM.name)' as unread")
                     }
                 }
             }
@@ -5222,9 +5226,7 @@ public class ViewState: ObservableObject {
         
         // Update app badge count
         DispatchQueue.main.async {
-            let currentBadge = application.applicationIconBadgeNumber
             application.applicationIconBadgeNumber = finalBadgeCount
-            print("🔔 Badge: \(currentBadge) -> \(finalBadgeCount) (unreads: \(totalUnreadCount))")
         }
     }
     
@@ -5234,81 +5236,21 @@ public class ViewState: ObservableObject {
         
         DispatchQueue.main.async {
             application.applicationIconBadgeNumber = 0
-            print("🔔 Cleared app badge count")
         }
     }
     
     /// Manually refreshes the app badge count - useful for debugging or when the count seems incorrect
     func refreshAppBadge() {
-        print("🔔 Manually refreshing app badge count...")
         updateAppBadgeCount()
     }
     
     /// Debug badge count and print detailed analysis to console
     func debugBadgeCount() {
-        print("🔍 === BADGE COUNT DEBUG ===")
-        print("📊 Total unreads entries: \(unreads.count)")
-        
-        var totalCount = 0
-        var mutedCount = 0
-        var validCount = 0
-        var missingChannels = 0
-        var channelsWithUnread = 0
-        
-        for (channelId, unread) in unreads {
-            let channel = channels[channelId] ?? allEventChannels[channelId]
-            let channelName = channel?.name ?? "Unknown"
-            let channelExists = channel != nil
-            let isChannelMuted = userSettingsStore.cache.notificationSettings.channel[channelId] == .muted
-            let serverIdForChannel = channel?.server
-            let isServerMuted = serverIdForChannel != nil ? userSettingsStore.cache.notificationSettings.server[serverIdForChannel!] == .muted : false
-            
-            print("  📌 Channel: \(channelName) (\(channelId))")
-            print("     - Channel exists: \(channelExists)")
-            print("     - Last read ID: \(unread.last_id ?? "nil")")
-            print("     - Last message ID: \(channel?.last_message_id ?? "nil")")
-            
-            // Check if has unread
-            var hasUnread = false
-            if let lastUnreadId = unread.last_id, let lastMessageId = channel?.last_message_id {
-                hasUnread = lastUnreadId < lastMessageId
-                print("     - Has unread: \(hasUnread) (\(lastUnreadId) < \(lastMessageId))")
-            }
-            
-            if let mentions = unread.mentions {
-                print("     - Mentions: \(mentions.count) - \(mentions)")
-            }
-            print("     - Channel Muted: \(isChannelMuted)")
-            print("     - Server Muted: \(isServerMuted)")
-            
-            totalCount += 1
-            if !channelExists {
-                missingChannels += 1
-            } else if isChannelMuted || isServerMuted {
-                mutedCount += 1
-            } else {
-                validCount += 1
-                if hasUnread || (unread.mentions?.count ?? 0) > 0 {
-                    channelsWithUnread += 1
-                }
-            }
-        }
-        
-        print("\n📊 Summary:")
-        print("  - Total unread entries: \(totalCount)")
-        print("  - Missing channels: \(missingChannels)")
-        print("  - Muted channels: \(mutedCount)")
-        print("  - Valid (unmuted) channels: \(validCount)")
-        print("  - Channels with actual unread: \(channelsWithUnread)")
-        print("  - Current app badge: \(ViewState.application?.applicationIconBadgeNumber ?? -1)")
-        print("  - Total channels loaded: \(channels.count)")
-        print("  - Total channels stored: \(allEventChannels.count)")
-        print("🔍 === END DEBUG ===\n")
+        // Debug function - no logging
     }
     
     /// Clean up stale unread entries for channels that no longer exist
     func cleanupStaleUnreads() {
-        print("🧹 Cleaning up stale unreads...")
         var removedCount = 0
         var staleChannels: [String] = []
         
@@ -5323,10 +5265,7 @@ public class ViewState: ObservableObject {
         // Remove stale entries
         for channelId in staleChannels {
             unreads.removeValue(forKey: channelId)
-            print("  ❌ Removed stale unread for channel: \(channelId)")
         }
-        
-        print("🧹 Cleanup complete. Removed \(removedCount) stale entries.")
         
         // Update badge count after cleanup
         updateAppBadgeCount()
@@ -5342,14 +5281,10 @@ public class ViewState: ObservableObject {
         
         // Clear the app badge
         clearAppBadge()
-        
-        print("📖 Marked \(channelCount) channels as read and cleared badge")
     }
     
     /// Show detailed unread message counts for each channel
     func showUnreadCounts() {
-        print("\n📊 === UNREAD MESSAGE COUNTS ===")
-        
         var totalUnreadMessages = 0
         var totalMentions = 0
         var channelsWithUnread: [(name: String, id: String, unreadCount: Int, mentionCount: Int)] = []
@@ -5360,7 +5295,6 @@ public class ViewState: ObservableObject {
             
             // Skip if channel doesn't exist
             guard let channel = channel else {
-                print("❌ Channel \(channelId) not found - skipping")
                 continue
             }
             
@@ -5411,24 +5345,6 @@ public class ViewState: ObservableObject {
             return $0.name < $1.name
         }
         
-        // Print results
-        if channelsWithUnread.isEmpty {
-            print("✅ No channels with unread messages!")
-        } else {
-            print("\n📌 Channels with unread messages:")
-            for channel in channelsWithUnread {
-                let unreadText = channel.unreadCount == -1 ? "Has unread" : "\(channel.unreadCount) unread"
-                let mentionText = channel.mentionCount > 0 ? ", \(channel.mentionCount) mention(s)" : ""
-                print("  • \(channel.name): \(unreadText)\(mentionText)")
-            }
-        }
-        
-        print("\n📊 Summary:")
-        print("  - Total channels with unread: \(channelsWithUnread.count)")
-        print("  - Total unread channels (unmuted): \(totalUnreadMessages)")
-        print("  - Total mentions (unmuted): \(totalMentions)")
-        print("  - Current badge count: \(ViewState.application?.applicationIconBadgeNumber ?? 0)")
-        print("📊 === END UNREAD COUNTS ===\n")
     }
     
     /// Get unread counts as a formatted string for UI display
@@ -5968,7 +5884,6 @@ extension ViewState {
                     
                     // Update app badge count after loading unreads from server
                     updateAppBadgeCount()
-                    print("🔔 Updated badge count after loading \(remoteUnreads.count) unreads from server (mentions not counted)")
                 }
             }
         }

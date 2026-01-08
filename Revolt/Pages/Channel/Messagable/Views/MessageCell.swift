@@ -2794,9 +2794,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     private func updateReactions(for message: Message, viewState: ViewState) {
         // CRITICAL FIX: Always get the latest message from ViewState instead of using the passed message
         let latestMessage = viewState.messages[message.id] ?? message
-        print("🔥 updateReactions called for message: \(message.id)")
-        print("🔥 Original message reactions: \(message.reactions?.keys.joined(separator: ", ") ?? "none")")
-        print("🔥 Latest message reactions: \(latestMessage.reactions?.keys.joined(separator: ", ") ?? "none")")
         
         // CRITICAL FIX: Ensure complete cleanup to prevent duplicate reactions
         reactionsContainerView.subviews.forEach { subview in
@@ -2811,12 +2808,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         
         // Check if latest message has reactions
         guard let reactions = latestMessage.reactions, !reactions.isEmpty else {
-            print("🔥 No reactions found, hiding container")
             reactionsContainerView.isHidden = true
             return
         }
         
-        print("🔥 Found \(reactions.count) reactions, showing container")
         reactionsContainerView.isHidden = false
         
         // Position spacer below images/content
@@ -3794,7 +3789,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 if let shortcodeRange = Range(match.range(at: 1), in: text) {
                     let shortcode = String(text[shortcodeRange])
                     let fullMatchRange = match.range
-                    print("🔍 MessageCell: Processing shortcode: '\(shortcode)'")
                     
                     // Check if this is an emoji shortcode using EmojiParser
                     if let emoji = EmojiParser.findEmojiByShortcode(shortcode) {

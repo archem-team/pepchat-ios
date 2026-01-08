@@ -54,6 +54,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     private var loadingTask: Task<Void, Never>? = nil
     var messageLoadingState: LoadingState = .notLoading
     
+    // Cache loading properties
+    private var activeChannelId: String? = nil
+    private var cacheLoadTask: Task<Void, Never>? = nil
+    private var replyFetchTask: Task<Void, Never>? = nil
+    private var cachedMessageTotal: Int = 0
+    private let cachePageSize: Int = 25
+    
     // Variable to track the time of last successful request
     var lastSuccessfulLoadTime: Date = .distantPast
     
@@ -903,8 +910,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Start loading immediately without any delays
                 Task {
-                    print("🚀 IMMEDIATE_LOAD: Starting API call NOW for channel \(channelId)")
-                    await loadInitialMessagesImmediate()
+                    print("🚀 LOAD_INITIAL: Starting load for channel \(channelId)")
+                    await loadInitialMessages()
                     
                     // Hide skeleton and show messages
                     DispatchQueue.main.async {
@@ -2593,6 +2600,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // Create a new Task for loading messages
             let loadTask = Task<Void, Never>(priority: .userInitiated) {
+                if await self.loadOlderMessagesFromCacheIfAvailable(
+                    channelId: self.viewModel.channel.id,
+                    oldContentOffset: oldContentOffset,
+                    oldContentHeight: oldContentHeight
+                ) {
+                    return
+                }
+                
                 do {
                     // Display request information - ADD DETAILED LOGGING
                     print("⏳ BEFORE_CALL: Waiting for API response for messageId=\(messageId ?? "nil"), channelId=\(self.viewModel.channel.id)")
@@ -3337,9 +3352,100 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             }
         }
     }
+
+    private func loadOlderMessagesFromCacheIfAvailable(
+        channelId: String,
+        oldContentOffset: CGPoint,
+        oldContentHeight: CGFloat
+    ) async -> Bool {
+        guard let userId = viewModel.viewState.currentUser?.id,
+              let baseURL = viewModel.viewState.baseURL else {
+            return false
+        }
+        
+        let totalCount = await MessageCacheManager.shared.cachedMessageCount(
+            for: channelId,
+            userId: userId,
+            baseURL: baseURL
+        )
+        cachedMessageTotal = totalCount
+        
+        let currentCount = localMessages.count
+        guard totalCount > currentCount else {
+            return false
+        }
+        
+        let cachedMessages = await MessageCacheManager.shared.loadCachedMessages(
+            for: channelId,
+            userId: userId,
+            baseURL: baseURL,
+            limit: cachePageSize,
+            offset: currentCount
+        )
+        
+        guard !cachedMessages.isEmpty else {
+            return false
+        }
+        
+        let authorIds = Set(cachedMessages.map { $0.author })
+        let cachedUsers = await MessageCacheManager.shared.loadCachedUsers(
+            for: Array(authorIds),
+            currentUserId: userId,
+            baseURL: baseURL
+        )
+        
+        await MainActor.run {
+            for (userId, user) in cachedUsers {
+                self.viewModel.viewState.users[userId] = user
+            }
+            
+            for message in cachedMessages {
+                self.viewModel.viewState.messages[message.id] = message
+            }
+            
+            let existingSet = Set(self.localMessages)
+            let newIds = cachedMessages.map { $0.id }.filter { !existingSet.contains($0) }
+            let merged = newIds + self.localMessages
+            
+            self.viewModel.viewState.channelMessages[channelId] = merged
+            self.viewModel.messages = merged
+            self.localMessages = merged
+            
+            if let localDataSource = self.dataSource as? LocalMessagesDataSource {
+                localDataSource.updateMessages(merged)
+            } else {
+                self.dataSource = LocalMessagesDataSource(
+                    viewModel: self.viewModel,
+                    viewController: self,
+                    localMessages: merged
+                )
+                self.tableView.dataSource = self.dataSource
+            }
+            
+            self.tableView.reloadData()
+            
+            let newContentHeight = self.tableView.contentSize.height
+            let delta = newContentHeight - oldContentHeight
+            self.tableView.contentOffset = CGPoint(
+                x: oldContentOffset.x,
+                y: oldContentOffset.y + delta
+            )
+            
+            self.loadingHeaderView.isHidden = true
+            self.messageLoadingState = .notLoading
+            self.isLoadingOlderMessages = false
+            self.lastSuccessfulLoadTime = Date()
+        }
+        
+        return true
+    }
     
     private func loadInitialMessages() async {
         let channelId = viewModel.channel.id
+        let currentChannelId = channelId
+        
+        // Set active channel ID for cache loading
+        activeChannelId = currentChannelId
         
         // CRITICAL FIX: Reset empty response time when loading initial messages
         lastEmptyResponseTime = nil
@@ -3349,6 +3455,105 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         if isInTargetMessagePosition && targetMessageId == nil {
             print("🎯 LOAD_INITIAL: User is in target message position, skipping reload to preserve position")
             return
+        }
+        
+        // MARK: - Cache Check First
+        if let userId = viewModel.viewState.currentUser?.id,
+           let baseURL = viewModel.viewState.baseURL {
+            // Check cache first
+            let hasCache = await MessageCacheManager.shared.hasCachedMessages(
+                for: channelId,
+                userId: userId,
+                baseURL: baseURL
+            )
+            
+            if hasCache {
+                print("✅ CACHE: Found cached messages for channel \(channelId), loading instantly")
+                
+                // Load cached messages
+                cacheLoadTask = Task { [weak self] in
+                    guard let self = self else { return }
+                    
+                    // Double-check channel is still active
+                    guard self.activeChannelId == currentChannelId else {
+                        print("⚠️ CACHE_LOAD: Channel changed, discarding cache results")
+                        return
+                    }
+                    
+                    let cachedMessages = await MessageCacheManager.shared.loadCachedMessages(
+                        for: channelId,
+                        userId: userId,
+                        baseURL: baseURL,
+                        limit: cachePageSize,
+                        offset: 0
+                    )
+                    
+                    // Load cached users
+                    let authorIds = Set(cachedMessages.map { $0.author })
+                    let cachedUsers = await MessageCacheManager.shared.loadCachedUsers(
+                        for: Array(authorIds),
+                        currentUserId: userId,
+                        baseURL: baseURL
+                    )
+                    
+                    cachedMessageTotal = await MessageCacheManager.shared.cachedMessageCount(
+                        for: channelId,
+                        userId: userId,
+                        baseURL: baseURL
+                    )
+                    
+                    await MainActor.run {
+                        // Double-check before UI update
+                        guard self.activeChannelId == currentChannelId,
+                              self.isViewLoaded else {
+                            print("⚠️ CACHE_LOAD: Channel changed or view not loaded, discarding cache results")
+                            return
+                        }
+
+                        if !self.viewModel.messages.isEmpty {
+                            print("⚠️ CACHE_LOAD: Messages already loaded from API, skipping cache apply")
+                            return
+                        }
+                        
+                        // Add cached users to ViewState
+                        for (userId, user) in cachedUsers {
+                            self.viewModel.viewState.users[userId] = user
+                        }
+                        
+                        // Add cached messages to ViewState
+                        for message in cachedMessages {
+                            self.viewModel.viewState.messages[message.id] = message
+                        }
+                        
+                        // Update channel messages
+                        let messageIds = cachedMessages.map { $0.id }
+                        self.viewModel.viewState.channelMessages[channelId] = messageIds
+                        self.viewModel.messages = messageIds
+                        self.localMessages = messageIds
+                        
+                        // Update data source
+                        self.dataSource = LocalMessagesDataSource(
+                            viewModel: self.viewModel,
+                            viewController: self,
+                            localMessages: self.localMessages
+                        )
+                        self.tableView.dataSource = self.dataSource
+                        self.tableView.reloadData()
+                        self.hideSkeletonView()
+                        self.tableView.alpha = 1.0
+                        
+                        // CRITICAL: Clear any loading indicators since we have cached messages
+                        self.tableView.tableFooterView = nil
+                        self.messageLoadingState = .notLoading
+                        
+                        print("✅ CACHE: Displayed \(cachedMessages.count) cached messages instantly")
+                    }
+                }
+            } else {
+                print("🚀 VIEW_DID_APPEAR: No cached messages found, will load from API")
+            }
+        } else {
+            print("⚠️ CACHE: No user context, skipping cache check - will load from API")
         }
         
         // Check if already loading to prevent duplicate calls
@@ -3395,16 +3600,25 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         if hasExistingMessages {
             // print("📊 Found existing messages for channel: \(channelId), keeping them visible while loading new ones")
             
-            // Keep existing messages visible, just show loading indicator
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                
-                // Display a loading indicator without clearing messages
-                let spinner = UIActivityIndicatorView(style: .medium)
-                spinner.startAnimating()
-                spinner.frame = CGRect(x: 0, y: 0, width: self.tableView.bounds.width, height: 44)
-                self.tableView.tableFooterView = spinner
+            // CRITICAL: Don't show loading spinner if we already have messages displayed (from cache)
+            // The API call will update messages in the background without showing a spinner
+            // Only show spinner if we have very few messages (might be incomplete cache)
+            let messageCount = viewModel.viewState.channelMessages[channelId]?.count ?? 0
+            if messageCount < 10 {
+                // Very few messages, might be incomplete - show subtle loading indicator
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    
+                    // Only show if there's no existing footer view
+                    if self.tableView.tableFooterView == nil {
+                        let spinner = UIActivityIndicatorView(style: .medium)
+                        spinner.startAnimating()
+                        spinner.frame = CGRect(x: 0, y: 0, width: self.tableView.bounds.width, height: 44)
+                        self.tableView.tableFooterView = spinner
+                    }
+                }
             }
+            // If we have 10+ messages, assume cache is complete and don't show spinner
         } else {
             // print("🧹 No existing messages for channel: \(channelId), starting fresh")
             
@@ -3787,16 +4001,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     viewModel.viewState.messages[message.id] = message
                 }
                         
-                        // Fetch reply message content for messages that have replies
-                        print("🔗 CALLING fetchReplyMessagesContentAndRefreshUI with \(fetchResult.messages.count) messages")
+                        // Fetch reply message content in the background to avoid blocking initial render.
                         await fetchReplyMessagesContentAndRefreshUI(for: fetchResult.messages)
-                        
-                        // CRITICAL FIX: Also check for any preloaded messages that might have replies
-                        let allCurrentMessages = localMessages.compactMap { messageId in
-                            viewModel.viewState.messages[messageId]
-                        }
-                        print("🔗 PRELOAD_CHECK: Checking \(allCurrentMessages.count) total messages for missing replies after regular load")
-                        await fetchReplyMessagesContentAndRefreshUI(for: allCurrentMessages)
                 
                 // Sort messages by creation timestamp to ensure chronological order
                 let sortedMessages = fetchResult.messages.sorted { msg1, msg2 in
@@ -3833,6 +4039,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Hide skeleton and show messages
                 self.hideSkeletonView()
+                
+                // CRITICAL: Clear any loading spinner at the bottom
+                self.tableView.tableFooterView = nil
                 
                     // print("📊 localMessages now has \(self.localMessages.count) messages")
                     
@@ -3915,6 +4124,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         
                         // Hide skeleton and show empty state
                         self.hideSkeletonView()
+                        
+                        // CRITICAL: Clear any loading spinner at the bottom
+                        self.tableView.tableFooterView = nil
                         
                         // Show empty state
                         self.updateEmptyStateVisibility()
@@ -4130,39 +4342,25 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     /// Fetch reply message content for messages that have replies and immediately refresh UI
     private func fetchReplyMessagesContentAndRefreshUI(for messages: [Types.Message]) async {
-        print("🔗 FETCH_AND_REFRESH: Starting fetch and refresh for \(messages.count) messages")
+        scheduleReplyPrefetch(for: messages)
+    }
+
+    private func scheduleReplyPrefetch(for messages: [Types.Message]) {
+        replyFetchTask?.cancel()
+        let currentChannelId = viewModel.channel.id
         
-        // Track which reply IDs we're about to fetch
-        var replyIdsBeingFetched: Set<String> = []
-        for message in messages {
-            guard let replies = message.replies, !replies.isEmpty else { continue }
-            for replyId in replies {
-                let isInCache = viewModel.viewState.messages[replyId] != nil
-                let isBeingFetched = ongoingReplyFetches.contains(replyId)
-                if !isInCache && !isBeingFetched {
-                    replyIdsBeingFetched.insert(replyId)
-                }
-            }
-        }
-        
-        print("🔗 FETCH_AND_REFRESH: Will fetch \(replyIdsBeingFetched.count) reply messages")
-        
-        await fetchReplyMessagesContent(for: messages)
-        
-        // CRITICAL: Always refresh UI after fetching replies for initial load
-        await MainActor.run {
-            print("🔗 FETCH_AND_REFRESH: Refreshing UI after initial reply loading")
+        replyFetchTask = Task { [weak self] in
+            guard let self = self else { return }
             
-            // Force a complete refresh if we fetched any replies
-            if !replyIdsBeingFetched.isEmpty {
-                // Use reloadData instead of refreshMessages for more complete refresh
-                if let tableView = self.tableView {
-                    print("🔗 FETCH_AND_REFRESH: Forcing complete table reload after fetching \(replyIdsBeingFetched.count) replies")
-                    tableView.reloadData()
-                } else {
-                    self.refreshMessages()
-                }
-            } else {
+            let messagesWithReplies = messages.filter { ($0.replies?.isEmpty == false) }
+            guard !messagesWithReplies.isEmpty else { return }
+            
+            await self.fetchReplyMessagesContent(for: messagesWithReplies)
+            
+            await MainActor.run {
+                guard self.activeChannelId == currentChannelId,
+                      self.isViewLoaded,
+                      !Task.isCancelled else { return }
                 self.refreshMessages()
             }
         }
@@ -4173,49 +4371,46 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     /// Fetch reply message content for messages that have replies
     private func fetchReplyMessagesContent(for messages: [Types.Message]) async {
+        if Task.isCancelled { return }
         print("🔗 FETCH_REPLIES: Processing \(messages.count) messages for reply content")
         
-        // DEBUG: Check what messages we have and their replies
         var messagesWithReplies = 0
         var totalReplyIds = 0
         
         for message in messages {
+            if Task.isCancelled { return }
             if let replies = message.replies, !replies.isEmpty {
                 messagesWithReplies += 1
                 totalReplyIds += replies.count
-                print("🔗 DEBUG: Message \(message.id) has \(replies.count) replies: \(replies)")
             }
         }
         
-        print("🔗 DEBUG: Found \(messagesWithReplies) messages with replies, total \(totalReplyIds) reply IDs")
+        print("🔗 FETCH_REPLIES: Found \(messagesWithReplies) messages with replies, total \(totalReplyIds) reply IDs")
         
         // Collect all unique reply message IDs that need to be fetched
         var replyIdsToFetch = Set<String>()
         var replyChannelMap = [String: String]() // messageId -> channelId
         
         for message in messages {
+            if Task.isCancelled { return }
             guard let replies = message.replies, !replies.isEmpty else { continue }
             
             for replyId in replies {
+                if Task.isCancelled { return }
                 // Check if already in cache or being fetched
                 let isInCache = viewModel.viewState.messages[replyId] != nil
                 let isBeingFetched = ongoingReplyFetches.contains(replyId)
-                print("🔗 DEBUG: Reply \(replyId) - In cache: \(isInCache), Being fetched: \(isBeingFetched)")
                 
                 // Only fetch if not already in cache and not being fetched
                 if !isInCache && !isBeingFetched {
                     replyIdsToFetch.insert(replyId)
                     replyChannelMap[replyId] = message.channel
                     ongoingReplyFetches.insert(replyId) // Mark as being fetched
-                    print("🔗 DEBUG: Added \(replyId) to fetch list for channel \(message.channel)")
                 }
             }
         }
         
-        print("🔗 DEBUG: Total unique reply IDs to fetch: \(replyIdsToFetch.count)")
-        if !replyIdsToFetch.isEmpty {
-            print("🔗 DEBUG: Reply IDs to fetch: \(Array(replyIdsToFetch))")
-        }
+        print("🔗 FETCH_REPLIES: Total unique reply IDs to fetch: \(replyIdsToFetch.count)")
         
         guard !replyIdsToFetch.isEmpty else {
             print("✅ FETCH_REPLIES: All reply messages already cached or no replies found")
@@ -4223,10 +4418,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
         
         print("🔗 FETCH_REPLIES: Need to fetch \(replyIdsToFetch.count) reply messages")
-        print("🌐 FETCH_REPLIES: About to start API calls for replies!")
         
         // Fetch reply messages concurrently for better performance
-        print("🌐 FETCH_REPLIES: Starting concurrent fetch of \(replyIdsToFetch.count) reply messages")
         await withTaskGroup(of: Void.self) { group in
             for replyId in replyIdsToFetch {
                 group.addTask { [weak self] in
@@ -4236,23 +4429,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         return 
                     }
                     
-                    print("🔍 FETCH_REPLIES: Starting fetch for reply \(replyId) in channel \(channelId)")
                     if let replyMessage = await self.fetchMessageForReply(messageId: replyId, channelId: channelId) {
-                        print("✅ FETCH_REPLIES: Successfully fetched reply \(replyId)")
-                        
                         // Also fetch the author if needed
                         await MainActor.run {
                             if self.viewModel.viewState.users[replyMessage.author] == nil {
-                                print("👥 FETCH_REPLIES: Fetching author \(replyMessage.author) for reply \(replyId)")
                                 Task {
                                     await self.fetchUserForMessage(userId: replyMessage.author)
                                 }
-                            } else {
-                                print("👥 FETCH_REPLIES: Author \(replyMessage.author) already cached for reply \(replyId)")
                             }
                         }
-                    } else {
-                        print("❌ FETCH_REPLIES: Failed to fetch reply \(replyId)")
                     }
                 }
             }
@@ -4269,8 +4454,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // FORCE refresh UI to show newly loaded reply content
             if !replyIdsToFetch.isEmpty {
-                print("🔗 FORCE_REFRESH: Forcing UI refresh after loading \(replyIdsToFetch.count) reply messages")
-                
                 // Force table view to reload data for messages with replies
                 if let tableView = self.tableView {
                     // Find visible cells that might have replies
@@ -4294,7 +4477,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     }
                     
                     if !indexPathsToReload.isEmpty {
-                        print("🔗 FORCE_REFRESH: Reloading \(indexPathsToReload.count) cells with newly fetched replies")
                         tableView.reloadRows(at: indexPathsToReload, with: .none)
                     }
                 }
@@ -7850,6 +8032,7 @@ class MessageSkeletonView: UIView {
         // Content container
         let contentStack = UIStackView()
         contentStack.axis = .vertical
+        contentStack.alignment = .leading
         contentStack.spacing = 6
         contentStack.translatesAutoresizingMaskIntoConstraints = false
         rowContainer.addSubview(contentStack)
@@ -7884,10 +8067,11 @@ class MessageSkeletonView: UIView {
             
             // Username placeholder constraints
             usernameView.heightAnchor.constraint(equalToConstant: 16),
-            usernameView.widthAnchor.constraint(equalToConstant: 120),
+            usernameView.widthAnchor.constraint(equalTo: contentStack.widthAnchor, multiplier: 0.5),
             
             // Message content placeholder constraints
             messageView.heightAnchor.constraint(equalToConstant: 20),
+            messageView.widthAnchor.constraint(equalTo: contentStack.widthAnchor, multiplier: 0.85),
         ])
         
         return rowContainer
@@ -7899,6 +8083,13 @@ extension MessageableChannelViewController {
     
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        
+        // Clear active channel ID and cancel cache load task
+        activeChannelId = nil
+        cacheLoadTask?.cancel()
+        cacheLoadTask = nil
+        replyFetchTask?.cancel()
+        replyFetchTask = nil
         
         print("⚡ VIEW_DID_DISAPPEAR: User has completely left channel \(viewModel.channel.id) - performing FINAL instant cleanup")
         let finalCleanupStartTime = CFAbsoluteTimeGetCurrent()

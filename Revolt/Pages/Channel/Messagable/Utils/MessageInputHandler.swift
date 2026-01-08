@@ -368,7 +368,22 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                 await MainActor.run {
                     if var updatedMessage = viewModel.viewState.messages[message.id] {
                         updatedMessage.content = newText
+                        let editedAt = Date()
+                        updatedMessage.edited = ISO8601DateFormatter().string(from: editedAt)
                         viewModel.viewState.messages[message.id] = updatedMessage
+                        
+                        // Update cache (background, non-blocking)
+                        if let userId = viewModel.viewState.currentUser?.id,
+                           let baseURL = viewModel.viewState.baseURL {
+                            MessageCacheManager.shared.updateCachedMessage(
+                                id: message.id,
+                                content: newText,
+                                editedAt: editedAt,
+                                channelId: viewModel.channel.id,
+                                userId: userId,
+                                baseURL: baseURL
+                            )
+                        }
                         
                         // Reload the table view to show the updated message
                         viewController.tableView.reloadData()
