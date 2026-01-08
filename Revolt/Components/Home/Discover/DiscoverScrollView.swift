@@ -493,8 +493,6 @@ class ServerChatDataFetcher {
                     }
                     let cache = ServerChatCache(timestamp: Date(), items: serverChats)
                     self.saveCache(cache)
-//                    completion(.success(serverChats))
-                    print("📋 [ServerChatDataFetcher] Parsed \(serverChats.count) valid servers from CSV")
                     completion(.success(serverChats))
                 } catch {
                     print("❌ [ServerChatDataFetcher] Failed to parse CSV: \(error.localizedDescription)")

@@ -336,7 +336,7 @@ public class ViewState: ObservableObject {
                     }
                 }
             }
-            saveUsersToSharedContainer()
+//            saveUsersToSharedContainer()
         }
     }
     
@@ -1191,7 +1191,15 @@ public class ViewState: ObservableObject {
         
         self.users = ViewState.decodeUserDefaults(forKey: "users", withDecoder: decoder, defaultingTo: [:])
         // Force refresh servers and channels from backend instead of using cached data
-        self.servers = [:] // ViewState.decodeUserDefaults(forKey: "servers", withDecoder: decoder, defaultingTo: [:])
+        /*self.servers = [:]*/ // ViewState.decodeUserDefaults(forKey: "servers", withDecoder: decoder, defaultingTo: [:])
+        let cachedServers = ViewState.loadServersCacheSync()
+        
+        if !cachedServers.isEmpty {
+            self.servers = cachedServers
+        } else {
+            self.servers = [:]
+        }
+        
         self.channels = [:] // ViewState.decodeUserDefaults(forKey: "channels", withDecoder: decoder, defaultingTo: [:])
         /*self.messages = ViewState.decodeUserDefaults(forKey: "messages", withDecoder: decoder, defaultingTo: [:])
          self.channelMessages = ViewState.decodeUserDefaults(forKey: "channelMessages", withDecoder: decoder, defaultingTo: [:])*/
@@ -5625,27 +5633,74 @@ public class ViewState: ObservableObject {
 }
 
 // This is used for notifications @mention issue fetches the corresponding @mention user from users.json. Testing is pending.
-extension ViewState {
-    func saveUsersToSharedContainer() {
-        guard let sharedURL = FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared.data")?
-            .appendingPathComponent("users.json") else {
-            print("❌ Failed to get App Group container URL")
-            return
-        }
+//extension ViewState {
+//    func saveUsersToSharedContainer() {
+//        guard let sharedURL = FileManager.default
+//            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared")?
+//            .appendingPathComponent("users.json") else {
+//            print("❌ Failed to get App Group container URL")
+//            return
+//        }
+//
+//        do {
+//            let data = try JSONEncoder().encode(self.users)
+//            try data.write(to: sharedURL, options: .atomic)
+//            print("✅ Shared users.json updated")
+//        } catch {
+//            print("❌ Failed to write users.json:", error)
+//        }
+//    }
+//}
 
+
+extension ViewState {
+    
+    // Defining the path of the cache and type of the cache
+    static func serversCacheURL() -> URL? {
+        let fileManager = FileManager.default
+        guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let dir = appSupport.appendingPathComponent(Bundle.main.bundleIdentifier ?? "ZekoChat")
         do {
-            let data = try JSONEncoder().encode(self.users)
-            try data.write(to: sharedURL, options: .atomic)
-            print("✅ Shared users.json updated")
+            try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
         } catch {
-            print("❌ Failed to write users.json:", error)
+            print("❌ Failed to create Application Support directory:", error)
+            return nil
+        }
+        return dir.appendingPathComponent("servers_cache.json")
+    }
+    
+    // Load the cache when app boots up
+    static func loadServersCacheSync() -> OrderedDictionary <String, Server> {
+        guard let url = serversCacheURL(), FileManager.default.fileExists(atPath: url.path) else {
+            return [:]
+        }
+        do {
+            let data  = try Data(contentsOf: url)
+            let decoder = JSONDecoder()
+            return try decoder.decode(OrderedDictionary<String, Server>.self, from: data)
+        } catch {
+            print("❌ Failed to load servers cache:", error)
+            return [:]
         }
     }
-}
-
-
-extension ViewState {
+    
+    func saveServersCacheAsync() {
+        let serversSnapshot = self.servers
+        Task.detached(priority: .background) {
+            do {
+                let encoder = JSONEncoder()
+                let data = try encoder.encode(serversSnapshot)
+                if let url = await ViewState.serversCacheURL() {
+                    try data.write(to: url, options: .atomic)
+                    print("✅ Saved servers cache to \(url.path)")
+                }
+            } catch {
+                print("❌ Failed to write servers cache:", error)
+            }
+        }
+    }
+    
+    
     func applyServerOrdering() {
         let ordering = self.userSettingsStore.cache.orderSettings.servers
         let allServers = Array(self.servers.values)
@@ -5976,6 +6031,7 @@ extension ViewState {
         }
         
         // print("🚀 VIEWSTATE: Final servers count after merge: \(self.servers.count)")
+        self.saveServersCacheAsync()
     }
 }
 
