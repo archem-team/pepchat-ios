@@ -212,6 +212,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             // MEMORY MANAGEMENT: Aggressive trimming on background
             state.performBackgroundMemoryCleanup()
             
+            // Force save servers cache immediately on background
+            state.saveServersCacheAsync(immediate: true)
+            
             // Force save all important data to UserDefaults immediately
             // DISABLED: Don't cache servers and channels to force refresh from backend on app launch
             // print("💾 BACKGROUND: Saving servers (\(state.servers.count)) to UserDefaults")

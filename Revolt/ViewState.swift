@@ -984,6 +984,11 @@ public class ViewState: ObservableObject {
                 // print("🧠 MEMORY: Trimmed channel \(channelId) messages from \(messageIds.count) to \(trimmedIds.count)")
             }
         }
+        
+        // Evict old channels from allEventChannels if memory pressure is high
+        if allEventChannels.count > maxEventChannels {
+            evictOldEventChannels()
+        }
     }
     
     // DISABLED: Smart message cleanup based on current channel and loading direction
@@ -1085,6 +1090,11 @@ public class ViewState: ObservableObject {
             }
             
             // print("🧠 MEMORY: Removed \(channelsToRemove.count) non-essential channels (kept all DMs)")
+        }
+        
+        // Evict old channels from allEventChannels if needed
+        if allEventChannels.count > maxEventChannels {
+            evictOldEventChannels()
         }
         
         // Clean up empty channel message arrays for server channels only
@@ -2848,6 +2858,9 @@ public class ViewState: ObservableObject {
         // Clear message cache on sign-out
         MessageCacheManager.shared.clearAllCaches()
         
+        // Invalidate servers cache on sign-out
+        invalidateServersCache()
+        
         state = .signedOut
         return .success(())
     }
@@ -3470,6 +3483,7 @@ public class ViewState: ObservableObject {
                 self.channels[channel.id] = channel
                 self.channelMessages[channel.id] = []
             }
+            self.saveServersCacheAsync(immediate: true)
             
         case .server_delete(let e):
             if case .server(let string) = currentSelection {
@@ -3481,6 +3495,7 @@ public class ViewState: ObservableObject {
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
                 self.servers.removeValue(forKey: e.id)
+                self.saveServersCacheAsync(immediate: true)
             }
             
             
@@ -3536,6 +3551,7 @@ public class ViewState: ObservableObject {
                 }
                 
                 self.servers[e.id] = t
+                self.saveServersCacheAsync()
             }
             
         case .channel_create(let channel):
@@ -3574,6 +3590,7 @@ public class ViewState: ObservableObject {
                 // Update server's channel list
                 if let serverId = channel.server {
                     self.servers[serverId]?.channels.append(channel.id)
+                    self.saveServersCacheAsync()
                 }
                 
             case .voice_channel(let voiceChannel):
@@ -3591,6 +3608,7 @@ public class ViewState: ObservableObject {
                 // Update server's channel list
                 if let serverId = channel.server {
                     self.servers[serverId]?.channels.append(channel.id)
+                    self.saveServersCacheAsync()
                 }
                 
             default:
@@ -3926,6 +3944,7 @@ public class ViewState: ObservableObject {
                 serverRoles[e.role_id] = role
                 server.roles = serverRoles
                 self.servers[e.id] = server
+                self.saveServersCacheAsync()
             
             
         case .server_role_delete(let e):
@@ -3944,6 +3963,7 @@ public class ViewState: ObservableObject {
                 // Update the server's roles
                 server.roles = serverRoles
                 self.servers[e.id] = server
+                self.saveServersCacheAsync()
             
         case .user_relationship(let event):
             updateUserRelationship(with: event)
@@ -4078,6 +4098,60 @@ public class ViewState: ObservableObject {
     // LAZY LOADING: Server channel management
     var allEventChannels: [String: Channel] = [:] // Store all channels for lazy loading
     var loadedServerChannels: Set<String> = [] // Track which servers have loaded channels
+    
+    // Server cache management
+    private let cacheActor = ServersCacheActor()
+    private var channelAccessOrder: [String] = [] // Track access order for LRU eviction
+    private let maxEventChannels = 5000
+    
+    // MARK: - LRU Eviction for allEventChannels
+    
+    /// Get event channel with LRU access tracking
+    func getEventChannel(id: String) -> Channel? {
+        // Update access order
+        channelAccessOrder.removeAll { $0 == id }
+        channelAccessOrder.append(id)
+        return allEventChannels[id]
+    }
+    
+    /// Evict old channels from allEventChannels using LRU policy
+    private func evictOldEventChannels() {
+        guard allEventChannels.count > maxEventChannels else { return }
+        
+        // Get channels that are not in any server's channel list (orphaned)
+        var serverChannelIds = Set<String>()
+        for server in servers.values {
+            serverChannelIds.formUnion(server.channels)
+        }
+        
+        // Also keep channels that are currently loaded
+        let loadedChannelIds = Set(channels.keys)
+        let essentialChannelIds = serverChannelIds.union(loadedChannelIds)
+        
+        // Evict channels that are:
+        // 1. Not in any server's channel list (orphaned)
+        // 2. Not currently loaded
+        // 3. Least recently accessed (from access order)
+        let toEvict = channelAccessOrder.prefix(allEventChannels.count - maxEventChannels)
+        var evictedCount = 0
+        
+        for id in toEvict {
+            // Don't evict if it's essential (in a server or currently loaded)
+            if essentialChannelIds.contains(id) {
+                continue
+            }
+            
+            allEventChannels.removeValue(forKey: id)
+            evictedCount += 1
+        }
+        
+        // Remove evicted IDs from access order
+        channelAccessOrder.removeFirst(evictedCount)
+        
+        if evictedCount > 0 {
+            print("🧹 MEMORY: Evicted \(evictedCount) old channels from allEventChannels (LRU)")
+        }
+    }
     
     // Load users for the first batch of DMs (called during processDMs)
     private func loadUsersForFirstDmBatch() {
@@ -5017,6 +5091,19 @@ public class ViewState: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
             self.channels.removeValue(forKey: id)
             self.dms = self.dms.filter{$0.id != id}
+            self.allEventChannels.removeValue(forKey: id)
+            
+            // Remove from server's channel list
+            for (serverId, server) in self.servers {
+                if server.channels.contains(id) {
+                    var updatedServer = server
+                    updatedServer.channels.removeAll { $0 == id }
+                    self.servers[serverId] = updatedServer
+                }
+            }
+            
+            // Save cache after deletion
+            self.saveServersCacheAsync(immediate: true)
         }
     }
     
@@ -5076,6 +5163,7 @@ public class ViewState: ObservableObject {
         }
         
         servers[response.server.id] = response.server
+        saveServersCacheAsync(immediate: true)
         
         // Update app badge count after joining a server
         // This ensures unread messages in the new channels are counted
@@ -6407,6 +6495,86 @@ public class ViewState: ObservableObject {
 //}
 
 
+// MARK: - Server Cache Structures
+
+struct ServersCache: Codable {
+    let version: Int
+    let cachedAt: Date
+    let servers: OrderedDictionary<String, Server>
+    
+    static let currentVersion = 1
+    
+    static func migrate(from data: Data) -> ServersCache? {
+        // Try current version first
+        if let cache = try? JSONDecoder().decode(ServersCache.self, from: data) {
+            return cache
+        }
+        
+        // Try legacy format (version 0 - direct OrderedDictionary)
+        if let legacyServers = try? JSONDecoder().decode(OrderedDictionary<String, Server>.self, from: data) {
+            return ServersCache(
+                version: currentVersion,
+                cachedAt: Date(),
+                servers: legacyServers
+            )
+        }
+        
+        return nil
+    }
+}
+
+private actor ServersCacheActor {
+    private var pendingSaveTask: Task<Void, Never>?
+    private let debounceDelay: UInt64 = 2_000_000_000 // 2 seconds
+    
+    func save(cache: ServersCache, url: URL, immediate: Bool = false) {
+        // Cancel previous task
+        pendingSaveTask?.cancel()
+        
+        let delay = immediate ? UInt64(0) : debounceDelay
+        pendingSaveTask = Task {
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: delay)
+            }
+            
+            guard !Task.isCancelled else { return }
+            
+            // Retry logic (max 2 retries)
+            var retryCount = 0
+            let maxRetries = 2
+            
+            while retryCount <= maxRetries {
+                do {
+                    let encoder = JSONEncoder()
+                    let data = try encoder.encode(cache)
+                    
+                    // Validate size (50MB limit)
+                    let maxSize = 50 * 1024 * 1024
+                    if data.count > maxSize {
+                        print("⚠️ Cache size (\(data.count) bytes) exceeds limit, skipping save")
+                        return
+                    }
+                    
+                    // Atomic write with temp file
+                    let tempURL = url.appendingPathExtension(".tmp")
+                    try data.write(to: tempURL, options: .atomic)
+                    try FileManager.default.moveItem(at: tempURL, to: url)
+                    print("✅ Saved servers cache to \(url.path)")
+                    return
+                } catch {
+                    retryCount += 1
+                    if retryCount > maxRetries {
+                        print("❌ Failed to write servers cache after \(maxRetries) retries:", error)
+                        return
+                    }
+                    // Wait a bit before retry
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                }
+            }
+        }
+    }
+}
+
 extension ViewState {
     
     // Defining the path of the cache and type of the cache
@@ -6428,30 +6596,158 @@ extension ViewState {
         guard let url = serversCacheURL(), FileManager.default.fileExists(atPath: url.path) else {
             return [:]
         }
+        
         do {
-            let data  = try Data(contentsOf: url)
-            let decoder = JSONDecoder()
-            return try decoder.decode(OrderedDictionary<String, Server>.self, from: data)
+            let data = try Data(contentsOf: url)
+            
+            // Try to migrate/load cache
+            guard let cache = ServersCache.migrate(from: data) else {
+                // Try to restore from backup
+                if let restored = restoreFromBackup(at: url) {
+                    print("✅ Restored servers cache from backup")
+                    return restored
+                }
+                
+                // Backup corrupted cache
+                backupCorruptedCache(at: url)
+                print("❌ Failed to load servers cache: invalid format, backed up corrupted file")
+                return [:]
+            }
+            
+            // Validate cache age (invalidate if >7 days old)
+            let cacheAge = Date().timeIntervalSince(cache.cachedAt)
+            let maxAge: TimeInterval = 7 * 24 * 60 * 60 // 7 days
+            if cacheAge > maxAge {
+                print("⚠️ Cache is older than 7 days (\(Int(cacheAge / 86400)) days), invalidating")
+                ViewState.invalidateServersCache()
+                return [:]
+            }
+            
+            // Validate servers
+            let validatedServers = validateServers(cache.servers)
+            if validatedServers.count != cache.servers.count {
+                print("⚠️ Cache validation removed \(cache.servers.count - validatedServers.count) invalid servers")
+            }
+            
+            return validatedServers
         } catch {
             print("❌ Failed to load servers cache:", error)
+            
+            // Try to restore from backup
+            if let restored = restoreFromBackup(at: url) {
+                print("✅ Restored servers cache from backup after error")
+                return restored
+            }
+            
+            // Backup corrupted cache
+            backupCorruptedCache(at: url)
             return [:]
         }
     }
     
-    func saveServersCacheAsync() {
+    func saveServersCacheAsync(immediate: Bool = false) {
         let serversSnapshot = self.servers
+        guard let url = ViewState.serversCacheURL() else { return }
+        
+        let cache = ServersCache(
+            version: ServersCache.currentVersion,
+            cachedAt: Date(),
+            servers: serversSnapshot
+        )
+        
+        let actor = self.cacheActor
         Task.detached(priority: .background) {
-            do {
-                let encoder = JSONEncoder()
-                let data = try encoder.encode(serversSnapshot)
-                if let url = await ViewState.serversCacheURL() {
-                    try data.write(to: url, options: .atomic)
-                    print("✅ Saved servers cache to \(url.path)")
-                }
-            } catch {
-                print("❌ Failed to write servers cache:", error)
-            }
+            await actor.save(cache: cache, url: url, immediate: immediate)
         }
+    }
+    
+    // MARK: - Cache Validation & Recovery
+    
+    private static func validateServers(_ servers: OrderedDictionary<String, Server>) -> OrderedDictionary<String, Server> {
+        var validated = OrderedDictionary<String, Server>()
+        var seenIds = Set<String>()
+        
+        for (id, server) in servers {
+            // Validate required fields
+            guard !id.isEmpty,
+                  !server.name.isEmpty,
+                  !server.owner.isEmpty else {
+                print("⚠️ Skipping invalid server: missing required fields (id: \(id))")
+                continue
+            }
+            
+            // Check for duplicates
+            if seenIds.contains(id) {
+                print("⚠️ Skipping duplicate server ID: \(id)")
+                continue
+            }
+            
+            seenIds.insert(id)
+            validated[id] = server
+        }
+        
+        return validated
+    }
+    
+    private static func backupCorruptedCache(at url: URL) {
+        let backupURL = url.appendingPathExtension(".backup")
+        do {
+            if FileManager.default.fileExists(atPath: url.path) {
+                if FileManager.default.fileExists(atPath: backupURL.path) {
+                    try FileManager.default.removeItem(at: backupURL)
+                }
+                try FileManager.default.moveItem(at: url, to: backupURL)
+                print("✅ Backed up corrupted cache to \(backupURL.path)")
+            }
+        } catch {
+            print("❌ Failed to backup corrupted cache:", error)
+        }
+    }
+    
+    private static func restoreFromBackup(at url: URL) -> OrderedDictionary<String, Server>? {
+        let backupURL = url.appendingPathExtension(".backup")
+        guard FileManager.default.fileExists(atPath: backupURL.path) else {
+            return nil
+        }
+        
+        do {
+            let data = try Data(contentsOf: backupURL)
+            guard let cache = ServersCache.migrate(from: data) else {
+                return nil
+            }
+            
+            // Restore backup to main file
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
+            try FileManager.default.moveItem(at: backupURL, to: url)
+            
+            return validateServers(cache.servers)
+        } catch {
+            print("❌ Failed to restore from backup:", error)
+            return nil
+        }
+    }
+    
+    static func invalidateServersCache() {
+        guard let url = serversCacheURL() else { return }
+        
+        // Remove main cache file
+        if FileManager.default.fileExists(atPath: url.path) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        
+        // Remove backup file
+        let backupURL = url.appendingPathExtension(".backup")
+        if FileManager.default.fileExists(atPath: backupURL.path) {
+            try? FileManager.default.removeItem(at: backupURL)
+        }
+        
+        print("✅ Invalidated servers cache")
+    }
+    
+    func invalidateServersCache() {
+        ViewState.invalidateServersCache()
     }
     
     
@@ -6471,6 +6767,7 @@ extension ViewState {
             newServers[server.id] = server
         }
         self.servers = newServers
+        self.saveServersCacheAsync()
     }
 }
 
