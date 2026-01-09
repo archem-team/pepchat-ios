@@ -6556,8 +6556,23 @@ private actor ServersCacheActor {
                     }
                     
                     // Atomic write with temp file
-                    let tempURL = url.appendingPathExtension(".tmp")
+                    // Create temp URL by appending .tmp to the filename (not as path extension)
+                    let tempURL = url.deletingPathExtension().appendingPathExtension("tmp")
+                    
+                    // Clean up any existing temp file
+                    if FileManager.default.fileExists(atPath: tempURL.path) {
+                        try? FileManager.default.removeItem(at: tempURL)
+                    }
+                    
+                    // Write to temp file
                     try data.write(to: tempURL, options: .atomic)
+                    
+                    // Remove destination file if it exists before moving
+                    if FileManager.default.fileExists(atPath: url.path) {
+                        try FileManager.default.removeItem(at: url)
+                    }
+                    
+                    // Move temp file to final location
                     try FileManager.default.moveItem(at: tempURL, to: url)
                     print("✅ Saved servers cache to \(url.path)")
                     return
@@ -6565,6 +6580,9 @@ private actor ServersCacheActor {
                     retryCount += 1
                     if retryCount > maxRetries {
                         print("❌ Failed to write servers cache after \(maxRetries) retries:", error)
+                        // Clean up temp file on final failure
+                        let tempURL = url.deletingPathExtension().appendingPathExtension("tmp")
+                        try? FileManager.default.removeItem(at: tempURL)
                         return
                     }
                     // Wait a bit before retry

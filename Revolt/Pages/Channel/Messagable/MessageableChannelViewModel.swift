@@ -58,7 +58,7 @@ extension MessageableChannelViewModel {
         // Fetch messages from API with reduced limit for faster response
         let result = try? await viewState.http.fetchHistory(
             channel: channel.id,
-            limit: 50, // Reduced from 100 to 50 for faster API response
+            limit: 10, // Reduced from 100 to 50 for faster API response
             before: before,
             after: after,
             sort: sort ?? "Latest",

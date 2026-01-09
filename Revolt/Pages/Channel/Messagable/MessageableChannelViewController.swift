@@ -60,7 +60,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     private var replyFetchTask: Task<Void, Never>? = nil
     private var cachedMessageTotal: Int = 0
     private var cachedMessageOffset: Int = 0
-    private let cachePageSize: Int = 25
+    private let cachePageSize: Int = 10
     var replyFetchDebounceTask: Task<Void, Never>? = nil
     private var pendingReplyFetchMessages: [Types.Message] = []
     private var pendingMissingReplyCheck: Bool = false
@@ -2646,6 +2646,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         switch messageLoadingState {
         case .loading:
             // print("⚠️ BEFORE_CALL: Message loading is already in progress, ignoring new request")
+            // CRITICAL FIX: Reset isLoadingMore if we're already loading to prevent stuck state
+            isLoadingMore = false
             return
             
         case .notLoading:
@@ -2653,17 +2655,22 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             let timeSinceLastLoad = Date().timeIntervalSince(lastSuccessfulLoadTime)
             if timeSinceLastLoad < 0.5 {
                 // print("⏱️ BEFORE_CALL: Only \(String(format: "%.1f", timeSinceLastLoad)) seconds since last load, waiting")
+                // CRITICAL FIX: Reset isLoadingMore if we're throttling to prevent stuck state
+                isLoadingMore = false
                 return
             }
             
             print("🌐 API CALL: loadMoreMessages (before) - Channel: \(viewModel.channel.id), Before: \(messageId ?? "nil")")
             
+            // CRITICAL FIX: Set loading state BEFORE cache check to ensure proper state management
+            messageLoadingState = .loading
+            
             // CRITICAL FIX: Set flag to prevent memory cleanup during older message loading
             isLoadingOlderMessages = true
             
             // Save scroll position before API call
-            let oldContentOffset = self.tableView.contentOffset
-            let oldContentHeight = self.tableView.contentSize.height
+            var oldContentOffset = self.tableView.contentOffset
+            var oldContentHeight = self.tableView.contentSize.height
             
             // Remember exact information about current scroll position for more precise adjustment
             var firstVisibleIndexPath: IndexPath? = nil
@@ -2699,22 +2706,92 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             
             // Create a new Task for loading messages
             let loadTask = Task<Void, Never>(priority: .userInitiated) {
-                if await self.loadOlderMessagesFromCacheIfAvailable(
-                    channelId: self.viewModel.channel.id,
-                    oldContentOffset: oldContentOffset,
-                    oldContentHeight: oldContentHeight
-                ) {
-                    return
+                var apiMessageId = messageId
+                var cacheExhausted = false
+                
+                // CRITICAL FIX: Keep loading from cache in a loop until cache is exhausted
+                // This ensures we load all available cached messages before hitting the server
+                var cacheLoadAttempts = 0
+                let maxCacheLoadAttempts = 50 // Safety limit to prevent infinite loops
+                
+                while cacheLoadAttempts < maxCacheLoadAttempts {
+                    let cacheLoaded = await self.loadOlderMessagesFromCacheIfAvailable(
+                        channelId: self.viewModel.channel.id,
+                        oldContentOffset: oldContentOffset,
+                        oldContentHeight: oldContentHeight
+                    )
+                    
+                    cacheLoadAttempts += 1
+                    print("🔄 CACHE_CHECK_RESULT [attempt \(cacheLoadAttempts)]: cacheLoaded=\(cacheLoaded), cachedMessageOffset=\(self.cachedMessageOffset), messageId=\(apiMessageId ?? "nil")")
+                    
+                    if !cacheLoaded {
+                        // No more cache available, proceed to API
+                        print("🔄 NO_CACHE: No more cache available after \(cacheLoadAttempts) attempts, proceeding to API call with messageId=\(apiMessageId ?? "nil")")
+                        cacheExhausted = true
+                        break
+                    }
+                    
+                    // Cache loaded successfully, check if cache is exhausted
+                    let totalCount = await MessageCacheManager.shared.cachedMessageCount(
+                        for: self.viewModel.channel.id,
+                        userId: self.viewModel.viewState.currentUser?.id ?? "",
+                        baseURL: self.viewModel.viewState.baseURL ?? ""
+                    )
+                    
+                    // Get the new first message ID after cache load
+                    let messages = await MainActor.run {
+                        !self.viewModel.messages.isEmpty ? self.viewModel.messages : self.localMessages
+                    }
+                    
+                    guard let newFirstMessageId = messages.first else {
+                        // No messages after cache load, something went wrong
+                        await MainActor.run {
+                            self.messageLoadingState = .notLoading
+                            self.isLoadingMore = false
+                        }
+                        return
+                    }
+                    
+                    // Update messageId to use the new first message (oldest after cache load)
+                    apiMessageId = newFirstMessageId
+                    
+                    if self.cachedMessageOffset >= totalCount {
+                        // Cache exhausted, proceed to API call
+                        print("🔄 CACHE_EXHAUSTED: Cache offset \(self.cachedMessageOffset) >= total \(totalCount), loading from API with messageId=\(apiMessageId)")
+                        cacheExhausted = true
+                        break
+                    } else {
+                        // Cache still has more messages, continue loading
+                        print("🔄 CACHE_MORE_AVAILABLE: Cache offset \(self.cachedMessageOffset) < total \(totalCount), loading more from cache...")
+                        // Update oldContentOffset and oldContentHeight for next iteration
+                        let updatedOffset = await MainActor.run {
+                            self.tableView.contentOffset
+                        }
+                        let updatedHeight = await MainActor.run {
+                            self.tableView.contentSize.height
+                        }
+                        oldContentOffset = updatedOffset
+                        oldContentHeight = updatedHeight
+                        // Continue loop to load more from cache
+                    }
                 }
+                
+                if !cacheExhausted {
+                    // Reached max attempts, proceed to API anyway
+                    print("🔄 CACHE_MAX_ATTEMPTS: Reached max cache load attempts (\(maxCacheLoadAttempts)), proceeding to API call with messageId=\(apiMessageId ?? "nil")")
+                }
+                
+                // API call path (either cache exhausted or no cache available)
+                print("🔄 PROCEEDING_TO_API: About to make API call with messageId=\(apiMessageId ?? "nil")")
                 
                 do {
                     // Display request information - ADD DETAILED LOGGING
-                    print("⏳ BEFORE_CALL: Waiting for API response for messageId=\(messageId ?? "nil"), channelId=\(self.viewModel.channel.id)")
+                    print("⏳ BEFORE_CALL: Waiting for API response for messageId=\(apiMessageId ?? "nil"), channelId=\(self.viewModel.channel.id)")
                     
                     // CRITICAL: Ensure we're using the right method for Before calls
-                    print("⏳ BEFORE_CALL: Calling viewModel.loadMoreMessages with before=\(messageId ?? "nil")")
+                    print("⏳ BEFORE_CALL: Calling viewModel.loadMoreMessages with before=\(apiMessageId ?? "nil")")
                     let loadResult = await self.viewModel.loadMoreMessages(
-                        before: messageId
+                        before: apiMessageId
                     )
                     
                     print("✅ BEFORE_CALL: API call completed, result is nil? \(loadResult == nil)")
@@ -3657,7 +3734,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         )
         cachedMessageTotal = totalCount
         let currentOffset = cachedMessageOffset
+        print("🔄 CACHE_CHECK: totalCount=\(totalCount), currentOffset=\(currentOffset), willLoad=\(totalCount > currentOffset)")
         guard totalCount > currentOffset else {
+            print("🔄 CACHE_EXHAUSTED_EARLY: totalCount (\(totalCount)) <= currentOffset (\(currentOffset)), returning false")
             return false
         }
         
@@ -3725,6 +3804,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             self.loadingHeaderView.isHidden = true
             self.messageLoadingState = .notLoading
             self.isLoadingOlderMessages = false
+            self.isLoadingMore = false  // CRITICAL FIX: Reset isLoadingMore when cache loading succeeds
             self.lastSuccessfulLoadTime = Date()
         }
         
