@@ -21,6 +21,14 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     private var fileAttachmentsContainer: UIView?
     private var fileAttachmentViews: [UIView] = []
     private var viewState: ViewState?
+    private var pendingImageLoads: [(imageView: UIImageView, url: URL, attachmentId: String)] = []
+    private var hasLoadedImages = false
+    private var pendingEmojiLoads: [(imageView: UIImageView, url: URL)] = []
+    private var reactionEmojiImageViews: [UIImageView] = []
+    private var hasLoadedEmojis = false
+    // MEMORY OPTIMIZATION: Defer avatar loading until cell is visible
+    private var pendingAvatarLoad: (url: URL, author: User, member: Member?, message: Message, viewState: ViewState)?
+    private var hasLoadedAvatar = false
     
 
     
@@ -157,6 +165,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         // PERFORMANCE: Cancel any ongoing image downloads with priority
         avatarImageView.kf.cancelDownloadTask()
         
+        // MEMORY OPTIMIZATION: Cancel all image loads
+        cancelImageLoads()
+        
         // PERFORMANCE: Aggressively clean up image attachments
         imageAttachmentViews.forEach { imageView in
             imageView.kf.cancelDownloadTask()
@@ -239,6 +250,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         
         // PERFORMANCE: Clean up any temp video files immediately
         cleanupTempVideos()
+        resetImageLoadState()
         
         // PERFORMANCE: Clean up video window if cell is reused
         if MessageCell.videoWindow != nil {
@@ -259,6 +271,80 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     }
     
     // MARK: - Cleanup Helper
+    
+    // MEMORY OPTIMIZATION: Public method to cancel all image loads and clear images from memory
+    // Called from didEndDisplaying to cancel off-screen image loads
+    func cancelImageLoads() {
+        var canceledCount = imageAttachmentViews.count + reactionEmojiImageViews.count
+        if pendingAvatarLoad != nil {
+            canceledCount += 1
+        }
+        if canceledCount > 0 {
+            print("🛑 [MEMORY] Canceling \(canceledCount) image loads for off-screen cell (message: \(currentMessage?.id ?? "unknown"))")
+        }
+        
+        // CRITICAL: Cancel AND clear avatar image from memory
+        avatarImageView.kf.cancelDownloadTask()
+        avatarImageView.image = nil // Clear from memory immediately
+        // Clear pending avatar load
+        pendingAvatarLoad = nil
+        hasLoadedAvatar = false
+        
+        // CRITICAL: Cancel AND clear all image attachment loads from memory
+        imageAttachmentViews.forEach { imageView in
+            imageView.kf.cancelDownloadTask()
+            imageView.image = nil // Clear from memory immediately
+        }
+
+        // CRITICAL: Cancel AND clear reaction emoji image loads from memory
+        reactionEmojiImageViews.forEach { imageView in
+            imageView.kf.cancelDownloadTask()
+            imageView.image = nil // Clear from memory immediately
+        }
+    }
+
+    // MEMORY OPTIMIZATION: Reset attachment load tracking on reuse
+    func resetImageLoadState() {
+        pendingImageLoads.removeAll()
+        hasLoadedImages = false
+        pendingEmojiLoads.removeAll()
+        reactionEmojiImageViews.removeAll()
+        hasLoadedEmojis = false
+        pendingAvatarLoad = nil
+        hasLoadedAvatar = false
+    }
+
+    // MEMORY OPTIMIZATION: Start deferred image loads when cell becomes visible
+    func startImageLoadsIfNeeded() {
+        // Load avatar first if pending
+        if !hasLoadedAvatar, let pending = pendingAvatarLoad {
+            hasLoadedAvatar = true
+            print("👤 [MEMORY] Starting deferred avatar load for message: \(currentMessage?.id ?? "unknown")")
+            loadAvatar(author: pending.author, member: pending.member, message: pending.message, viewState: pending.viewState)
+            pendingAvatarLoad = nil
+        }
+        
+        if !hasLoadedImages, !pendingImageLoads.isEmpty {
+            hasLoadedImages = true
+            print("🖼️ [MEMORY] Starting \(pendingImageLoads.count) deferred image loads for message: \(currentMessage?.id ?? "unknown")")
+            
+            for pending in pendingImageLoads {
+                loadAttachmentImage(into: pending.imageView, url: pending.url, attachmentId: pending.attachmentId)
+            }
+            pendingImageLoads.removeAll()
+        }
+
+        if !hasLoadedEmojis, !pendingEmojiLoads.isEmpty {
+            hasLoadedEmojis = true
+            print("😀 [MEMORY] Starting \(pendingEmojiLoads.count) deferred emoji loads for message: \(currentMessage?.id ?? "unknown")")
+            
+            for pending in pendingEmojiLoads {
+                loadEmojiImage(into: pending.imageView, url: pending.url)
+            }
+            pendingEmojiLoads.removeAll()
+        }
+    }
+    
     private func cleanupTempVideos() {
         if !tempVideoURLs.isEmpty {
             // print("🧹 Cleaning up \(tempVideoURLs.count) temp video files...")
@@ -1140,6 +1226,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         self.currentMember = member
         self.viewState = viewState
         self.isContinuation = isContinuation
+        resetImageLoadState()
         
         // Pending state will be set by the data source based on queued messages
         
@@ -1562,6 +1649,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 imageView.removeFromSuperview()
             }
             imageAttachmentViews.removeAll()
+            pendingImageLoads.removeAll()
+            hasLoadedImages = false
             
             // Make sure the container is visible
             imageAttachmentsContainer!.isHidden = false
@@ -1719,38 +1808,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 }
                 
             } else {
-                // For real messages, load from server using Kingfisher
+                // For real messages, defer loading until cell is visible
                 if let url = URL(string: viewState.formatUrl(fromId: attachmentId, withTag: "attachments")) {
-                    imageView.kf.setImage(
-                        with: url,
-                        placeholder: UIImage(systemName: "photo"),
-                        options: [
-                            .transition(.fade(0.3)),
-                            .cacheOriginalImage,
-                            .retryStrategy(DelayRetryStrategy(maxRetryCount: 3, retryInterval: .seconds(2)))
-                        ],
-                        completionHandler: { [weak self] result in
-                            switch result {
-                            case .success(_):
-                                // Ensure cell hasn't been reused for a different message
-                                if let currentAttachments = self?.currentMessage?.attachments,
-                                   currentAttachments.contains(where: { $0.id == attachmentId }) {
-                                    // Success: keep the loaded image
-                                    
-                                    // Force layout update to ensure proper positioning
-                                    self?.contentView.setNeedsLayout()
-                                    self?.contentView.layoutIfNeeded()
-                                } else {
-                                    // Cell has been reused for a different message
-                                    imageView.image = nil
-                                }
-                            case .failure(let error):
-                                // print("Error loading image: \(error.localizedDescription)")
-                                // Show error placeholder
-                                imageView.image = UIImage(systemName: "exclamationmark.triangle")
-                            }
-                        }
-                    )
+                    imageView.image = UIImage(systemName: "photo")
+                    pendingImageLoads.append((imageView: imageView, url: url, attachmentId: attachmentId))
+                    print("📋 [MEMORY] Deferred image load queued: \(attachmentId) (total pending: \(pendingImageLoads.count))")
                 }
             }
             
@@ -1770,6 +1832,93 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         
         // // print("🖼️ Set fixed container height: \(totalHeight) for \(numberOfRows) rows")
         // // print("🖼️ Image details - Width: \(finalImageWidth), Height: \(containerImageHeight), Attachments: \(attachments.count)")
+    }
+
+    private func loadAttachmentImage(into imageView: UIImageView, url: URL, attachmentId: String) {
+        // MEMORY OPTIMIZATION: Use downsampling to reduce memory usage
+        // Target size: 400x400 max (2x for retina = 800x800 points)
+        let processor = DownsamplingImageProcessor(size: CGSize(width: 800, height: 800))
+        let scale = UIScreen.main.scale
+        
+        let startTime = Date()
+        print("🖼️ [MEMORY] Loading attachment image: \(attachmentId) with downsampling to 800x800 @\(scale)x scale")
+
+        imageView.kf.setImage(
+            with: url,
+            placeholder: UIImage(systemName: "photo"),
+            options: [
+                .processor(processor),
+                .scaleFactor(scale),
+                .transition(.fade(0.3)),
+                .cacheOriginalImage, // Keep original in disk cache for fullscreen view
+                .retryStrategy(DelayRetryStrategy(maxRetryCount: 3, retryInterval: .seconds(2)))
+            ],
+            completionHandler: { [weak self] result in
+                let loadTime = Date().timeIntervalSince(startTime)
+                switch result {
+                case .success(let value):
+                    // Log image size information
+                    let image = value.image
+                    let imageSize = image.size
+                    let imageDataSize = image.pngData()?.count ?? 0
+                    let memorySizeMB = Double(imageDataSize) / 1024.0 / 1024.0
+                    let cacheType = value.cacheType
+                    let cacheSource = cacheType == .memory ? "MEMORY" : (cacheType == .disk ? "DISK" : "NONE")
+                    print("✅ [MEMORY] Image loaded: \(attachmentId) | Size: \(Int(imageSize.width))x\(Int(imageSize.height)) | Memory: \(String(format: "%.2f", memorySizeMB))MB | Cache: \(cacheSource) | Time: \(String(format: "%.2f", loadTime))s")
+                    
+                    // Ensure cell hasn't been reused for a different message
+                    if let currentAttachments = self?.currentMessage?.attachments,
+                       currentAttachments.contains(where: { $0.id == attachmentId }) {
+                        // Force layout update to ensure proper positioning
+                        self?.contentView.setNeedsLayout()
+                        self?.contentView.layoutIfNeeded()
+                    } else {
+                        // Cell has been reused for a different message
+                        print("⚠️ [MEMORY] Image loaded but cell reused, clearing: \(attachmentId)")
+                        imageView.image = nil
+                    }
+                case .failure(let error):
+                    print("❌ [MEMORY] Image load failed: \(attachmentId) | Error: \(error.localizedDescription) | Time: \(String(format: "%.2f", loadTime))s")
+                    imageView.image = UIImage(systemName: "exclamationmark.triangle")
+                }
+            }
+        )
+    }
+
+    private func loadEmojiImage(into imageView: UIImageView, url: URL) {
+        // MEMORY OPTIMIZATION: Use downsampling for emojis (target 18x18 display = 36x36 @2x)
+        let emojiProcessor = DownsamplingImageProcessor(size: CGSize(width: 64, height: 64))
+        let scale = UIScreen.main.scale
+        
+        let startTime = Date()
+        print("😀 [MEMORY] Loading emoji: \(url.lastPathComponent) with downsampling to 64x64 @\(scale)x scale")
+
+        imageView.kf.setImage(
+            with: url,
+            placeholder: UIImage(systemName: "face.smiling"),
+            options: [
+                .processor(emojiProcessor),
+                .scaleFactor(scale),
+                .transition(.fade(0.2)),
+                .cacheOriginalImage // Keep original in disk cache
+            ],
+            completionHandler: { [weak imageView] result in
+                let loadTime = Date().timeIntervalSince(startTime)
+                switch result {
+                case .success(let value):
+                    let image = value.image
+                    let imageSize = image.size
+                    let imageDataSize = image.pngData()?.count ?? 0
+                    let memorySizeKB = Double(imageDataSize) / 1024.0
+                    let cacheType = value.cacheType
+                    let cacheSource = cacheType == .memory ? "MEMORY" : (cacheType == .disk ? "DISK" : "NONE")
+                    print("✅ [MEMORY] Emoji loaded: \(url.lastPathComponent) | Size: \(Int(imageSize.width))x\(Int(imageSize.height)) | Memory: \(String(format: "%.2f", memorySizeKB))KB | Cache: \(cacheSource) | Time: \(String(format: "%.2f", loadTime))s")
+                case .failure(let error):
+                    print("❌ [MEMORY] Emoji load failed: \(url.lastPathComponent) | Error: \(error.localizedDescription) | Time: \(String(format: "%.2f", loadTime))s")
+                    imageView?.image = UIImage(systemName: "face.smiling")
+                }
+            }
+        )
     }
     
     // MARK: - File Attachments Support
@@ -3071,23 +3220,16 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             // Use ViewState formatUrl method to construct the custom emoji URL
             let emojiURL = URL(string: viewState.formatUrl(fromEmoji: emoji))
             
-            // Load the custom emoji using Kingfisher
-            emojiImageView.kf.setImage(
-                with: emojiURL,
-                placeholder: UIImage(systemName: "face.smiling"),
-                options: [
-                    .transition(.fade(0.2)),
-                    .cacheOriginalImage
-                ],
-                completionHandler: { result in
-                    switch result {
-                    case .success(_):
-                        break
-                    case .failure(let error):
-                        print("Error loading custom emoji in reaction: \(error.localizedDescription)")
-                    }
+            // Defer loading until cell is visible
+            emojiImageView.image = UIImage(systemName: "face.smiling")
+            if let emojiURL = emojiURL {
+                if hasLoadedEmojis {
+                    loadEmojiImage(into: emojiImageView, url: emojiURL)
+                } else {
+                    pendingEmojiLoads.append((imageView: emojiImageView, url: emojiURL))
                 }
-            )
+            }
+            reactionEmojiImageViews.append(emojiImageView)
             
             stackView.addArrangedSubview(emojiImageView)
             
@@ -3186,27 +3328,16 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             // Use ViewState formatUrl method to construct the custom emoji URL
             let emojiURL = URL(string: viewState.formatUrl(fromEmoji: emoji))
             
-            // Load the custom emoji using Kingfisher with weak self to prevent retain cycles
-            emojiImageView.kf.setImage(
-                with: emojiURL,
-                placeholder: UIImage(systemName: "face.smiling"), // Placeholder while loading
-                options: [
-                    .transition(.fade(0.2)),
-                    .cacheOriginalImage
-                ],
-                completionHandler: { [weak emojiImageView] result in
-                    // Use weak reference to prevent retain cycles
-                    switch result {
-                    case .success(_):
-                        // Image loaded successfully, no additional action needed
-                        break
-                    case .failure(let error):
-                        // print("Error loading custom emoji: \(error.localizedDescription)")
-                        // Set fallback emoji on failure
-                        emojiImageView?.image = UIImage(systemName: "face.smiling")
-                    }
+            // Defer loading until cell is visible
+            emojiImageView.image = UIImage(systemName: "face.smiling")
+            if let emojiURL = emojiURL {
+                if hasLoadedEmojis {
+                    loadEmojiImage(into: emojiImageView, url: emojiURL)
+                } else {
+                    pendingEmojiLoads.append((imageView: emojiImageView, url: emojiURL))
                 }
-            )
+            }
+            reactionEmojiImageViews.append(emojiImageView)
             
             contentStackView.addArrangedSubview(emojiImageView)
             
@@ -3838,14 +3969,13 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     private func configureAvatar(author: User, member: Member?, message: Message, viewState: ViewState) {
         let avatarInfo = viewState.resolveAvatarUrl(user: author, member: member, masquerade: message.masquerade)
         
-        avatarImageView.kf.setImage(
-            with: avatarInfo.url,
-            placeholder: UIImage(systemName: "person.circle.fill"),
-            options: [
-                .transition(.fade(0.2)),
-                .cacheOriginalImage
-            ]
-        )
+        // MEMORY OPTIMIZATION: Defer avatar loading until cell becomes visible
+        // Store avatar info for deferred loading
+        pendingAvatarLoad = (url: avatarInfo.url, author: author, member: member, message: message, viewState: viewState)
+        hasLoadedAvatar = false
+        
+        // Set placeholder immediately
+        avatarImageView.image = UIImage(systemName: "person.circle.fill")
         
         // Set background color if no avatar
         if !avatarInfo.isAvatarSet {
@@ -3859,6 +3989,47 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         } else {
             avatarImageView.backgroundColor = UIColor.clear
         }
+        
+        print("📋 [MEMORY] Deferred avatar load queued: \(avatarInfo.url.lastPathComponent)")
+    }
+    
+    // MEMORY OPTIMIZATION: Actually load the avatar image (called when cell becomes visible)
+    private func loadAvatar(author: User, member: Member?, message: Message, viewState: ViewState) {
+        let avatarInfo = viewState.resolveAvatarUrl(user: author, member: member, masquerade: message.masquerade)
+        
+        // MEMORY OPTIMIZATION: Use aggressive downsampling for avatars (target 60x60 display = 120x120 @2x)
+        // Reduced from 160x160 to save memory - avatars are small in UI
+        let avatarProcessor = DownsamplingImageProcessor(size: CGSize(width: 120, height: 120))
+        let scale = UIScreen.main.scale
+        
+        let startTime = Date()
+        print("👤 [MEMORY] Loading avatar: \(avatarInfo.url.lastPathComponent) with downsampling to 120x120 @\(scale)x scale")
+        
+        avatarImageView.kf.setImage(
+            with: avatarInfo.url,
+            placeholder: UIImage(systemName: "person.circle.fill"),
+            options: [
+                .processor(avatarProcessor),
+                .scaleFactor(scale),
+                .transition(.fade(0.2)),
+                .cacheOriginalImage // Keep original in disk cache
+            ],
+            completionHandler: { result in
+                let loadTime = Date().timeIntervalSince(startTime)
+                switch result {
+                case .success(let value):
+                    let image = value.image
+                    let imageSize = image.size
+                    let imageDataSize = image.pngData()?.count ?? 0
+                    let memorySizeKB = Double(imageDataSize) / 1024.0
+                    let cacheType = value.cacheType
+                    let cacheSource = cacheType == .memory ? "MEMORY" : (cacheType == .disk ? "DISK" : "NONE")
+                    print("✅ [MEMORY] Avatar loaded: \(avatarInfo.url.lastPathComponent) | Size: \(Int(imageSize.width))x\(Int(imageSize.height)) | Memory: \(String(format: "%.2f", memorySizeKB))KB | Cache: \(cacheSource) | Time: \(String(format: "%.2f", loadTime))s")
+                case .failure(let error):
+                    print("❌ [MEMORY] Avatar load failed: \(avatarInfo.url.lastPathComponent) | Error: \(error.localizedDescription) | Time: \(String(format: "%.2f", loadTime))s")
+                }
+            }
+        )
     }
     
     private func loadAttachments(message: Message, viewState: ViewState) {
@@ -5146,4 +5317,3 @@ extension Array {
         return indices.contains(index) ? self[index] : nil
     }
 }
-

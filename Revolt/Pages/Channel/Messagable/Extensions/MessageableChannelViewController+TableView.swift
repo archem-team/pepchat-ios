@@ -39,9 +39,26 @@ extension MessageableChannelViewController: UITableViewDelegate {
                     }
                 }
             }
+            
+            // MEMORY OPTIMIZATION: Start loading images when cell becomes visible
+            let messageId = indexPath.row < localMessages.count ? localMessages[indexPath.row] : "unknown"
+            print("👁️ [MEMORY] Cell became visible: row \(indexPath.row), message: \(messageId)")
+            currentCell.startImageLoadsIfNeeded()
         }
         
         loadMoreMessagesIfNeeded(for: indexPath)
+    }
+    
+    // MEMORY OPTIMIZATION: Cancel image loads when cells scroll off-screen
+    func tableView(_ tableView: UITableView, didEndDisplaying cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        if let messageCell = cell as? MessageCell {
+            let messageId = indexPath.row < localMessages.count ? localMessages[indexPath.row] : "unknown"
+            print("👁️ [MEMORY] Cell scrolled off-screen: row \(indexPath.row), message: \(messageId)")
+            // Cancel all image downloads for this cell
+            // This is handled in prepareForReuse, but we can also cancel here
+            // to be more aggressive about memory management
+            messageCell.cancelImageLoads()
+        }
     }
     
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
@@ -197,4 +214,3 @@ extension MessageableChannelViewController: UITableViewDelegate {
         }
     }
 }
-

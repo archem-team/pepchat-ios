@@ -80,16 +80,41 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     /// This prevents image cache from consuming unlimited memory and ensures automatic cleanup.
     private func configureKingfisherCache() {
         // Memory Cache Configuration
-        ImageCache.default.memoryStorage.config.totalCostLimit = 50 * 1024 * 1024 // 50MB
-        ImageCache.default.memoryStorage.config.countLimit = 200 // Increased from 100 for emoji/reaction-heavy views
-        ImageCache.default.memoryStorage.config.cleanInterval = 300 // Clean every 5 minutes
-        ImageCache.default.memoryStorage.config.expiration = .seconds(3600) // Expire after 1 hour
+        // MEMORY OPTIMIZATION: Aggressively reduced limits to prevent memory crashes
+        ImageCache.default.memoryStorage.config.totalCostLimit = 30 * 1024 * 1024 // 30MB (reduced from 50MB)
+        ImageCache.default.memoryStorage.config.countLimit = 100 // Reduced from 150 to prevent memory buildup
+        ImageCache.default.memoryStorage.config.cleanInterval = 60 // Clean every 1 minute (very aggressive)
+        ImageCache.default.memoryStorage.config.expiration = .seconds(600) // Expire after 10 minutes (very aggressive)
         
         // Disk Cache Configuration
         ImageCache.default.diskStorage.config.sizeLimit = 200 * 1024 * 1024 // 200MB
         ImageCache.default.diskStorage.config.expiration = .days(7) // Expire after 7 days
         
-        print("✅ MEMORY: Kingfisher cache configured - Memory: 50MB/200 count, Disk: 200MB, Expiration: 1h/7d")
+        print("✅ [MEMORY] Kingfisher cache configured - Memory: 30MB/100 count, Disk: 200MB, Expiration: 10m/7d")
+        
+        // Log cache usage periodically
+        Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { _ in
+            self.logCacheUsage()
+        }
+    }
+    
+    /// Logs current Kingfisher cache usage for debugging
+    private func logCacheUsage() {
+        let memoryCost = ImageCache.default.memoryStorage.config.totalCostLimit
+        let memoryCount = ImageCache.default.memoryStorage.config.countLimit
+        let diskSize = ImageCache.default.diskStorage.config.sizeLimit
+        
+        // Get actual usage (these are async, so we log config for now)
+        ImageCache.default.calculateDiskStorageSize { result in
+            switch result {
+            case .success(let size):
+                let diskMB = Double(size) / 1024.0 / 1024.0
+                let memoryMB = Double(memoryCost) / 1024.0 / 1024.0
+                print("📊 [MEMORY] Cache usage - Memory: \(String(format: "%.2f", memoryMB))MB/\(memoryCount) count, Disk: \(String(format: "%.2f", diskMB))MB")
+            case .failure(let error):
+                print("⚠️ [MEMORY] Failed to calculate disk cache size: \(error.localizedDescription)")
+            }
+        }
     }
     
     

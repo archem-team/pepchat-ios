@@ -674,8 +674,9 @@ public class ViewState: ObservableObject {
     
     // MEMORY MANAGEMENT: Configuration for aggressive cleanup
     /// Maximum messages to keep in memory. Uses feature flag if enabled, otherwise old limit.
+    /// Reduced from 2000 to 1500 to prevent memory from reaching 1GB+
     private var maxMessagesInMemory: Int {
-        enableAggressiveMemoryManagement ? 2000 : 7000
+        enableAggressiveMemoryManagement ? 1500 : 7000
     }
     
     /// Maximum users to keep in memory. Uses feature flag if enabled, otherwise old limit.
@@ -684,8 +685,9 @@ public class ViewState: ObservableObject {
     }
     
     /// Maximum messages per channel. Uses feature flag if enabled, otherwise old limit.
+    /// Reduced from 100 to 75 to prevent memory buildup
     private var maxChannelMessages: Int {
-        enableAggressiveMemoryManagement ? 100 : 800
+        enableAggressiveMemoryManagement ? 75 : 800
     }
     
     private let maxServersInMemory = 50 // Maximum servers to keep in memory
@@ -814,16 +816,15 @@ public class ViewState: ObservableObject {
     
     @MainActor
     func enforceMemoryLimits() {
-        // MEMORY MANAGEMENT: Re-enabled with aggressive thresholds to prevent memory growth to 1.8GB
-        // Only cleanup if significantly over limits to prevent excessive cleanup
-        guard messages.count > 1500 || totalMessageMemorySize > 75 * 1024 * 1024 else {
+        // MEMORY MANAGEMENT: More aggressive thresholds to prevent memory growth to 1GB+
+        // Trigger cleanup earlier to prevent memory buildup
+        // Also check actual memory usage, not just message count/size
+        let currentMemoryMB = getCurrentMemoryUsage()
+        guard messages.count > 1000 || totalMessageMemorySize > 50 * 1024 * 1024 || currentMemoryMB > 700 else {
             return
         }
         
-        print("🧹 MEMORY_CLEANUP: Starting cleanup - Messages: \(messages.count), Size: \(String(format: "%.2f", Double(totalMessageMemorySize) / 1024.0 / 1024.0))MB")
-        
-        // Check current memory usage
-        let currentMemoryMB = getCurrentMemoryUsage()
+        print("🧹 MEMORY_CLEANUP: Starting cleanup - Messages: \(messages.count), Size: \(String(format: "%.2f", Double(totalMessageMemorySize) / 1024.0 / 1024.0))MB, Memory: \(String(format: "%.2f", currentMemoryMB))MB")
         
         // EMERGENCY MEMORY RESET if over 4GB
         if currentMemoryMB > 4000 {
@@ -1848,9 +1849,13 @@ public class ViewState: ObservableObject {
                 guard let self = self else { return }
                 
                 // Check thresholds off-main-thread
+                // MEMORY OPTIMIZATION: Use same thresholds as enforceMemoryLimits (1000 messages, 50MB)
                 let messageCount = await MainActor.run { self.messages.count }
                 let totalSize = await MainActor.run { self.totalMessageMemorySize }
-                let shouldCleanup = messageCount > 1500 || totalSize > 75 * 1024 * 1024 // 75MB
+                let currentMemoryMB = await MainActor.run { self.getCurrentMemoryUsage() }
+                
+                // Trigger cleanup if over message/size thresholds OR if memory is high (>700MB)
+                let shouldCleanup = messageCount > 1000 || totalSize > 50 * 1024 * 1024 || currentMemoryMB > 700
                 
                 if shouldCleanup {
                     // Perform cleanup on main actor (for dictionary access)

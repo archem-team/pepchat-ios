@@ -216,13 +216,19 @@ class ReplyItemView: UIView {
         let masquerade: Masquerade? = messageReply.message.masquerade
         let avatarInfo = viewState.resolveAvatarUrl(user: author, member: member, masquerade: masquerade)
         
+        // MEMORY OPTIMIZATION: Use aggressive downsampling for avatars (target 60x60 display = 120x120 @2x)
+        let avatarProcessor = DownsamplingImageProcessor(size: CGSize(width: 120, height: 120))
+        let scale = UIScreen.main.scale
+        
         // Load the avatar with Kingfisher
         userIconView.kf.setImage(
             with: avatarInfo.url,
             placeholder: UIImage(systemName: "person.circle.fill"),
             options: [
+                .processor(avatarProcessor),
+                .scaleFactor(scale),
                 .transition(.fade(0.2)),
-                .cacheOriginalImage
+                .cacheOriginalImage // Keep original in disk cache
             ]
         )
         

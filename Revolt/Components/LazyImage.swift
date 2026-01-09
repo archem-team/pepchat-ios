@@ -60,16 +60,42 @@ struct LazyImage<S: Shape>: View {
         }
     }
 
+    // MARK: - Computed Properties for Logging
+    
+    /// Description of the image source for logging
+    private var sourceDescription: String {
+        switch source {
+        case .url(let u): return "URL(\(u.lastPathComponent))"
+        case .file(let f): return "File(\(f.filename))"
+        case .emoji(let id): return "Emoji(\(id))"
+        case .local(_): return "Local"
+        case .id(let id, let tag): return "ID(\(id), \(tag))"
+        }
+    }
+
     // MARK: - Body
 
     /// The main body of the `LazyImage` view.
     @ViewBuilder
     var body: some View {
-        KFAnimatedImage(source: _source)
+        // MEMORY OPTIMIZATION: Calculate target size for downsampling
+        // Default to 400x400 if no size specified, otherwise use provided size with 2x scale for retina
+        let targetWidth = (width ?? 400) * 2
+        let targetHeight = (height ?? 400) * 2
+        let processor = DownsamplingImageProcessor(size: CGSize(width: targetWidth, height: targetHeight))
+        let scale = UIScreen.main.scale
+        
+        // MEMORY OPTIMIZATION: Use KFImage which supports processors and handles both static and animated images
+        KFImage(source: _source)
+            .setProcessor(processor)
+            .scaleFactor(scale)
             .placeholder { Color.bgGray11 }
             .aspectRatio(contentMode: contentMode)
             .frame(width: width, height: height)
             .clipped()
             .clipShape(clipTo)
+            .onAppear {
+                print("🖼️ [MEMORY] LazyImage loading: \(self.sourceDescription) with downsampling to \(Int(targetWidth))x\(Int(targetHeight)) @\(scale)x scale")
+            }
     }
 }

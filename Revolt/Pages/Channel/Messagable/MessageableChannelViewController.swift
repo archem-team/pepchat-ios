@@ -81,6 +81,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     var lastManualScrollUpTime: Date?
     var scrollProtectionTimer: Timer?
     private var scrollCheckTimer: Timer?
+    var lastOlderMessagesLoadTriggerTime: Date? // Debounce for loading older messages
+    var lastScrollLogTime: Date? // Throttle scroll event logging to reduce excessive logs
     // MEMORY MANAGEMENT: Track scroll events for periodic cleanup
     var scrollEventCount: Int = 0
     private var contentSizeObserverRegistered = false
@@ -310,6 +312,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        // MEMORY LOGGING: Log initial state (moved to after setup to ensure viewModel is ready)
         // Match bgDefaultPurple13 color
         view.backgroundColor = .bgDefaultPurple13
         
@@ -339,6 +343,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         setupBindings()
         setupKeyboardObservers()
         setupAdditionalMessageObservers() // Add additional message observer
+        
+        // MEMORY LOGGING: Log initial state after setup (use async to ensure everything is ready)
+        DispatchQueue.main.async { [weak self] in
+            self?.logMemoryUsage(prefix: "viewDidLoad")
+        }
         
         // Initialize managers (typing indicator setup is handled automatically)
         _ = typingIndicatorManager
@@ -728,6 +737,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        
+        // MEMORY LOGGING: Log when view appears
+        logMemoryUsage(prefix: "viewDidAppear")
+        
+        // Set up periodic memory logging
+        setupMemoryLogging()
         
         // CRITICAL FIX: Check if we have a target message from ViewState that we need to restore
         if targetMessageId == nil, let targetFromViewState = viewModel.viewState.currentTargetMessageId {
@@ -1304,6 +1319,39 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     }
     
     // Helper method to log memory usage
+    /// Sets up periodic memory logging for debugging
+    private func setupMemoryLogging() {
+        // Log memory every 5 seconds while view is visible
+        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
+            self.logMemoryUsage(prefix: "Periodic")
+            self.logImageCacheStats()
+        }
+    }
+    
+    /// Logs Kingfisher image cache statistics
+    private func logImageCacheStats() {
+        let memoryCostLimit = ImageCache.default.memoryStorage.config.totalCostLimit
+        let memoryCountLimit = ImageCache.default.memoryStorage.config.countLimit
+        let diskSizeLimit = ImageCache.default.diskStorage.config.sizeLimit
+        
+        let memoryCostMB = Double(memoryCostLimit) / 1024.0 / 1024.0
+        let diskLimitMB = Double(diskSizeLimit) / 1024.0 / 1024.0
+        
+        ImageCache.default.calculateDiskStorageSize { result in
+            switch result {
+            case .success(let size):
+                let diskMB = Double(size) / 1024.0 / 1024.0
+                print("📊 [MEMORY] Image Cache - Memory: \(memoryCountLimit) limit, \(String(format: "%.2f", memoryCostMB))MB limit | Disk: \(String(format: "%.2f", diskMB))/\(String(format: "%.2f", diskLimitMB))MB")
+            case .failure(let error):
+                print("⚠️ [MEMORY] Failed to calculate disk cache: \(error.localizedDescription)")
+            }
+        }
+    }
+    
     private func logMemoryUsage(prefix: String) {
         var info = mach_task_basic_info()
         var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
@@ -1319,13 +1367,39 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         if result == KERN_SUCCESS {
             let usedMB = Double(info.resident_size) / 1024.0 / 1024.0
-            // print("📊 MEMORY USAGE [\(prefix)]: \(String(format: "%.2f", usedMB)) MB")
-            // print("   - Messages in viewState: \(viewModel.viewState.messages.count)")
-            // print("   - Users in viewState: \(viewModel.viewState.users.count)")
-            // print("   - Channel messages count: \(viewModel.viewState.channelMessages[viewModel.channel.id]?.count ?? 0)")
-            // print("   - Local messages count: \(localMessages.count)")
-            // print("   - Servers: \(viewModel.viewState.servers.count)")
-            // print("   - Members dictionaries: \(viewModel.viewState.members.count)")
+            print("📊 [MEMORY] Usage [\(prefix)]: \(String(format: "%.2f", usedMB)) MB")
+            
+            // PROACTIVE MEMORY MANAGEMENT: Clear image cache if memory gets too high
+            // Lowered threshold from 800MB to 500MB to prevent memory from reaching 1GB+
+            if usedMB > 500 {
+                print("⚠️ [MEMORY] High memory usage detected (\(String(format: "%.2f", usedMB))MB), clearing image cache proactively")
+                ImageCache.default.clearMemoryCache()
+                
+                // Also trigger ViewState cleanup if memory is high (lowered from 800MB to 600MB)
+                if usedMB > 600 {
+                    print("⚠️ [MEMORY] Very high memory usage (\(String(format: "%.2f", usedMB))MB), triggering ViewState cleanup")
+                    Task { @MainActor in
+                        viewModel.viewState.enforceMemoryLimits()
+                    }
+                }
+            }
+            
+            // Safely access viewModel properties
+            // Use optional chaining and provide defaults to avoid crashes
+            let viewState = viewModel.viewState
+            print("   - Messages in viewState: \(viewState.messages.count)")
+            print("   - Users in viewState: \(viewState.users.count)")
+            let channelId = viewModel.channel.id
+            print("   - Channel messages count: \(viewState.channelMessages[channelId]?.count ?? 0)")
+            print("   - Servers: \(viewState.servers.count)")
+            print("   - Members dictionaries: \(viewState.members.count)")
+            
+            print("   - Local messages count: \(localMessages.count)")
+            if tableView != nil {
+                print("   - Visible cells: \(tableView.indexPathsForVisibleRows?.count ?? 0)")
+            } else {
+                print("   - tableView not available yet")
+            }
         }
     }
     
@@ -2295,8 +2369,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
         
         // CRITICAL FIX: Check if we recently received an empty response (reached beginning)
+        // Reduced cooldown from 60s to 10s to allow retries if user scrolls again
         if let lastEmpty = lastEmptyResponseTime,
-           Date().timeIntervalSince(lastEmpty) < 60.0 { // Don't retry for 1 minute
+           Date().timeIntervalSince(lastEmpty) < 10.0 {
             print("⏹️ LOAD_BLOCKED: Reached beginning of conversation recently, skipping load")
             return
         }
@@ -2321,22 +2396,25 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             let firstMessageId = messages.first!
             // print("🔄🔄 LOAD_TRIGGERED: At or near top row \(indexPath.row), loading more history, current first message: \(firstMessageId)")
             
-            // Show loading indicator
+            // CRITICAL FIX: Set trigger time and loading state atomically to prevent duplicates
+            lastOlderMessagesLoadTriggerTime = Date()
+            isLoadingMore = true
+            
+            // Show loading indicator (without scrolling to avoid UI jumps)
             DispatchQueue.main.async {
-                self.loadingHeaderView.isHidden = false
-                let headRect = self.tableView.rect(forSection: 0)
-                // Make sure loading indicator is visible
-                if headRect.origin.y < self.tableView.contentOffset.y {
-                    self.tableView.scrollRectToVisible(CGRect(x: 0, y: self.tableView.contentOffset.y - 60, width: 1, height: 1), animated: true)
+                // Add header if not already added
+                if self.tableView.tableHeaderView == nil {
+                    self.tableView.tableHeaderView = self.loadingHeaderView
                 }
-                
-                // Show notification to user
-//                let banner = NotificationBanner(message: "Loading older messages...")
-//                banner.show(duration: 1.5)
+                // Only show if not already visible to prevent jumping
+                if self.loadingHeaderView.isHidden {
+                    self.loadingHeaderView.isHidden = false
+                }
+                // CRITICAL FIX: Removed scrollRectToVisible call that was causing UI jumps
+                // The header will be visible naturally when messages are added at the top
             }
             
-            // Only set loading state for indexPath.row == 0 to prioritize top-row loading
-            isLoadingMore = true
+            // Load older messages
             loadMoreMessages(before: firstMessageId)
         }
     }
@@ -2602,14 +2680,18 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 }
             }
             
-            // Show loading indicator
+            // Show loading indicator (without scrolling to avoid UI jumps)
             DispatchQueue.main.async {
-                self.loadingHeaderView.isHidden = false
-                // Make sure the header view is visible
-                let headRect = self.tableView.rect(forSection: 0)
-                if headRect.origin.y < self.tableView.contentOffset.y {
-                    self.tableView.scrollRectToVisible(CGRect(x: 0, y: self.tableView.contentOffset.y - 60, width: 1, height: 1), animated: true)
+                // Add header if not already added
+                if self.tableView.tableHeaderView == nil {
+                    self.tableView.tableHeaderView = self.loadingHeaderView
                 }
+                // Only show if not already visible to prevent jumping
+                if self.loadingHeaderView.isHidden {
+                    self.loadingHeaderView.isHidden = false
+                }
+                // CRITICAL FIX: Removed scrollRectToVisible call that was causing UI jumps
+                // The header will be visible naturally when messages are added at the top
             }
             
             // Save count of messages before loading
@@ -2657,6 +2739,18 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         
                         // If we got a response with messages
                         if let result = loadResult {
+                            // CRITICAL FIX: If we got a full batch (50 messages), clear atTopOfChannel
+                            // This allows loading more messages if user scrolls up again
+                            if result.messages.count >= 50 {
+                                self.viewModel.viewState.atTopOfChannel.remove(self.viewModel.channel.id)
+                                print("🔄 BEFORE_CALL: Got full batch (\(result.messages.count) messages), cleared atTopOfChannel to allow more loads")
+                            } else if result.messages.isEmpty {
+                                // Empty response means we've reached the beginning
+                                self.viewModel.viewState.atTopOfChannel.insert(self.viewModel.channel.id)
+                                self.lastEmptyResponseTime = Date()
+                                print("⏹️ BEFORE_CALL: Empty response, reached beginning of channel")
+                            }
+                            
                             // Log message counts for debugging
                             // print("🧮 BEFORE_CALL: Current message counts:")
                             // print("   ViewModel: \(self.viewModel.messages.count) messages")
@@ -2682,11 +2776,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                                 // print("⚠️ BEFORE_CALL: Tried to sync but channelMessages was empty, skipping sync to avoid clearing arrays")
                             }
                             
-                            self.enforceMessageWindow(keepingMostRecent: false)
+                            // CRITICAL FIX: When loading older messages, keep the most recent (latest) messages
+                            // Don't trim the latest messages - we want to preserve them!
+                            self.enforceMessageWindow(keepingMostRecent: true)
                             
                             // MEMORY MANAGEMENT: Aggressive cleanup after loading older messages
+                            // CRITICAL FIX: Keep most recent messages when trimming after loading older messages
                             if self.localMessages.count > Int(Double(MessageableChannelConstants.maxMessagesInMemory) * 1.2) {
-                                self.enforceMessageWindow(keepingMostRecent: false)
+                                self.enforceMessageWindow(keepingMostRecent: true)
                                 // Also trigger ViewState cleanup if total messages are high
                                 let totalMessages = self.viewModel.viewState.messages.count
                                 if totalMessages > 1500 {
@@ -2817,6 +2914,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         self.messageLoadingState = .notLoading
                         self.isLoadingMore = false
                         
+                        // CRITICAL FIX: Reset debounce timer after loading completes
+                        // This allows subsequent loads after a reasonable delay
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            self.lastOlderMessagesLoadTriggerTime = nil
+                        }
+                        
                         // Update table view bouncing behavior after loading completes
                         self.updateTableViewBouncing()
                         
@@ -2837,6 +2940,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         
                         self.messageLoadingState = .notLoading
                         self.isLoadingMore = false
+                        
+                        // CRITICAL FIX: Reset debounce timer after loading error
+                        // This allows retries after a reasonable delay
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            self.lastOlderMessagesLoadTriggerTime = nil
+                        }
                         
                         // Update table view bouncing behavior after loading error
                         self.updateTableViewBouncing()
@@ -2872,6 +2981,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     self.messageLoadingState = .notLoading
                     self.isLoadingMore = false
                     self.lastSuccessfulLoadTime = Date() // Update to prevent immediate retries
+                    
+                    // CRITICAL FIX: Reset debounce timer after timeout
+                    self.lastOlderMessagesLoadTriggerTime = nil
                     
                     // Update table view bouncing behavior after timeout
                     self.updateTableViewBouncing()
@@ -3031,7 +3143,24 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         }
         
         let wasNearBottom = isUserNearBottom()
+        let oldLastMessageId = localMessages.last
         localMessages = channelMessages
+        let newLastMessageId = localMessages.last
+        let channelLastMessageId = viewModel.channel.last_message_id
+        
+        if let jsonDataBeforeReload = try? JSONSerialization.data(withJSONObject: [
+            "filter": "REFRESH",
+            "action": "refreshMessages_before_reload",
+            "oldLastMessageId": oldLastMessageId ?? "nil",
+            "newLastMessageId": newLastMessageId ?? "nil",
+            "channelLastMessageId": channelLastMessageId ?? "nil",
+            "localMessagesCount": localMessages.count,
+            "wasNearBottom": wasNearBottom,
+            "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+        ]),
+           let jsonStringBeforeReload = String(data: jsonDataBeforeReload, encoding: .utf8) {
+            print("MESSAGE_SCROLLING: \(jsonStringBeforeReload)")
+        }
         
         // CRITICAL: Mark data source as updating to protect scroll events
         isDataSourceUpdating = true
@@ -3048,6 +3177,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         // FAST: Single reload operation
         tableView.reloadData()
+        
+        if let jsonDataAfterReload = try? JSONSerialization.data(withJSONObject: [
+            "filter": "REFRESH",
+            "action": "refreshMessages_after_reload",
+            "tableViewRows": tableView.numberOfRows(inSection: 0),
+            "localMessagesCount": localMessages.count,
+            "lastMessageId": localMessages.last ?? "nil",
+            "channelLastMessageId": channelLastMessageId ?? "nil",
+            "matchesChannelLatest": localMessages.last == channelLastMessageId,
+            "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+        ]),
+           let jsonStringAfterReload = String(data: jsonDataAfterReload, encoding: .utf8) {
+            print("MESSAGE_SCROLLING: \(jsonStringAfterReload)")
+        }
         
         // CRITICAL: Reset flag after reload with slight delay to prevent immediate scroll conflicts
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
@@ -3403,19 +3546,72 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
 
     @MainActor
     func enforceMessageWindow(keepingMostRecent: Bool) {
+        // CRITICAL FIX: When loading older messages, always keep the most recent messages
+        // Never trim the latest messages when we're in the process of loading older messages
+        if isLoadingOlderMessages && !keepingMostRecent {
+            print("🛡️ WINDOW_TRIM: Blocked trimming latest messages while loading older messages - forcing keepingMostRecent: true")
+            // Force keepingMostRecent to true to preserve latest messages
+            // Don't return early - we still need to trim if over limit, just keep the most recent
+        }
+        
         let channelId = viewModel.channel.id
         let currentIds = viewModel.viewState.channelMessages[channelId] ?? localMessages
         let maxCount = MessageableChannelConstants.maxMessagesInMemory
+        let channelLastMessageId = viewModel.channel.last_message_id
+        
+        // CRITICAL FIX: If we're loading older messages, always keep most recent regardless of parameter
+        let shouldKeepMostRecent = isLoadingOlderMessages ? true : keepingMostRecent
+        
+        if let jsonData = try? JSONSerialization.data(withJSONObject: [
+            "filter": "WINDOW_TRIM",
+            "action": "enforceMessageWindow_start",
+            "keepingMostRecent": shouldKeepMostRecent,
+            "originalKeepingMostRecent": keepingMostRecent,
+            "isLoadingOlderMessages": isLoadingOlderMessages,
+            "channelId": channelId,
+            "currentCount": currentIds.count,
+            "maxCount": maxCount,
+            "channelLastMessageId": channelLastMessageId ?? "nil",
+            "currentLastMessageId": currentIds.last ?? "nil",
+            "willTrim": currentIds.count > maxCount,
+            "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+        ]),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            print("MESSAGE_SCROLLING: \(jsonString)")
+        }
+        
         guard currentIds.count > maxCount else { return }
         
         // Calculate which messages to keep/remove (lightweight operation, can stay on main thread)
-        let kept = keepingMostRecent
+        // CRITICAL FIX: Use shouldKeepMostRecent to ensure we never trim latest when loading older messages
+        let kept = shouldKeepMostRecent
             ? Array(currentIds.suffix(maxCount))
             : Array(currentIds.prefix(maxCount))
         guard kept.count < currentIds.count else { return }
         
         let keptSet = Set(kept)
         let removedIds = currentIds.filter { !keptSet.contains($0) }
+        
+        if let jsonData2 = try? JSONSerialization.data(withJSONObject: [
+            "filter": "WINDOW_TRIM",
+            "action": "enforceMessageWindow_result",
+            "keptCount": kept.count,
+            "removedCount": removedIds.count,
+            "keptFirst": kept.first ?? "nil",
+            "keptLast": kept.last ?? "nil",
+            "removedFirst": removedIds.first ?? "nil",
+            "removedLast": removedIds.last ?? "nil",
+            "keepingMostRecent": shouldKeepMostRecent,
+            "originalKeepingMostRecent": keepingMostRecent,
+            "isLoadingOlderMessages": isLoadingOlderMessages,
+            "channelLastMessageId": channelLastMessageId ?? "nil",
+            "keptLastMatchesChannel": kept.last == channelLastMessageId,
+            "removedContainsLatest": removedIds.contains(where: { $0 == channelLastMessageId }),
+            "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+        ]),
+           let jsonString2 = String(data: jsonData2, encoding: .utf8) {
+            print("MESSAGE_SCROLLING: \(jsonString2)")
+        }
         
         // MEMORY MANAGEMENT: Remove messages from dictionary off-main-thread to prevent UI hitches
         if !removedIds.isEmpty {
@@ -3439,7 +3635,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             localDataSource.updateMessages(kept)
         }
         
-        let trimDirection = keepingMostRecent ? "mostRecent" : "oldest"
+        let trimDirection = shouldKeepMostRecent ? "mostRecent" : "oldest"
         let timestamp = String(format: "%.3f", Date().timeIntervalSince1970)
         print("CACHE_TRACE t=\(timestamp) cacheTrim channel=\(channelId) kept=\(kept.count) removed=\(removedIds.count) direction=\(trimDirection)")
     }
@@ -3501,7 +3697,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             self.viewModel.viewState.channelMessages[channelId] = merged
             self.viewModel.messages = merged
             self.localMessages = merged
-            self.enforceMessageWindow(keepingMostRecent: false)
+            // CRITICAL FIX: When loading from cache, keep the most recent messages
+            // Don't trim the latest messages - we want to preserve them!
+            self.enforceMessageWindow(keepingMostRecent: true)
             self.cachedMessageOffset = min(totalCount, currentOffset + cachedMessages.count)
             
             if let localDataSource = self.dataSource as? LocalMessagesDataSource {
@@ -3533,7 +3731,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         return true
     }
     
-    private func loadInitialMessages() async {
+    func loadInitialMessages() async {
         let channelId = viewModel.channel.id
         let currentChannelId = channelId
         
@@ -5646,8 +5844,35 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // Load newer messages (when scrolling to bottom)
     func loadNewerMessages(after messageId: String) {
+        let channelLastMessageId = viewModel.channel.last_message_id
+        
+        if let jsonData = try? JSONSerialization.data(withJSONObject: [
+            "filter": "LOAD_NEWER",
+            "action": "loadNewerMessages_start",
+            "afterMessageId": messageId,
+            "localMessagesCount": localMessages.count,
+            "localMessagesEmpty": localMessages.isEmpty,
+            "isLoadingMore": isLoadingMore,
+            "lastMessageId": localMessages.last ?? "nil",
+            "channelLastMessageId": channelLastMessageId ?? "nil",
+            "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+        ]),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            print("MESSAGE_SCROLLING: \(jsonString)")
+        }
+        
         // Only if we have messages and not already loading
         guard !localMessages.isEmpty && !isLoadingMore else { 
+            if let jsonDataGuard = try? JSONSerialization.data(withJSONObject: [
+                "filter": "LOAD_NEWER",
+                "action": "loadNewerMessages_guard_failed",
+                "isEmpty": localMessages.isEmpty,
+                "isLoadingMore": isLoadingMore,
+                "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+            ]),
+               let jsonStringGuard = String(data: jsonDataGuard, encoding: .utf8) {
+                print("MESSAGE_SCROLLING: \(jsonStringGuard)")
+            }
             // print("🛑 AFTER: Skipping - no messages or already loading")
             return 
         }
@@ -5664,8 +5889,27 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             // print("⏳ AFTER: Loading newer messages...")
         }
         
-        // Create task to load messages
+        // Create task to load messages with timeout protection
         Task {
+            // CRITICAL FIX: Add timeout to prevent isLoadingMore from staying true forever
+            let timeoutTask = Task {
+                try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 second timeout
+                await MainActor.run {
+                    if self.isLoadingMore {
+                        if let jsonDataTimeout = try? JSONSerialization.data(withJSONObject: [
+                            "filter": "LOAD_NEWER",
+                            "action": "loadNewerMessages_timeout",
+                            "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+                        ]),
+                           let jsonStringTimeout = String(data: jsonDataTimeout, encoding: .utf8) {
+                            print("MESSAGE_SCROLLING: \(jsonStringTimeout)")
+                        }
+                        self.isLoadingMore = false
+                        self.messageLoadingState = .notLoading
+                    }
+                }
+            }
+            
             do {
                 // Save count of messages before loading
                 let initialCount = localMessages.count
@@ -5676,6 +5920,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     before: nil,
                     after: messageId
                 )
+                
+                // Cancel timeout task since we got a result
+                timeoutTask.cancel()
                 
                 // print("📥📥 AFTER_CALL: API call completed. Result is nil? \(result == nil)")
                 
@@ -5688,6 +5935,24 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                     // Process the new messages
                     if let fetchResult = result, !fetchResult.messages.isEmpty {
                         // print("📥📥 AFTER_CALL: Processing \(fetchResult.messages.count) new messages")
+                        
+                        let channelLastMessageId = self.viewModel.channel.last_message_id
+                        
+                        if let jsonDataBefore = try? JSONSerialization.data(withJSONObject: [
+                            "filter": "LOAD_NEWER",
+                            "action": "loadNewerMessages_api_result",
+                            "fetchResultCount": fetchResult.messages.count,
+                            "localMessagesCountBefore": localMessages.count,
+                            "lastMessageIdBefore": localMessages.last ?? "nil",
+                            "firstNewMessageId": fetchResult.messages.first?.id ?? "nil",
+                            "lastNewMessageId": fetchResult.messages.last?.id ?? "nil",
+                            "channelLastMessageId": channelLastMessageId ?? "nil",
+                            "newLastMatchesChannel": fetchResult.messages.last?.id == channelLastMessageId,
+                            "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+                        ]),
+                           let jsonStringBefore = String(data: jsonDataBefore, encoding: .utf8) {
+                            print("MESSAGE_SCROLLING: \(jsonStringBefore)")
+                        }
                         
                         // Process all messages
                         for message in fetchResult.messages {
@@ -5704,6 +5969,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                         if !messagesToAdd.isEmpty {
                             // print("📥📥 AFTER_CALL: Adding \(messagesToAdd.count) new messages to arrays")
                             
+                            if let jsonData = try? JSONSerialization.data(withJSONObject: [
+                                "filter": "LOAD_NEWER",
+                                "action": "loadNewerMessages_adding",
+                                "messagesToAddCount": messagesToAdd.count,
+                                "beforeCount": localMessages.count,
+                                "newMessageIds": Array(messagesToAdd.prefix(5)),
+                                "lastMessageIdBefore": localMessages.last ?? "nil",
+                                "channelLastMessageId": channelLastMessageId ?? "nil",
+                                "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+                            ]),
+                               let jsonString = String(data: jsonData, encoding: .utf8) {
+                                print("MESSAGE_SCROLLING: \(jsonString)")
+                            }
+                            
                             // Create new arrays to avoid reference issues
                             var updatedMessages = localMessages
                             updatedMessages.append(contentsOf: messagesToAdd)
@@ -5712,7 +5991,35 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             viewModel.messages = updatedMessages
                             localMessages = updatedMessages
                             viewModel.viewState.channelMessages[viewModel.channel.id] = updatedMessages
+                            
+                            if let jsonData2 = try? JSONSerialization.data(withJSONObject: [
+                                "filter": "LOAD_NEWER",
+                                "action": "loadNewerMessages_before_enforce",
+                                "afterCount": updatedMessages.count,
+                                "lastMessageIdAfter": updatedMessages.last ?? "nil",
+                                "channelLastMessageId": channelLastMessageId ?? "nil",
+                                "keepingMostRecent": true,
+                                "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+                            ]),
+                               let jsonString2 = String(data: jsonData2, encoding: .utf8) {
+                                print("MESSAGE_SCROLLING: \(jsonString2)")
+                            }
+                            
                             self.enforceMessageWindow(keepingMostRecent: true)
+                            
+                            if let jsonData3 = try? JSONSerialization.data(withJSONObject: [
+                                "filter": "LOAD_NEWER",
+                                "action": "loadNewerMessages_after_enforce",
+                                "localMessagesCountAfter": self.localMessages.count,
+                                "lastMessageIdAfterEnforce": self.localMessages.last ?? "nil",
+                                "viewModelMessagesCount": self.viewModel.messages.count,
+                                "channelLastMessageId": channelLastMessageId ?? "nil",
+                                "matchesChannelLatest": self.localMessages.last == channelLastMessageId,
+                                "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+                            ]),
+                               let jsonString3 = String(data: jsonData3, encoding: .utf8) {
+                                print("MESSAGE_SCROLLING: \(jsonString3)")
+                            }
                             
                             // MEMORY MANAGEMENT: Aggressive cleanup after loading newer messages
                             if self.localMessages.count > Int(Double(MessageableChannelConstants.maxMessagesInMemory) * 1.2) {
@@ -5731,19 +6038,87 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             // Final verification
                             // print("📥📥 AFTER_CALL: Arrays updated: viewModel.messages=\(viewModel.messages.count), localMessages=\(localMessages.count)")
                             
-                            // Update UI
-                            refreshMessages()
+                            if let jsonData4 = try? JSONSerialization.data(withJSONObject: [
+                                "filter": "LOAD_NEWER",
+                                "action": "loadNewerMessages_before_refresh",
+                                "localMessagesCount": self.localMessages.count,
+                                "viewModelMessagesCount": self.viewModel.messages.count,
+                                "channelMessagesCount": self.viewModel.viewState.channelMessages[self.viewModel.channel.id]?.count ?? 0,
+                                "lastMessageId": self.localMessages.last ?? "nil",
+                                "channelLastMessageId": channelLastMessageId ?? "nil",
+                                "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+                            ]),
+                               let jsonString4 = String(data: jsonData4, encoding: .utf8) {
+                                print("MESSAGE_SCROLLING: \(jsonString4)")
+                            }
+                            
+                            // CRITICAL FIX: Defer UI update to avoid jumps during scroll
+                            // Only refresh if not currently scrolling to prevent UI jumps
+                            if !self.tableView.isDragging && !self.tableView.isDecelerating {
+                                self.refreshMessages()
+                            } else {
+                                // Defer refresh until scroll ends
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    if !self.tableView.isDragging && !self.tableView.isDecelerating {
+                                        self.refreshMessages()
+                                    }
+                                }
+                            }
+                            
+                            if let jsonData5 = try? JSONSerialization.data(withJSONObject: [
+                                "filter": "LOAD_NEWER",
+                                "action": "loadNewerMessages_after_refresh",
+                                "localMessagesCount": self.localMessages.count,
+                                "tableViewRows": self.tableView.numberOfRows(inSection: 0),
+                                "lastMessageId": self.localMessages.last ?? "nil",
+                                "channelLastMessageId": channelLastMessageId ?? "nil",
+                                "matchesChannelLatest": self.localMessages.last == channelLastMessageId,
+                                "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+                            ]),
+                               let jsonString5 = String(data: jsonData5, encoding: .utf8) {
+                                print("MESSAGE_SCROLLING: \(jsonString5)")
+                            }
                             
                             // Show success notification
                             // print("✅ AFTER_CALL: Successfully loaded \(messagesToAdd.count) newer messages")
                         } else {
+                            if let jsonDataEmpty = try? JSONSerialization.data(withJSONObject: [
+                                "filter": "LOAD_NEWER",
+                                "action": "loadNewerMessages_no_messages_to_add",
+                                "messagesToAddEmpty": messagesToAdd.isEmpty,
+                                "newMessageIdsCount": newMessageIds.count,
+                                "existingIdsCount": existingIds.count,
+                                "localMessagesCount": localMessages.count,
+                                "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+                            ]),
+                               let jsonStringEmpty = String(data: jsonDataEmpty, encoding: .utf8) {
+                                print("MESSAGE_SCROLLING: \(jsonStringEmpty)")
+                            }
                             // print("📥📥 AFTER_CALL: No new unique messages to add (duplicates)")
                         }
                     } else {
+                        if let jsonDataNoResult = try? JSONSerialization.data(withJSONObject: [
+                            "filter": "LOAD_NEWER",
+                            "action": "loadNewerMessages_empty_api_result",
+                            "resultIsNil": result == nil,
+                            "resultMessagesEmpty": result?.messages.isEmpty ?? true,
+                            "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
+                        ]),
+                           let jsonStringNoResult = String(data: jsonDataNoResult, encoding: .utf8) {
+                            print("MESSAGE_SCROLLING: \(jsonStringNoResult)")
+                        }
                         // print("📥📥 AFTER_CALL: API returned empty result or no new messages")
+                        
+                        // CRITICAL FIX: Explicitly ensure loading flags are reset when result is empty
+                        // This prevents isLoadingMore from staying true and blocking subsequent loads
+                        isLoadingMore = false
+                        messageLoadingState = .notLoading
                     }
                 }
             } catch {
+                // Cancel timeout task since we got an error
+                timeoutTask.cancel()
+                
                 // print("❌ AFTER_CALL: Error loading newer messages: \(error)")
                 
                 // Reset loading state on main thread
@@ -7624,23 +7999,6 @@ extension MessageableChannelViewController: UITableViewDataSourcePrefetching {
                         // Use Kingfisher's ImagePrefetcher with the URL - make sure to not pass any arguments to start()
                         let prefetcher = ImagePrefetcher(urls: [url])
                         prefetcher.start()
-                    }
-                    
-                    // Pre-load message attachments if any
-                    if let attachments = message.attachments, !attachments.isEmpty {
-                        // Create an array to store valid attachment URLs
-                        let attachmentUrls = attachments.compactMap { attachment -> URL? in
-                            // Generate URL string and safely convert to URL object
-                            let urlString = viewModel.viewState.formatUrl(fromId: attachment.id, withTag: "attachments")
-                            return URL(string: urlString)
-                        }
-                        
-                        // Prefetch all attachments in one batch if there are any
-                        if !attachmentUrls.isEmpty {
-                            // Fix: Create the prefetcher and then start it - make sure to not pass any arguments to start()
-                            let prefetcher = ImagePrefetcher(urls: attachmentUrls)
-                            prefetcher.start()
-                        }
                     }
                 }
             }

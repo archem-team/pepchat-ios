@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI
 import AVKit
 import Types
+import UIKit
 
 // Formatter to convert byte counts into human-readable strings
 var fmt = ByteCountFormatter()
@@ -54,15 +55,24 @@ struct MessageAttachment: View {
                 
                 
             case .video(_):  // Handle video attachments
-                
-                Button {
-                    self.isPresented.toggle()
-                } label : {
-                    VideoPlayer(player: AVPlayer(url: URL(string: viewState.formatUrl(with: attachment))!))  // Play the video using AVPlayer
-                        .aspectRatio(contentMode: .fit)  // Maintain aspect ratio
-                        .frame(maxHeight: 298)  // Set a maximum height for the video player
-                        .clipShape(RoundedRectangle(cornerRadius: .radiusXSmall))
-                }
+                // MEMORY OPTIMIZATION: Use VideoPlayerView which shows thumbnail instead of creating AVPlayer immediately
+                VideoPlayerViewWrapper(
+                    videoURL: viewState.formatUrl(with: attachment),
+                    filename: attachment.filename,
+                    fileSize: attachment.size,
+                    headers: {
+                        var headers: [String: String] = [:]
+                        if let token = viewState.sessionToken {
+                            headers["x-session-token"] = token
+                        }
+                        return headers
+                    }(),
+                    onPlayTapped: {
+                        self.isPresented.toggle()
+                    }
+                )
+                .frame(maxHeight: 298)
+                .clipShape(RoundedRectangle(cornerRadius: .radiusXSmall))
                 
             case .file(_), .text(_), .audio(_):  // Handle general file types, text files, and audio files
                 HStack(alignment: .center) {
@@ -230,6 +240,35 @@ struct ZoomableMessageAttachment : View {
     }
 }
 
+
+// MARK: - VideoPlayerViewWrapper
+/// SwiftUI wrapper for VideoPlayerView to avoid immediate AVPlayer creation
+struct VideoPlayerViewWrapper: UIViewRepresentable {
+    let videoURL: String
+    let filename: String?
+    let fileSize: Int64?
+    let headers: [String: String]
+    let onPlayTapped: () -> Void
+    
+    func makeUIView(context: Context) -> VideoPlayerView {
+        let videoPlayerView = VideoPlayerView()
+        videoPlayerView.configure(
+            with: videoURL,
+            filename: filename,
+            fileSize: fileSize,
+            headers: headers
+        )
+        videoPlayerView.onPlayTapped = { _ in
+            onPlayTapped()
+        }
+        return videoPlayerView
+    }
+    
+    func updateUIView(_ uiView: VideoPlayerView, context: Context) {
+        // Update if needed (e.g., if URL changes)
+        // For now, configuration happens in makeUIView
+    }
+}
 
 struct ZoomableScrollView<Content: View>: UIViewRepresentable {
   private var content: Content

@@ -146,12 +146,18 @@ class UserSheetViewController: UIViewController {
     
     private func loadAvatar() {
         if let avatarURL = userAvatar {
+            // MEMORY OPTIMIZATION: Use aggressive downsampling for avatars (target 60x60 display = 120x120 @2x)
+            let avatarProcessor = DownsamplingImageProcessor(size: CGSize(width: 120, height: 120))
+            let scale = UIScreen.main.scale
+            
             avatarImageView.kf.setImage(
                 with: avatarURL,
                 placeholder: UIImage(systemName: "person.circle.fill"),
                 options: [
+                    .processor(avatarProcessor),
+                    .scaleFactor(scale),
                     .transition(.fade(0.2)),
-                    .cacheOriginalImage
+                    .cacheOriginalImage // Keep original in disk cache
                 ]
             )
         } else {
