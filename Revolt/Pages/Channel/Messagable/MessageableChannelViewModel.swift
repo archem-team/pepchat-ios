@@ -311,7 +311,7 @@ extension MessageableChannelViewModel {
     }
     
     // Helper function to get created timestamp from message ID
-    private func createdAt(id: String) -> Date {
+    internal func createdAt(id: String) -> Date {
         // Try ULID first (what Revolt uses)
         if let ulid = ULID(ulidString: id) {
             return ulid.timestamp

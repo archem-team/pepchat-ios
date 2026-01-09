@@ -1,0 +1,20 @@
+# Cursor Rules for PepChat iOS
+
+## File Size Guidelines
+- **Maximum file length: 300 lines of code**
+- When a file exceeds 300 lines, it should be refactored and split into smaller, more focused files
+- Break down large files by:
+  - Extracting related functionality into separate files
+  - Moving extensions to dedicated extension files
+  - Splitting large view controllers/view models into smaller components
+  - Separating concerns into logical modules
+
+## Code Organization
+- Keep files focused on a single responsibility
+- Use extensions to organize related functionality when appropriate
+- Prefer composition over large monolithic files
+- When adding new files, edit the xcode project file to include them
+
+
+## Build
+- use this command to run build: xcodebuild -scheme Revolt -destination 'id=00008020-001E61EC3AB8003A' build
