@@ -29,10 +29,25 @@ class VideoPlayerView: UIView {
     private var authHeaders: [String: String] = [:]
     private var isDownloading = false
     private var videoAsset: AVAsset?
+    private var assetLoadingTask: Task<Void, Never>?
     
-    // Static cache for thumbnails
+    // Static cache for thumbnails with LRU tracking
     private static var thumbnailCache: [String: UIImage] = [:]
+    private static var thumbnailCacheAccessOrder: [String] = [] // LRU tracking
+    private static let maxThumbnailCacheEntries = 50
+    
+    // Static cache for durations with LRU tracking
     private static var durationCache: [String: TimeInterval] = [:]
+    private static var durationCacheAccessOrder: [String] = [] // LRU tracking
+    private static let maxDurationCacheEntries = 100
+    
+    /// Clear caches on memory warnings
+    static func clearCachesOnMemoryWarning() {
+        thumbnailCache.removeAll()
+        thumbnailCacheAccessOrder.removeAll()
+        durationCache.removeAll()
+        durationCacheAccessOrder.removeAll()
+    }
     
     // Callback for when play button is tapped
     var onPlayTapped: ((String) -> Void)?
@@ -46,6 +61,12 @@ class VideoPlayerView: UIView {
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         setupUI()
+    }
+    
+    deinit {
+        // AVAsset cleanup: Release videoAsset and cancel loading operations
+        assetLoadingTask?.cancel()
+        videoAsset = nil
     }
     
     // MARK: - UI Setup
@@ -295,7 +316,18 @@ class VideoPlayerView: UIView {
             thumbnailImageView.image = cachedThumbnail
             thumbnailImageView.contentMode = .scaleAspectFill
             
+            // Update LRU access order (move to end = most recently used)
+            if let index = VideoPlayerView.thumbnailCacheAccessOrder.firstIndex(of: urlString) {
+                VideoPlayerView.thumbnailCacheAccessOrder.remove(at: index)
+            }
+            VideoPlayerView.thumbnailCacheAccessOrder.append(urlString)
+            
             if let cachedDuration = VideoPlayerView.durationCache[urlString] {
+                // Update LRU access order for duration cache
+                if let index = VideoPlayerView.durationCacheAccessOrder.firstIndex(of: urlString) {
+                    VideoPlayerView.durationCacheAccessOrder.remove(at: index)
+                }
+                VideoPlayerView.durationCacheAccessOrder.append(urlString)
                 durationLabel.text = formatTime(cachedDuration)
             } else {
                 durationLabel.text = "--:--"
@@ -424,15 +456,34 @@ class VideoPlayerView: UIView {
             }
         }
         
-        // Clean up old cache items if needed (keep only last 50)
-        if VideoPlayerView.thumbnailCache.count > 50 {
-            // Remove oldest entries
-            let sortedKeys = VideoPlayerView.thumbnailCache.keys.sorted()
-            for key in sortedKeys.prefix(10) {
+        // LRU eviction for thumbnail cache
+        if VideoPlayerView.thumbnailCache.count > VideoPlayerView.maxThumbnailCacheEntries {
+            let keysToRemove = VideoPlayerView.thumbnailCacheAccessOrder.prefix(VideoPlayerView.thumbnailCache.count - VideoPlayerView.maxThumbnailCacheEntries)
+            for key in keysToRemove {
                 VideoPlayerView.thumbnailCache.removeValue(forKey: key)
-                VideoPlayerView.durationCache.removeValue(forKey: key)
+                VideoPlayerView.thumbnailCacheAccessOrder.removeAll { $0 == key }
             }
         }
+        
+        // LRU eviction for duration cache
+        if VideoPlayerView.durationCache.count > VideoPlayerView.maxDurationCacheEntries {
+            let keysToRemove = VideoPlayerView.durationCacheAccessOrder.prefix(VideoPlayerView.durationCache.count - VideoPlayerView.maxDurationCacheEntries)
+            for key in keysToRemove {
+                VideoPlayerView.durationCache.removeValue(forKey: key)
+                VideoPlayerView.durationCacheAccessOrder.removeAll { $0 == key }
+            }
+        }
+        
+        // Update access order for LRU (move to end = most recently used)
+        if let index = VideoPlayerView.thumbnailCacheAccessOrder.firstIndex(of: cacheKey) {
+            VideoPlayerView.thumbnailCacheAccessOrder.remove(at: index)
+        }
+        VideoPlayerView.thumbnailCacheAccessOrder.append(cacheKey)
+        
+        if let index = VideoPlayerView.durationCacheAccessOrder.firstIndex(of: cacheKey) {
+            VideoPlayerView.durationCacheAccessOrder.remove(at: index)
+        }
+        VideoPlayerView.durationCacheAccessOrder.append(cacheKey)
     }
     
     private func formatTime(_ timeInterval: TimeInterval) -> String {
@@ -711,3 +762,4 @@ class VideoPlayerView: UIView {
         return CGSize(width: UIView.noIntrinsicMetric, height: 200)
     }
 }
+

@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Sentry
 import UserNotificationsUI
+import Kingfisher
 
 #if os(macOS)
 import AppKit
@@ -65,11 +66,30 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Initialize audio session manager for proper audio handling
         _ = AudioSessionManager.shared
         
+        // MEMORY OPTIMIZATION: Configure Kingfisher image cache limits
+        configureKingfisherCache()
+        
         if let notification = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
                 handleInitialNotification(notification: notification)
         }
             
         return true
+    }
+    
+    /// Configures Kingfisher image cache with memory and disk limits, eviction policies, and expiration settings.
+    /// This prevents image cache from consuming unlimited memory and ensures automatic cleanup.
+    private func configureKingfisherCache() {
+        // Memory Cache Configuration
+        ImageCache.default.memoryStorage.config.totalCostLimit = 50 * 1024 * 1024 // 50MB
+        ImageCache.default.memoryStorage.config.countLimit = 200 // Increased from 100 for emoji/reaction-heavy views
+        ImageCache.default.memoryStorage.config.cleanInterval = 300 // Clean every 5 minutes
+        ImageCache.default.memoryStorage.config.expiration = .seconds(3600) // Expire after 1 hour
+        
+        // Disk Cache Configuration
+        ImageCache.default.diskStorage.config.sizeLimit = 200 * 1024 * 1024 // 200MB
+        ImageCache.default.diskStorage.config.expiration = .days(7) // Expire after 7 days
+        
+        print("✅ MEMORY: Kingfisher cache configured - Memory: 50MB/200 count, Disk: 200MB, Expiration: 1h/7d")
     }
     
     
@@ -158,6 +178,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         // Get the current ViewState
         if let state = ViewState.shared {
+            // MEMORY MANAGEMENT: Mark app as in background
+            state.setAppInBackground(true)
+            
+            // MEMORY MANAGEMENT: Cancel cleanup timer on background
+            state.cancelMemoryCleanupTimer()
+            
+            // MEMORY MANAGEMENT: Aggressive trimming on background
+            state.performBackgroundMemoryCleanup()
+            
             // Force save all important data to UserDefaults immediately
             // DISABLED: Don't cache servers and channels to force refresh from backend on app launch
             // print("💾 BACKGROUND: Saving servers (\(state.servers.count)) to UserDefaults")
@@ -203,6 +232,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             let _ = ViewState()
         } else {
             print("✅ FOREGROUND: ViewState still exists")
+            // MEMORY MANAGEMENT: Mark app as in foreground
+            ViewState.shared?.setAppInBackground(false)
+            
+            // MEMORY MANAGEMENT: Restore limits and restart cleanup timer on foreground
+            ViewState.shared?.restoreForegroundLimits()
+            ViewState.shared?.restartMemoryCleanupTimer()
         }
     }
     

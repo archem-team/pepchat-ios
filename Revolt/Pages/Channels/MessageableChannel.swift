@@ -49,7 +49,7 @@ class MessageableChannelViewModel: ObservableObject {
 
         let result = (try? await viewState.http.fetchHistory(
             channel: channel.id,
-            limit: 100, // Reduced from 300 to prevent memory issues
+            limit: viewState.getEffectiveFetchLimit(), // Uses getEffectiveFetchLimit() for guardrail support
             before: before,
             server: serverId,
             messages: messageIds

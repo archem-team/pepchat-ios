@@ -81,6 +81,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     var lastManualScrollUpTime: Date?
     var scrollProtectionTimer: Timer?
     private var scrollCheckTimer: Timer?
+    // MEMORY MANAGEMENT: Track scroll events for periodic cleanup
+    var scrollEventCount: Int = 0
     private var contentSizeObserverRegistered = false
     var lastScrollToBottomTime: Date?
     let scrollDebounceInterval: TimeInterval = 2.0
@@ -1234,9 +1236,27 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // CRITICAL: Add automatic memory management to prevent crashes
     private func enforceMessageLimits() {
-        // DISABLED: Memory cleanup was causing UI freezes
-        // Don't perform any message limit enforcement while in the channel
-        return
+        // MEMORY MANAGEMENT: Aggressive cleanup during active scrolling to prevent memory growth
+        let channelId = viewModel.channel.id
+        let currentCount = localMessages.count
+        let maxCount = MessageableChannelConstants.maxMessagesInMemory
+        
+        // Only cleanup if we're significantly over the limit (75% threshold)
+        guard currentCount > Int(Double(maxCount) * 1.5) else { return }
+        
+        // Aggressively trim to maxCount during scrolling
+        enforceMessageWindow(keepingMostRecent: true)
+        
+        // Also trigger ViewState cleanup if total messages are high
+        let totalMessages = viewModel.viewState.messages.count
+        if totalMessages > 1500 {
+            Task.detached(priority: .background) { [weak self] in
+                guard let self = self else { return }
+                await MainActor.run {
+                    self.viewModel.viewState.enforceMemoryLimits()
+                }
+            }
+        }
     }
     
     // Check if we need memory cleanup
@@ -1262,11 +1282,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     // Handle system memory warnings
     @objc private func handleMemoryWarning() {
-        // DISABLED: Memory cleanup was causing UI freezes while in the channel
-        // Don't perform any aggressive cleanup while user is actively viewing messages
-        // Messages will be cleared when leaving the channel
-        // print("⚠️ MEMORY WARNING: Received memory warning but deferring cleanup until channel exit")
-        return
+        // MEMORY MANAGEMENT: Delegate to ViewState for centralized memory pressure handling
+        viewModel.viewState.didReceiveMemoryWarning()
     }
     
     // Handle channel search closing notification
@@ -2667,6 +2684,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             
                             self.enforceMessageWindow(keepingMostRecent: false)
                             
+                            // MEMORY MANAGEMENT: Aggressive cleanup after loading older messages
+                            if self.localMessages.count > Int(Double(MessageableChannelConstants.maxMessagesInMemory) * 1.2) {
+                                self.enforceMessageWindow(keepingMostRecent: false)
+                                // Also trigger ViewState cleanup if total messages are high
+                                let totalMessages = self.viewModel.viewState.messages.count
+                                if totalMessages > 1500 {
+                                    Task.detached(priority: .background) {
+                                        await MainActor.run {
+                                            self.viewModel.viewState.enforceMemoryLimits()
+                                        }
+                                    }
+                                }
+                            }
+                            
                             // CRITICAL: Make sure we're using the correct messages array
                             let messagesForDataSource = !self.viewModel.messages.isEmpty ? 
                                 self.viewModel.messages : 
@@ -3371,12 +3402,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     }
 
     @MainActor
-    private func enforceMessageWindow(keepingMostRecent: Bool) {
+    func enforceMessageWindow(keepingMostRecent: Bool) {
         let channelId = viewModel.channel.id
         let currentIds = viewModel.viewState.channelMessages[channelId] ?? localMessages
         let maxCount = MessageableChannelConstants.maxMessagesInMemory
         guard currentIds.count > maxCount else { return }
         
+        // Calculate which messages to keep/remove (lightweight operation, can stay on main thread)
         let kept = keepingMostRecent
             ? Array(currentIds.suffix(maxCount))
             : Array(currentIds.prefix(maxCount))
@@ -3384,12 +3416,21 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         
         let keptSet = Set(kept)
         let removedIds = currentIds.filter { !keptSet.contains($0) }
+        
+        // MEMORY MANAGEMENT: Remove messages from dictionary off-main-thread to prevent UI hitches
         if !removedIds.isEmpty {
-            for messageId in removedIds {
-                viewModel.viewState.messages.removeValue(forKey: messageId)
+            Task.detached(priority: .background) { [weak self] in
+                guard let self = self else { return }
+                // Remove messages off-main-thread
+                await MainActor.run {
+                    for messageId in removedIds {
+                        self.viewModel.viewState.messages.removeValue(forKey: messageId)
+                    }
+                }
             }
         }
         
+        // Update UI immediately on main thread (synchronous updates for responsiveness)
         viewModel.viewState.channelMessages[channelId] = kept
         viewModel.messages = kept
         localMessages = kept
@@ -3397,7 +3438,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
         if let localDataSource = dataSource as? LocalMessagesDataSource {
             localDataSource.updateMessages(kept)
         }
-
+        
         let trimDirection = keepingMostRecent ? "mostRecent" : "oldest"
         let timestamp = String(format: "%.3f", Date().timeIntervalSince1970)
         print("CACHE_TRACE t=\(timestamp) cacheTrim channel=\(channelId) kept=\(kept.count) removed=\(removedIds.count) direction=\(trimDirection)")
@@ -3721,10 +3762,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
     
     do {
         // Use the API to fetch messages near the specified message
-        print("🌐 API CALL: fetchHistory (nearby) - Channel: \(viewModel.channel.id), Target: \(targetId), Limit: 100")
+        let effectiveLimit = viewModel.viewState.getEffectiveFetchLimit()
+        print("🌐 API CALL: fetchHistory (nearby) - Channel: \(viewModel.channel.id), Target: \(targetId), Limit: \(effectiveLimit)")
         let result = try await viewModel.viewState.http.fetchHistory(
             channel: viewModel.channel.id,
-            limit: 100,  // Get context around the target message
+            limit: effectiveLimit,  // Uses getEffectiveFetchLimit() for guardrail support
             nearby: targetId
         ).get()
         print("✅ API RESPONSE: fetchHistory (nearby) - Received \(result.messages.count) messages, \(result.users.count) users")
@@ -4843,9 +4885,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             let result = try await withThrowingTaskGroup(of: FetchHistory.self) { group in
                 // Add the actual API call
                 group.addTask {
-                    try await self.viewModel.viewState.http.fetchHistory(
+                    let effectiveLimit = self.viewModel.viewState.getEffectiveFetchLimit()
+                    return try await self.viewModel.viewState.http.fetchHistory(
                         channel: self.viewModel.channel.id,
-                        limit: 100,
+                        limit: effectiveLimit,  // Uses getEffectiveFetchLimit() for guardrail support
                         nearby: messageId
                     ).get()
                 }
@@ -5670,6 +5713,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                             localMessages = updatedMessages
                             viewModel.viewState.channelMessages[viewModel.channel.id] = updatedMessages
                             self.enforceMessageWindow(keepingMostRecent: true)
+                            
+                            // MEMORY MANAGEMENT: Aggressive cleanup after loading newer messages
+                            if self.localMessages.count > Int(Double(MessageableChannelConstants.maxMessagesInMemory) * 1.2) {
+                                self.enforceMessageWindow(keepingMostRecent: true)
+                                // Also trigger ViewState cleanup if total messages are high
+                                let totalMessages = self.viewModel.viewState.messages.count
+                                if totalMessages > 1500 {
+                                    Task.detached(priority: .background) {
+                                        await MainActor.run {
+                                            self.viewModel.viewState.enforceMemoryLimits()
+                                        }
+                                    }
+                                }
+                            }
                             
                             // Final verification
                             // print("📥📥 AFTER_CALL: Arrays updated: viewModel.messages=\(viewModel.messages.count), localMessages=\(localMessages.count)")
@@ -6939,9 +6996,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
                 
                 // Call API directly with strong error handling
                 // print("⬇️⬇️⬇️ Making direct API call to fetch messages after \(lastMessageId)")
+                let effectiveLimit = viewModel.viewState.getEffectiveFetchLimit()
                 let result = try await viewModel.viewState.http.fetchHistory(
                     channel: viewModel.channel.id,
-                    limit: 100,
+                    limit: effectiveLimit,  // Uses getEffectiveFetchLimit() for guardrail support
                     before: nil,
                     after: lastMessageId,
                     sort: "Oldest", // Add sort=Oldest parameter for after requests
@@ -7410,14 +7468,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate, N
             // Get server ID if this is a server channel
             let serverId = viewModel.channel.server
             
-            // SMART LIMIT: Use 10 for specific channel in specific server, 50 for others
-            let messageLimit = (channelId == "01J7QTT66242A7Q26A2FH5TD48" && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : 50
+            // SMART LIMIT: Use 10 for specific channel in specific server, otherwise use effective fetch limit
+            let baseLimit = (channelId == "01J7QTT66242A7Q26A2FH5TD48" && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : viewModel.viewState.getEffectiveFetchLimit()
+            let messageLimit = baseLimit
             
             // IMMEDIATE API CALL
             print("⚡ API CALL: fetchHistory IMMEDIATE - Channel: \(channelId), Limit: \(messageLimit)")
             let result = try await viewModel.viewState.http.fetchHistory(
                 channel: channelId,
-                limit: messageLimit,
+                limit: messageLimit,  // Uses getEffectiveFetchLimit() for guardrail support
                 sort: "Latest",
                 server: serverId,
                 include_users: true

@@ -31,5 +31,10 @@ enum MessageableChannelConstants {
     static let messageLoadLimit = 50
     static let retryMaxAttempts = 3
     static let retryBaseDelay: TimeInterval = 1.0
-    static let maxMessagesInMemory = 100
+    
+    /// Maximum messages in memory per channel. Uses feature flag if enabled, otherwise old limit.
+    static var maxMessagesInMemory: Int {
+        let enableAggressive = UserDefaults.standard.object(forKey: "enableAggressiveMemoryManagement") as? Bool ?? true
+        return enableAggressive ? 50 : 100
+    }
 }

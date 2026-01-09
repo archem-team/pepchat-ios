@@ -34,8 +34,10 @@ class AudioPlayerManager: NSObject, ObservableObject {
     // Track buffered ranges
     private var bufferedRanges: [CMTimeRange] = []
     
-    // Cache for preloaded durations
+    // Cache for preloaded durations with LRU tracking
     private var durationCache: [String: TimeInterval] = [:]
+    private var durationCacheAccessOrder: [String] = [] // LRU tracking
+    private let maxDurationCacheEntries = 200
     
     // Session token for authenticated requests
     private var sessionToken: String?
@@ -96,6 +98,11 @@ class AudioPlayerManager: NSObject, ObservableObject {
         
         // Check if we already have this duration cached
         if let cachedDuration = durationCache[urlString] {
+            // Update LRU access order (move to end = most recently used)
+            if let index = durationCacheAccessOrder.firstIndex(of: urlString) {
+                durationCacheAccessOrder.remove(at: index)
+            }
+            durationCacheAccessOrder.append(urlString)
             // print("💾 CACHE HIT: Using cached duration \(String(format: "%.1f", cachedDuration))s for \(url.lastPathComponent)")
             completion(cachedDuration)
             return
@@ -154,6 +161,19 @@ class AudioPlayerManager: NSObject, ObservableObject {
                     
                     // Cache the duration
                     self.durationCache[urlString] = durationSeconds
+                    // Update LRU access order
+                    if let index = self.durationCacheAccessOrder.firstIndex(of: urlString) {
+                        self.durationCacheAccessOrder.remove(at: index)
+                    }
+                    self.durationCacheAccessOrder.append(urlString)
+                    // LRU eviction
+                    if self.durationCache.count > self.maxDurationCacheEntries {
+                        let keysToRemove = self.durationCacheAccessOrder.prefix(self.durationCache.count - self.maxDurationCacheEntries)
+                        for key in keysToRemove {
+                            self.durationCache.removeValue(forKey: key)
+                            self.durationCacheAccessOrder.removeAll { $0 == key }
+                        }
+                    }
                     // print("💾 CACHED: Total cache entries: \(self.durationCache.count)")
                     
                     completion(durationSeconds)
@@ -181,6 +201,19 @@ class AudioPlayerManager: NSObject, ObservableObject {
                             
                             // Cache the duration
                             self.durationCache[urlString] = durationSeconds
+                    // Update LRU access order
+                    if let index = self.durationCacheAccessOrder.firstIndex(of: urlString) {
+                        self.durationCacheAccessOrder.remove(at: index)
+                    }
+                    self.durationCacheAccessOrder.append(urlString)
+                    // LRU eviction
+                    if self.durationCache.count > self.maxDurationCacheEntries {
+                        let keysToRemove = self.durationCacheAccessOrder.prefix(self.durationCache.count - self.maxDurationCacheEntries)
+                        for key in keysToRemove {
+                            self.durationCache.removeValue(forKey: key)
+                            self.durationCacheAccessOrder.removeAll { $0 == key }
+                        }
+                    }
                             completion(durationSeconds)
                             return
                         }
@@ -213,6 +246,19 @@ class AudioPlayerManager: NSObject, ObservableObject {
                                 
                                 // Cache the duration
                                 self.durationCache[urlString] = durationSeconds
+                    // Update LRU access order
+                    if let index = self.durationCacheAccessOrder.firstIndex(of: urlString) {
+                        self.durationCacheAccessOrder.remove(at: index)
+                    }
+                    self.durationCacheAccessOrder.append(urlString)
+                    // LRU eviction
+                    if self.durationCache.count > self.maxDurationCacheEntries {
+                        let keysToRemove = self.durationCacheAccessOrder.prefix(self.durationCache.count - self.maxDurationCacheEntries)
+                        for key in keysToRemove {
+                            self.durationCache.removeValue(forKey: key)
+                            self.durationCacheAccessOrder.removeAll { $0 == key }
+                        }
+                    }
                                 completion(durationSeconds)
                             } else {
                                 // print("❌ PRELOAD FAIL: PlayerItem duration also indefinite for \(url.lastPathComponent)")
@@ -966,7 +1012,13 @@ class AudioPlayerManager: NSObject, ObservableObject {
     // Clear all cached durations (useful for memory management)
     func clearDurationCache() {
         durationCache.removeAll()
+        durationCacheAccessOrder.removeAll()
         // print("🧹 Cleared all cached durations")
+    }
+    
+    /// Clear caches on memory warnings
+    func clearCachesOnMemoryWarning() {
+        clearDurationCache()
     }
     
     // Get cache statistics for debugging

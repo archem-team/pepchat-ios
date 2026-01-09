@@ -94,6 +94,27 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
             return
         }
         
+        // MEMORY MANAGEMENT: Aggressive cleanup during scrolling to prevent memory growth to 1.8GB
+        // Check every 20 scroll events to avoid performance impact
+        scrollEventCount += 1
+        if scrollEventCount % 20 == 0 {
+            let currentCount = localMessages.count
+            let maxCount = MessageableChannelConstants.maxMessagesInMemory
+            if currentCount > Int(Double(maxCount) * 1.2) {
+                enforceMessageWindow(keepingMostRecent: true)
+                // Also trigger ViewState cleanup if total messages are very high
+                let totalMessages = viewModel.viewState.messages.count
+                if totalMessages > 1500 {
+                    Task.detached(priority: .background) { [weak self] in
+                        guard let self = self else { return }
+                        await MainActor.run {
+                            self.viewModel.viewState.enforceMemoryLimits()
+                        }
+                    }
+                }
+            }
+        }
+        
         // Update bouncing behavior on every scroll
         updateTableViewBouncing()
         
@@ -161,6 +182,11 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
                 if !messages.isEmpty && !viewModel.viewState.atTopOfChannel.contains(viewModel.channel.id) {
                     if let firstMessageId = messages.first {
                         // print("🔄 LOAD TRIGGER: User approaching top (offset: \(offsetY)), loading older messages")
+                        
+                        // MEMORY MANAGEMENT: Cleanup before loading if we're over limit
+                        if localMessages.count > Int(Double(MessageableChannelConstants.maxMessagesInMemory) * 1.2) {
+                            enforceMessageWindow(keepingMostRecent: false)
+                        }
                         
                         // Set loading state
                         isLoadingMore = true

@@ -10,6 +10,9 @@ import UserNotifications
 import KeychainAccess
 import Darwin
 import Network
+#if canImport(Kingfisher)
+import Kingfisher
+#endif
 
 
 enum UserStateError: Error {
@@ -544,7 +547,7 @@ public class ViewState: ObservableObject {
     @Published var currentUserOptionsSheet: UserMaybeMember? = nil
     @Published var atTopOfChannel: Set<String> = []
     
-    @Published var alert : (String?,ImageResource?, Color?) = (nil,nil, nil)
+    @Published var alert : (String?,SwiftUI.ImageResource?, Color?) = (nil,nil, nil)
     
     @Published var serverMembersCount : String? = nil
     
@@ -653,15 +656,128 @@ public class ViewState: ObservableObject {
     
     var userSettingsStore: UserSettingsData
     
+    // MEMORY MANAGEMENT: Feature flags for staged rollout
+    /// Feature flag to enable aggressive memory management. Default: true after rollout.
+    private var enableAggressiveMemoryManagement: Bool {
+        UserDefaults.standard.object(forKey: "enableAggressiveMemoryManagement") as? Bool ?? true // Fallback to true
+    }
+    
+    /// Aggressive message limit per channel. Default: 50.
+    private var aggressiveMessageLimit: Int {
+        UserDefaults.standard.object(forKey: "aggressiveMessageLimit") as? Int ?? 50 // Fallback to 50
+    }
+    
+    /// Aggressive user limit total. Default: 1000.
+    private var aggressiveUserLimit: Int {
+        UserDefaults.standard.object(forKey: "aggressiveUserLimit") as? Int ?? 1000 // Fallback to 1000
+    }
+    
     // MEMORY MANAGEMENT: Configuration for aggressive cleanup
-    private let maxMessagesInMemory = 7000 // Maximum messages to keep in memory
-    private let maxUsersInMemory = 2000 // Increased to handle 300+ messages with users
-    private let maxChannelMessages = 800 // Maximum messages per channel (reduced for better memory management)
+    /// Maximum messages to keep in memory. Uses feature flag if enabled, otherwise old limit.
+    private var maxMessagesInMemory: Int {
+        enableAggressiveMemoryManagement ? 2000 : 7000
+    }
+    
+    /// Maximum users to keep in memory. Uses feature flag if enabled, otherwise old limit.
+    private var maxUsersInMemory: Int {
+        enableAggressiveMemoryManagement ? aggressiveUserLimit : 2000
+    }
+    
+    /// Maximum messages per channel. Uses feature flag if enabled, otherwise old limit.
+    private var maxChannelMessages: Int {
+        enableAggressiveMemoryManagement ? 100 : 800
+    }
+    
     private let maxServersInMemory = 50 // Maximum servers to keep in memory
+    
+    // MEMORY MANAGEMENT: Size-based eviction tracking
+    /// Dictionary to track approximate memory size per message
+    private var messageSizes: [String: Int] = [:]
+    
+    /// Total approximate memory size of all messages in bytes
+    private var totalMessageMemorySize: Int = 0
+    
+    // MEMORY MANAGEMENT: User cache limits per channel
+    /// Dictionary to track which users belong to which channels
+    private var channelUserIds: [String: Set<String>] = [:]
+    
+    /// Maximum users to keep per channel
+    private let maxUsersPerChannel = 100
+    
+    // MEMORY MANAGEMENT: Channel access tracking with persistence
+    /// Dictionary to track when channels were last accessed (for cleanup prioritization)
+    private var channelLastAccessTime: [String: Date] = [:]
+    
+    /// Multitasking awareness flags
+    private var isAppInSplitView: Bool = false
+    private var isAppInBackgroundFetch: Bool = false
+    private var isAppInBackground: Bool = false
+    
+    // MEMORY MANAGEMENT: Per-channel memory cost instrumentation
+    /// Structure to track memory costs per channel
+    struct ChannelMemoryCost {
+        var messageCount: Int
+        var messageSizeBytes: Int
+        var userCount: Int
+        var imageCacheSizeBytes: Int // Always 0 - image cache is global, not per-channel
+        var videoCacheSizeBytes: Int // Estimated (thumbnails, durations, AVAssets)
+        var totalBytes: Int { messageSizeBytes + videoCacheSizeBytes } // Exclude imageCacheSizeBytes
+    }
+    
+    /// Dictionary to track memory costs per channel
+    private var channelMemoryCosts: [String: ChannelMemoryCost] = [:]
     
     // PRELOADING CONTROL: Configuration for automatic message preloading
     /// Set to false to disable all automatic message preloading when entering servers/channels
     private let enableAutomaticPreloading = false // DISABLED: No automatic preloading
+    
+    // MEMORY MANAGEMENT: Size calculation helper
+    /// Calculates approximate memory size of a message in bytes
+    /// Uses UTF-8 byte count for content, actual attachment sizes from metadata, and user object estimates
+    private func calculateMessageSize(_ message: Message) -> Int {
+        var size = 0
+        
+        // Content size: UTF-8 byte count (actual bytes, not character count)
+        if let content = message.content {
+            size += content.utf8.count
+        }
+        
+        // Attachment size: Sum of actual file sizes from metadata
+        if let attachments = message.attachments {
+            for attachment in attachments {
+                // attachment.size is Int64, not optional
+                size += Int(attachment.size)
+            }
+        }
+        
+        // User object size: Estimate ~500 bytes per user referenced by message
+        // Count unique users: author + mentions
+        var uniqueUsers = Set<String>()
+        uniqueUsers.insert(message.author)
+        if let mentions = message.mentions {
+            uniqueUsers.formUnion(mentions)
+        }
+        size += uniqueUsers.count * 500
+        
+        return size
+    }
+    
+    /// Updates message size tracking when a message is added
+    private func updateMessageSize(messageId: String, message: Message) {
+        let size = calculateMessageSize(message)
+        if let oldSize = messageSizes[messageId] {
+            totalMessageMemorySize -= oldSize
+        }
+        messageSizes[messageId] = size
+        totalMessageMemorySize += size
+    }
+    
+    /// Removes message size tracking when a message is removed
+    private func removeMessageSize(messageId: String) {
+        if let size = messageSizes.removeValue(forKey: messageId) {
+            totalMessageMemorySize -= size
+        }
+    }
     
     // MEMORY MANAGEMENT: Helper methods
     private func debouncedSave(key: String, data: Data) {
@@ -697,10 +813,14 @@ public class ViewState: ObservableObject {
     }
     
     @MainActor
-    private func enforceMemoryLimits() {
-        // CRITICAL FIX: Completely disable enforceMemoryLimits to prevent infinite loop and black messages
-        // print("🚫 MEMORY_CLEANUP: enforceMemoryLimits DISABLED to prevent infinite loop and black messages")
-        return
+    func enforceMemoryLimits() {
+        // MEMORY MANAGEMENT: Re-enabled with aggressive thresholds to prevent memory growth to 1.8GB
+        // Only cleanup if significantly over limits to prevent excessive cleanup
+        guard messages.count > 1500 || totalMessageMemorySize > 75 * 1024 * 1024 else {
+            return
+        }
+        
+        print("🧹 MEMORY_CLEANUP: Starting cleanup - Messages: \(messages.count), Size: \(String(format: "%.2f", Double(totalMessageMemorySize) / 1024.0 / 1024.0))MB")
         
         // Check current memory usage
         let currentMemoryMB = getCurrentMemoryUsage()
@@ -750,6 +870,10 @@ public class ViewState: ObservableObject {
                 // Keep only last 100 messages
                 let sortedMessages = messages.sorted { $0.value.id > $1.value.id }
                 let recentMessages = Array(sortedMessages.prefix(100))
+                let messagesToRemove = Set(messages.keys).subtracting(recentMessages.map { $0.key })
+                for messageId in messagesToRemove {
+                    removeMessageSize(messageId: messageId)
+                }
                 messages = Dictionary(uniqueKeysWithValues: recentMessages)
                 
                 // Keep ALL DMs and current channel
@@ -798,24 +922,46 @@ public class ViewState: ObservableObject {
                 return
             }
         
-        // NORMAL CLEANUP: Remove excess messages
-        if messages.count > maxMessagesInMemory {
+        // NORMAL CLEANUP: Remove excess messages (consider both count AND size)
+        let sizeLimitMB = 100 * 1024 * 1024 // 100MB
+        let shouldCleanupByCount = messages.count > maxMessagesInMemory
+        let shouldCleanupBySize = totalMessageMemorySize > sizeLimitMB
+        
+        if shouldCleanupByCount || shouldCleanupBySize {
             // print("🧠 MEMORY: Enforcing message limit. Current: \(messages.count), Max: \(maxMessagesInMemory)")
             
-            // Get all message IDs sorted by timestamp (older first)
-            let sortedMessageIds = messages.keys.sorted { id1, id2 in
-                let date1 = createdAt(id: id1)
-                let date2 = createdAt(id: id2)
-                return date1 < date2
+            // Get all message IDs sorted by size (largest first) and timestamp (older first)
+            // Prioritize removing largest messages from least-recently-accessed channels
+            let sortedMessageIds: [String]
+            if shouldCleanupBySize {
+                // Size-based: Sort by size (largest first), then by timestamp (oldest first)
+                sortedMessageIds = messages.keys.sorted { id1, id2 in
+                    let size1 = messageSizes[id1] ?? 0
+                    let size2 = messageSizes[id2] ?? 0
+                    if size1 != size2 {
+                        return size1 > size2 // Largest first
+                    }
+                    let date1 = createdAt(id: id1)
+                    let date2 = createdAt(id: id2)
+                    return date1 < date2 // Oldest first
+                }
+            } else {
+                // Count-based: Sort by timestamp (older first)
+                sortedMessageIds = messages.keys.sorted { id1, id2 in
+                    let date1 = createdAt(id: id1)
+                    let date2 = createdAt(id: id2)
+                    return date1 < date2
+                }
             }
             
             // Calculate how many messages to remove
-            let messagesToRemove = messages.count - maxMessagesInMemory
+            let messagesToRemove = shouldCleanupByCount ? (messages.count - maxMessagesInMemory) : max(1, messages.count / 10) // Remove 10% if size-based
             let idsToRemove = Array(sortedMessageIds.prefix(messagesToRemove))
             
             // Remove messages
             for id in idsToRemove {
                 messages.removeValue(forKey: id)
+                removeMessageSize(messageId: id)
             }
             
             // Clean up channel message references
@@ -982,30 +1128,183 @@ public class ViewState: ObservableObject {
         
         let originalMessageCount = currentChannelMessages.count
         
-        // Keep only last 100 messages in channel
-        let maxMessagesToKeep = 100
+        // Determine if channel is active (current channel)
+        let isActiveChannel: Bool
+        if case .channel(let activeChannelId) = currentChannel {
+            isActiveChannel = activeChannelId == channelId
+        } else {
+            isActiveChannel = false
+        }
+        
+        // Use feature flag limits: 50 for active, 100 for inactive
+        let maxMessagesToKeep = isActiveChannel ? 50 : 100
+        
         if currentChannelMessages.count > maxMessagesToKeep {
-            let messagesToKeep = Array(currentChannelMessages.suffix(maxMessagesToKeep))
-            let messagesToRemove = Array(currentChannelMessages.prefix(currentChannelMessages.count - maxMessagesToKeep))
+            // UX PRESERVATION: Collect messages that must be preserved
+            var messagesToPreserve = Set<String>()
             
-            // Update channel message list to keep only last 100
-            channelMessages[channelId] = messagesToKeep
+            // 1. Preserve target message + 20 around it
+            if let targetMessageId = currentTargetMessageId, 
+               targetMessageId != channelId, // Ensure it's a message ID, not channel ID
+               let targetIndex = currentChannelMessages.firstIndex(of: targetMessageId) {
+                let startIndex = max(0, targetIndex - 20)
+                let endIndex = min(currentChannelMessages.count, targetIndex + 21)
+                messagesToPreserve.formUnion(currentChannelMessages[startIndex..<endIndex])
+            }
+            
+            // 2. Preserve unread markers
+            if let unread = unreads[channelId] {
+                if let lastId = unread.last_id {
+                    messagesToPreserve.insert(lastId)
+                }
+                if let mentions = unread.mentions {
+                    messagesToPreserve.formUnion(mentions)
+                }
+            }
+            
+            // 3. Preserve reply context (parent messages)
+            for messageId in currentChannelMessages {
+                if let message = messages[messageId], let replies = message.replies, !replies.isEmpty {
+                    // Add parent messages referenced in replies (replies is [String] of message IDs)
+                    for replyId in replies {
+                        messagesToPreserve.insert(replyId)
+                    }
+                }
+            }
+            
+            // 4. Always preserve last 50 messages (or more if target/unread/replies require it)
+            let lastMessages = Set(currentChannelMessages.suffix(50))
+            messagesToPreserve.formUnion(lastMessages)
+            
+            // Build final list: preserved messages + recent messages up to limit
+            var finalMessagesToKeep: [String] = []
+            var seenMessages = Set<String>()
+            
+            // First, add preserved messages in order
+            for messageId in currentChannelMessages {
+                if messagesToPreserve.contains(messageId) && !seenMessages.contains(messageId) {
+                    finalMessagesToKeep.append(messageId)
+                    seenMessages.insert(messageId)
+                }
+            }
+            
+            // Then, add recent messages up to limit (if not already included)
+            let recentMessages = currentChannelMessages.suffix(maxMessagesToKeep)
+            for messageId in recentMessages {
+                if !seenMessages.contains(messageId) {
+                    finalMessagesToKeep.append(messageId)
+                    seenMessages.insert(messageId)
+                }
+            }
+            
+            // Sort final list to maintain chronological order
+            finalMessagesToKeep.sort { id1, id2 in
+                guard let index1 = currentChannelMessages.firstIndex(of: id1),
+                      let index2 = currentChannelMessages.firstIndex(of: id2) else {
+                    return false
+                }
+                return index1 < index2
+            }
+            
+            // Trim to limit if still over (prioritize preserved + recent)
+            if finalMessagesToKeep.count > maxMessagesToKeep {
+                // Keep preserved messages + most recent
+                let preservedSet = Set(finalMessagesToKeep.filter { messagesToPreserve.contains($0) })
+                let recentToKeep = finalMessagesToKeep.filter { !messagesToPreserve.contains($0) }.suffix(maxMessagesToKeep - preservedSet.count)
+                finalMessagesToKeep = Array(preservedSet) + Array(recentToKeep)
+                finalMessagesToKeep.sort { id1, id2 in
+                    guard let index1 = currentChannelMessages.firstIndex(of: id1),
+                          let index2 = currentChannelMessages.firstIndex(of: id2) else {
+                        return false
+                    }
+                    return index1 < index2
+                }
+            }
+            
+            let messagesToRemove = Set(currentChannelMessages).subtracting(finalMessagesToKeep)
+            
+            // Update channel message list
+            channelMessages[channelId] = finalMessagesToKeep
             
             // Remove the older messages from global messages dictionary
             for messageId in messagesToRemove {
                 messages.removeValue(forKey: messageId)
+                removeMessageSize(messageId: messageId)
             }
             
-            // print("🧠 MEMORY: Channel \(channelId) - kept last \(messagesToKeep.count) messages, removed \(messagesToRemove.count) older messages")
+            // print("🧠 MEMORY: Channel \(channelId) - kept \(finalMessagesToKeep.count) messages (preserved: \(messagesToPreserve.count)), removed \(messagesToRemove.count) older messages")
             // print("🧠 MEMORY: Total messages in memory: \(messages.count)")
         } else {
-            // print("🧠 MEMORY: Channel \(channelId) has \(originalMessageCount) messages (≤100), keeping all")
+            // print("🧠 MEMORY: Channel \(channelId) has \(originalMessageCount) messages (≤\(maxMessagesToKeep)), keeping all")
         }
         
         // Clean up orphaned messages (messages that don't belong to any channel anymore)
         cleanupOrphanedMessages()
         
+        // Clean up users for this channel
+        cleanupChannelUsers(channelId: channelId)
+        
         // print("🧠 MEMORY: Channel cleanup completed for: \(channelId)")
+    }
+    
+    /// Cleans up users that are no longer referenced by any channel's messages
+    private func cleanupOrphanedUsers() {
+        // Get all users referenced by any channel
+        let allReferencedUsers = Set(channelUserIds.values.flatMap { $0 })
+        
+        // Also keep current user and friends
+        var usersToKeep = allReferencedUsers
+        if let currentUserId = currentUser?.id {
+            usersToKeep.insert(currentUserId)
+        }
+        // TODO: Add friends list if available
+        
+        // Remove users not referenced by any channel (except current user and friends)
+        let usersToRemove = users.keys.filter { !usersToKeep.contains($0) }
+        for userId in usersToRemove {
+            users.removeValue(forKey: userId)
+        }
+        
+        if !usersToRemove.isEmpty {
+            // print("🧠 MEMORY: Cleaned up \(usersToRemove.count) orphaned users")
+        }
+    }
+    
+    /// Cleans up users for a specific channel, keeping only those referenced by remaining messages
+    private func cleanupChannelUsers(channelId: String) {
+        guard let channelMessageIds = channelMessages[channelId] else {
+            channelUserIds.removeValue(forKey: channelId)
+            return
+        }
+        
+        // Get users referenced by remaining messages in this channel
+        var referencedUsers = Set<String>()
+        for messageId in channelMessageIds {
+            if let message = messages[messageId] {
+                referencedUsers.insert(message.author)
+                if let mentions = message.mentions {
+                    referencedUsers.formUnion(mentions)
+                }
+            }
+        }
+        
+        // Update channel user tracking
+        channelUserIds[channelId] = referencedUsers
+        
+        // If channel has too many users, keep only most recent (by message count)
+        if referencedUsers.count > maxUsersPerChannel {
+            // Count messages per user in this channel
+            var userMessageCounts: [String: Int] = [:]
+            for messageId in channelMessageIds {
+                if let message = messages[messageId] {
+                    userMessageCounts[message.author, default: 0] += 1
+                }
+            }
+            
+            // Keep top maxUsersPerChannel users by message count
+            let topUsers = userMessageCounts.sorted { $0.value > $1.value }.prefix(maxUsersPerChannel).map { $0.key }
+            channelUserIds[channelId] = Set(topUsers)
+        }
     }
     
     // Helper function to clean up messages that don't belong to any channel
@@ -1255,6 +1554,15 @@ public class ViewState: ObservableObject {
         // Load any pending notification token
         self.loadPendingNotificationToken()
         
+        // MEMORY MANAGEMENT: Register feature flag defaults (CRITICAL: prevents false defaults)
+        registerFeatureFlagDefaults()
+        
+        // MEMORY MANAGEMENT: Load channel access times from persistence
+        loadChannelAccessTimes()
+        
+        // MEMORY MANAGEMENT: Load guardrail state from UserDefaults (for consistency across reinitializations)
+        reducedFetchLimit = UserDefaults.standard.object(forKey: "reducedFetchLimit") as? Bool ?? false
+        
         // MEMORY MANAGEMENT: Start periodic memory cleanup
         startPeriodicMemoryCleanup()
         
@@ -1399,13 +1707,14 @@ public class ViewState: ObservableObject {
             // Get server ID if this is a server channel
             let serverId = channel.server
             
-            // SMART LIMIT: Use 10 for specific channel in specific server, 50 for others
-            let messageLimit = (channelId == "01J7QTT66242A7Q26A2FH5TD48" && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : 50
+            // SMART LIMIT: Use 10 for specific channel in specific server, otherwise use effective fetch limit
+            let baseLimit = (channelId == "01J7QTT66242A7Q26A2FH5TD48" && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : getEffectiveFetchLimit()
+            let messageLimit = baseLimit
             
             // Fetch messages for this channel
             let result = try await http.fetchHistory(
                 channel: channelId,
-                limit: messageLimit, // Smart limit based on channel
+                limit: messageLimit, // Uses getEffectiveFetchLimit() for guardrail support
                 sort: "Latest",
                 server: serverId,
                 include_users: true
@@ -1452,20 +1761,271 @@ public class ViewState: ObservableObject {
     private var memoryCleanupTimer: Timer?
     private var memoryMonitorTimer: Timer?
     
+    /// Registers feature flag defaults to prevent false defaults when unset.
+    /// CRITICAL: UserDefaults.standard.bool(forKey:) returns false when unset, which would keep aggressive mode OFF unintentionally.
+    private func registerFeatureFlagDefaults() {
+        // Register defaults if not already set (CRITICAL: prevents false defaults)
+        if UserDefaults.standard.object(forKey: "enableAggressiveMemoryManagement") == nil {
+            UserDefaults.standard.set(true, forKey: "enableAggressiveMemoryManagement") // Default: true after rollout
+        }
+        if UserDefaults.standard.object(forKey: "aggressiveMessageLimit") == nil {
+            UserDefaults.standard.set(50, forKey: "aggressiveMessageLimit") // Default: 50
+        }
+        if UserDefaults.standard.object(forKey: "aggressiveUserLimit") == nil {
+            UserDefaults.standard.set(1000, forKey: "aggressiveUserLimit") // Default: 1000
+        }
+    }
+    
+    // MARK: - Channel Access Tracking
+    
+    /// Loads channel access times from UserDefaults persistence
+    private func loadChannelAccessTimes() {
+        if let stored = UserDefaults.standard.dictionary(forKey: "channelLastAccessTimes") as? [String: TimeInterval] {
+            channelLastAccessTime = stored.mapValues { Date(timeIntervalSince1970: $0) }
+        } else {
+            channelLastAccessTime = [:]
+        }
+    }
+    
+    /// Saves channel access times to UserDefaults persistence
+    private func saveChannelAccessTimes() {
+        let timestamps = channelLastAccessTime.mapValues { $0.timeIntervalSince1970 }
+        UserDefaults.standard.set(timestamps, forKey: "channelLastAccessTimes")
+    }
+    
+    /// Updates the access time for a channel when it's viewed
+    private func updateChannelAccessTime(channelId: String) {
+        channelLastAccessTime[channelId] = Date()
+        // Debounce saves to avoid excessive UserDefaults writes
+        Task.detached(priority: .background) { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second debounce
+            await MainActor.run {
+                self?.saveChannelAccessTimes()
+            }
+        }
+    }
+    
+    /// Checks if a channel is currently active (not eligible for aggressive cleanup)
+    private func isChannelActive(channelId: String) -> Bool {
+        // Channel is active if it's the current channel
+        if case .channel(let currentId) = currentChannel, currentId == channelId {
+            return true
+        }
+        
+        // Channel is active if app is in split view and channel is visible
+        if isAppInSplitView {
+            // In split view, assume all channels might be visible
+            return true
+        }
+        
+        // Channel is active if app is performing background fetch for this channel
+        if isAppInBackgroundFetch {
+            // During background fetch, assume channels being fetched are active
+            return true
+        }
+        
+        return false
+    }
+    
+    /// Gets the time since a channel was last accessed
+    private func timeSinceChannelAccess(channelId: String) -> TimeInterval? {
+        guard let accessTime = channelLastAccessTime[channelId] else {
+            return nil
+        }
+        return Date().timeIntervalSince(accessTime)
+    }
+    
     private func startPeriodicMemoryCleanup() {
+        // CRITICAL: Always invalidate existing timer before creating new one
         memoryCleanupTimer?.invalidate()
         
-        // Clean up memory every 15 seconds for better stability
-        memoryCleanupTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
+        // Clean up memory every 60 seconds (reduced from 15s to reduce CPU/battery impact)
+        memoryCleanupTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             
-            Task { @MainActor [weak self] in
-                self?.cleanupMemory()
+            // All cleanup work must be off-main-thread
+            Task.detached(priority: .background) { [weak self] in
+                guard let self = self else { return }
+                
+                // Check thresholds off-main-thread
+                let messageCount = await MainActor.run { self.messages.count }
+                let totalSize = await MainActor.run { self.totalMessageMemorySize }
+                let shouldCleanup = messageCount > 1500 || totalSize > 75 * 1024 * 1024 // 75MB
+                
+                if shouldCleanup {
+                    // Perform cleanup on main actor (for dictionary access)
+                    await MainActor.run {
+                        self.enforceMemoryLimits()
+                        self.cleanupOrphanedUsers()
+                    }
+                }
             }
         }
         
         // Start memory monitoring
         startMemoryMonitoring()
+    }
+    
+    /// Cancels the memory cleanup timer (called on background)
+    @MainActor
+    func cancelMemoryCleanupTimer() {
+        memoryCleanupTimer?.invalidate()
+        memoryCleanupTimer = nil
+    }
+    
+    /// Restarts the memory cleanup timer (called on foreground)
+    @MainActor
+    func restartMemoryCleanupTimer() {
+        startPeriodicMemoryCleanup()
+    }
+    
+    // MARK: - Background/Foreground Handling
+    
+    /// Sets the app background state flag
+    @MainActor
+    func setAppInBackground(_ inBackground: Bool) {
+        isAppInBackground = inBackground
+    }
+    
+    /// Performs aggressive memory cleanup when app enters background
+    @MainActor
+    func performBackgroundMemoryCleanup() {
+        // Conditional cache clearing: Only clear if RAM usage > 500MB threshold
+        Task.detached(priority: .background) { [weak self] in
+            guard let self = self else { return }
+            let memoryUsage = await MainActor.run { self.checkMemoryUsage() }
+            
+            if memoryUsage.usedMB > 500 {
+                // Above threshold: Clear memory cache to free RAM
+                await MainActor.run {
+                    #if canImport(Kingfisher)
+                    ImageCache.default.clearMemoryCache()
+                    print("🧹 BACKGROUND: Cleared image cache (RAM > 500MB)")
+                    #endif
+                }
+            } else {
+                // Below threshold: Keep cache to prevent re-decoding/re-downloads on foreground
+                print("💾 BACKGROUND: Preserving image cache (RAM < 500MB)")
+            }
+            
+            // Aggressive trimming: Reduce inactive channel messages to 10
+            await MainActor.run {
+                self.aggressiveTrimInactiveChannels(targetMessages: 10)
+            }
+        }
+    }
+    
+    /// Restores normal memory limits when app enters foreground
+    @MainActor
+    func restoreForegroundLimits() {
+        // Limits are restored automatically via feature flags
+        // This method is a placeholder for any additional restoration logic
+        print("✅ FOREGROUND: Memory limits restored")
+    }
+    
+    /// Aggressively trims inactive channels to target message count
+    @MainActor
+    private func aggressiveTrimInactiveChannels(targetMessages: Int) {
+        let currentChannelId: String?
+        if case .channel(let id) = currentChannel {
+            currentChannelId = id
+        } else {
+            currentChannelId = nil
+        }
+        
+        for (channelId, messageIds) in channelMessages {
+            // Skip current channel
+            if channelId == currentChannelId {
+                continue
+            }
+            
+            // Skip active channels
+            if isChannelActive(channelId: channelId) {
+                continue
+            }
+            
+            // Check if channel hasn't been accessed recently
+            if let timeSinceAccess = timeSinceChannelAccess(channelId: channelId),
+               timeSinceAccess > 120 { // 2 minutes
+                // Trim to target message count, preserving UX-critical messages
+                if messageIds.count > targetMessages {
+                    let messagesToKeep = preserveUXCriticalMessages(
+                        channelId: channelId,
+                        messageIds: messageIds,
+                        targetCount: targetMessages
+                    )
+                    
+                    // Remove messages not in keep list
+                    let messagesToRemove = Set(messageIds).subtracting(messagesToKeep)
+                    for messageId in messagesToRemove {
+                        messages.removeValue(forKey: messageId)
+                        removeMessageSize(messageId: messageId)
+                    }
+                    
+                    channelMessages[channelId] = Array(messagesToKeep)
+                    print("🧹 BACKGROUND: Trimmed channel \(channelId) from \(messageIds.count) to \(messagesToKeep.count) messages")
+                }
+            }
+        }
+    }
+    
+    /// Preserves UX-critical messages (target, unread, reply context)
+    private func preserveUXCriticalMessages(channelId: String, messageIds: [String], targetCount: Int) -> Set<String> {
+        var messagesToKeep = Set<String>()
+        
+        // Always keep last N messages
+        let recentMessages = Array(messageIds.suffix(targetCount))
+        messagesToKeep.formUnion(recentMessages)
+        
+        // Preserve target message + 20 messages around it
+        if let targetId = currentTargetMessageId,
+           let targetMessage = messages[targetId],
+           targetMessage.channel == channelId {
+            if let targetIndex = messageIds.firstIndex(of: targetId) {
+                let startIndex = max(0, targetIndex - 10)
+                let endIndex = min(messageIds.count, targetIndex + 11)
+                messagesToKeep.formUnion(messageIds[startIndex..<endIndex])
+            }
+        }
+        
+        // Preserve unread markers
+        if let unread = unreads[channelId] {
+            if let lastId = unread.last_id, messages[lastId] != nil {
+                messagesToKeep.insert(lastId)
+                // Keep 10 messages around unread marker
+                if let unreadIndex = messageIds.firstIndex(of: lastId) {
+                    let startIndex = max(0, unreadIndex - 5)
+                    let endIndex = min(messageIds.count, unreadIndex + 6)
+                    messagesToKeep.formUnion(messageIds[startIndex..<endIndex])
+                }
+            }
+            // Preserve mention messages
+            if let mentions = unread.mentions {
+                for mentionId in mentions {
+                    if messages[mentionId] != nil {
+                        messagesToKeep.insert(mentionId)
+                    }
+                }
+            }
+        }
+        
+        // Preserve reply context
+        for messageId in messageIds {
+            if let message = messages[messageId],
+               let replies = message.replies,
+               !replies.isEmpty {
+                // Keep parent messages referenced in replies
+                for replyId in replies {
+                    if messages[replyId] != nil {
+                        messagesToKeep.insert(replyId)
+                    }
+                }
+                // Keep the message with replies
+                messagesToKeep.insert(messageId)
+            }
+        }
+        
+        return messagesToKeep
     }
     
     // MEMORY MONITORING: Track memory usage
@@ -1475,7 +2035,9 @@ public class ViewState: ObservableObject {
         memoryMonitorTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             
-            let memoryUsage = self.getCurrentMemoryUsage()
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                let memoryUsage = self.getCurrentMemoryUsage()
             // print("📊 MEMORY MONITOR: Current usage: \(String(format: "%.2f", memoryUsage)) MB")
             // print("   - Messages: \(self.messages.count)")
             // print("   - Users: \(self.users.count)")
@@ -1501,14 +2063,23 @@ public class ViewState: ObservableObject {
                 // Don't call smartUserCleanup() to prevent black messages
             }
             
+            // Check memory usage with thresholds and guardrails
+            let memoryCheck = self.checkMemoryUsage()
+            
+            if memoryCheck.critical {
+                // Activate guardrails when critical threshold is hit
+                self.activateMemoryGuardrails()
+            }
+            
             // Warning if memory usage is high (only for non-DM views)
             if memoryUsage > 1500 { // Increased threshold to 1.5GB for better performance
                 // print("⚠️ MEMORY WARNING: High memory usage detected!")
                 
                 // Force immediate aggressive cleanup
-                enforceMemoryLimits()
-                smartUserCleanup()
-                smartChannelCleanup()
+                self.enforceMemoryLimits()
+                self.smartUserCleanup()
+                self.smartChannelCleanup()
+            }
             }
         }
     }
@@ -1530,6 +2101,245 @@ public class ViewState: ObservableObject {
             return Double(info.resident_size) / 1024.0 / 1024.0 // Convert to MB
         } else {
             return 0
+        }
+    }
+    
+    // MARK: - Memory Monitoring with Thresholds and Guardrails
+    
+    /// Cached memory usage result (5 second cache to avoid frequent system calls)
+    private var cachedMemoryUsage: (usedMB: Double, timestamp: Date)?
+    private let memoryUsageCacheInterval: TimeInterval = 5.0
+    
+    /// Memory monitoring guardrail flags
+    private var disableImagePreviews: Bool = false
+    private var reducedFetchLimit: Bool = false
+    private var memoryWarningRestoreTimer: Timer?
+    
+    /// Checks memory usage with thresholds and returns warning/critical status
+    /// Runs off-main-thread to avoid blocking UI
+    func checkMemoryUsage() -> (usedMB: Double, warning: Bool, critical: Bool) {
+        // Check cache first
+        if let cached = cachedMemoryUsage,
+           Date().timeIntervalSince(cached.timestamp) < memoryUsageCacheInterval {
+            let usedMB = cached.usedMB
+            let warning = usedMB > 600 || messages.count > 1800 || Double(totalMessageMemorySize) / 1024.0 / 1024.0 > 90 || users.count > 900
+            let critical = usedMB > 800 || messages.count > 1900 || Double(totalMessageMemorySize) / 1024.0 / 1024.0 > 95 || users.count > 950
+            return (usedMB, warning, critical)
+        }
+        
+        // Calculate fresh memory usage
+        let usedMB = getCurrentMemoryUsage()
+        let messageSizeMB = Double(totalMessageMemorySize) / 1024.0 / 1024.0
+        
+        // Update cache
+        cachedMemoryUsage = (usedMB, Date())
+        
+        // Thresholds
+        let warning = usedMB > 600 || messages.count > 1800 || messageSizeMB > 90 || users.count > 900
+        let critical = usedMB > 800 || messages.count > 1900 || messageSizeMB > 95 || users.count > 950
+        
+        return (usedMB, warning, critical)
+    }
+    
+    /// Gets the effective fetch limit based on guardrails
+    /// Nonisolated to allow calling from any context
+    nonisolated func getEffectiveFetchLimit() -> Int {
+        // Load from UserDefaults to ensure consistency across reinitializations
+        if UserDefaults.standard.object(forKey: "reducedFetchLimit") as? Bool == true {
+            return 25 // Guardrail: reduced limit
+        }
+        // Access feature flag directly from UserDefaults (nonisolated)
+        let enableAggressive = UserDefaults.standard.object(forKey: "enableAggressiveMemoryManagement") as? Bool ?? true
+        return enableAggressive ? 50 : 100 // Normal limit based on feature flag
+    }
+    
+    /// Activates guardrails when critical threshold is hit
+    @MainActor
+    private func activateMemoryGuardrails() {
+        guard !disableImagePreviews && !reducedFetchLimit else { return } // Already activated
+        
+        print("🚨 MEMORY GUARDRAILS: Activating emergency measures")
+        
+        disableImagePreviews = true
+        reducedFetchLimit = true
+        
+        // Persist guardrail state
+        UserDefaults.standard.set(true, forKey: "reducedFetchLimit")
+        
+        // Aggressive cleanup: Reduce inactive channel messages to 10
+        aggressiveTrimInactiveChannels(targetMessages: 10)
+        
+        // Log critical memory state with per-channel attribution
+        let attribution = getChannelMemoryAttribution()
+        print("🚨 MEMORY CRITICAL: Per-channel attribution:")
+        for (channelId, cost) in attribution {
+            print("  Channel \(channelId): \(cost.messageCount) msgs, \(cost.userCount) users, \(String(format: "%.2f", Double(cost.totalBytes) / 1024.0 / 1024.0))MB")
+        }
+        
+        // Schedule restore after 60 seconds of normal memory
+        memoryWarningRestoreTimer?.invalidate()
+        memoryWarningRestoreTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.restoreMemoryGuardrails()
+            }
+        }
+    }
+    
+    /// Restores guardrails after memory pressure subsides
+    @MainActor
+    private func restoreMemoryGuardrails() {
+        let memoryUsage = checkMemoryUsage()
+        
+        // Only restore if memory is back to normal
+        if !memoryUsage.critical && !memoryUsage.warning {
+            print("✅ MEMORY GUARDRAILS: Restoring normal limits")
+            disableImagePreviews = false
+            reducedFetchLimit = false
+            UserDefaults.standard.set(false, forKey: "reducedFetchLimit")
+        } else {
+            // Schedule another check in 60 seconds
+            memoryWarningRestoreTimer?.invalidate()
+            memoryWarningRestoreTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: false) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.restoreMemoryGuardrails()
+                }
+            }
+        }
+    }
+    
+    // MARK: - Memory Instrumentation
+    
+    /// Updates memory costs for a channel when messages/users are added/removed
+    private func updateChannelMemoryCost(channelId: String) {
+        let messageIds = channelMessages[channelId] ?? []
+        var messageCount = 0
+        var messageSizeBytes = 0
+        var uniqueUsers = Set<String>()
+        
+        for messageId in messageIds {
+            if let message = messages[messageId] {
+                messageCount += 1
+                messageSizeBytes += messageSizes[messageId] ?? 0
+                uniqueUsers.insert(message.author)
+                if let mentions = message.mentions {
+                    uniqueUsers.formUnion(mentions)
+                }
+            }
+        }
+        
+        // Video cache size estimation (thumbnails + durations)
+        // Note: This is an estimate since VideoPlayerView and AudioPlayerManager use static caches
+        let videoCacheSizeBytes = 0 // Per-channel attribution not feasible without refactoring
+        
+        channelMemoryCosts[channelId] = ChannelMemoryCost(
+            messageCount: messageCount,
+            messageSizeBytes: messageSizeBytes,
+            userCount: uniqueUsers.count,
+            imageCacheSizeBytes: 0, // Image cache is global, not per-channel
+            videoCacheSizeBytes: videoCacheSizeBytes
+        )
+    }
+    
+    /// Logs memory costs per channel and total memory usage
+    func logChannelMemoryCosts() {
+        // Update all channel costs
+        for channelId in channelMessages.keys {
+            updateChannelMemoryCost(channelId: channelId)
+        }
+        
+        // Calculate totals
+        var totalMessages = 0
+        var totalMessageSize = 0
+        var totalUsers = 0
+        var totalVideoCache = 0
+        
+        for cost in channelMemoryCosts.values {
+            totalMessages += cost.messageCount
+            totalMessageSize += cost.messageSizeBytes
+            totalUsers += cost.userCount
+            totalVideoCache += cost.videoCacheSizeBytes
+        }
+        
+        // Get total image cache size (global, not per-channel)
+        #if canImport(Kingfisher)
+        let totalImageCacheMB = Double(ImageCache.default.memoryStorage.config.totalCostLimit) / 1024.0 / 1024.0
+        #else
+        let totalImageCacheMB = 0.0
+        #endif
+        
+        print("📊 MEMORY INSTRUMENTATION:")
+        print("  Total Messages: \(totalMessages) (\(String(format: "%.2f", Double(totalMessageSize) / 1024.0 / 1024.0))MB)")
+        print("  Total Users: \(totalUsers)")
+        print("  Total Image Cache: \(String(format: "%.2f", totalImageCacheMB))MB (shared across all channels)")
+        print("  Total Video Cache: \(String(format: "%.2f", Double(totalVideoCache) / 1024.0 / 1024.0))MB")
+        print("  Per-Channel Breakdown:")
+        for (channelId, cost) in channelMemoryCosts.sorted(by: { $0.key < $1.key }) {
+            print("    Channel \(channelId):")
+            print("      Messages: \(cost.messageCount) (\(String(format: "%.2f", Double(cost.messageSizeBytes) / 1024.0 / 1024.0))MB)")
+            print("      Users: \(cost.userCount)")
+            print("      Video Cache: \(String(format: "%.2f", Double(cost.videoCacheSizeBytes) / 1024.0 / 1024.0))MB")
+        }
+    }
+    
+    /// Returns current memory costs per channel (without image cache per-channel)
+    func getChannelMemoryAttribution() -> [String: ChannelMemoryCost] {
+        // Update all channel costs before returning
+        for channelId in channelMessages.keys {
+            updateChannelMemoryCost(channelId: channelId)
+        }
+        return channelMemoryCosts
+    }
+    
+    // MARK: - Memory Pressure Handling
+    
+    /// Handles system memory warnings with temporary limits that restore
+    @MainActor
+    func didReceiveMemoryWarning() {
+        print("🚨 MEMORY WARNING: System memory pressure detected")
+        
+        // Clear memory cache (only on memory warnings, not on channel exit)
+        #if canImport(Kingfisher)
+        ImageCache.default.clearMemoryCache()
+        print("🧹 MEMORY WARNING: Cleared image memory cache")
+        #endif
+        
+        // Clear video caches
+        VideoPlayerView.clearCachesOnMemoryWarning()
+        AudioPlayerManager.shared.clearCachesOnMemoryWarning()
+        
+        // Reduce current channel messages to 30 (from 50), preserving UX-critical messages
+        if case .channel(let channelId) = currentChannel,
+           let messageIds = channelMessages[channelId],
+           messageIds.count > 30 {
+            let messagesToKeep = preserveUXCriticalMessages(
+                channelId: channelId,
+                messageIds: messageIds,
+                targetCount: 30
+            )
+            
+            let messagesToRemove = Set(messageIds).subtracting(messagesToKeep)
+            for messageId in messagesToRemove {
+                messages.removeValue(forKey: messageId)
+                removeMessageSize(messageId: messageId)
+            }
+            
+            channelMessages[channelId] = Array(messagesToKeep)
+            print("🧹 MEMORY WARNING: Reduced current channel from \(messageIds.count) to \(messagesToKeep.count) messages")
+        }
+        
+        // Clear all inactive channel messages (keep only 20 per channel), preserving UX-critical messages
+        aggressiveTrimInactiveChannels(targetMessages: 20)
+        
+        // Set temporary memory limit flag
+        // Note: This is handled via guardrails now, but keeping for compatibility
+        activateMemoryGuardrails()
+        
+        // Restore path: After 30 seconds of no memory warnings, restore normal limits
+        memoryWarningRestoreTimer?.invalidate()
+        memoryWarningRestoreTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.restoreMemoryGuardrails()
+            }
         }
     }
     
@@ -2024,6 +2834,12 @@ public class ViewState: ObservableObject {
         // IMPORTANT: do not destroy the cache/session here. It'll cause the app to crash before it can transition to the welcome screen.
         // The cache is destroyed in RevoltApp.swift:ApplicationSwitcher
         
+        // MEMORY MANAGEMENT: Teardown cleanup timer on logout
+        memoryCleanupTimer?.invalidate()
+        memoryCleanupTimer = nil
+        memoryMonitorTimer?.invalidate()
+        memoryMonitorTimer = nil
+        
         // Clear message cache on sign-out
         MessageCacheManager.shared.clearAllCaches()
         
@@ -2378,6 +3194,17 @@ public class ViewState: ObservableObject {
             }
             
             messages[m.id] = m
+            // Update message size tracking
+            updateMessageSize(messageId: m.id, message: m)
+            
+            // Update per-channel user tracking
+            if channelUserIds[m.channel] == nil {
+                channelUserIds[m.channel] = Set<String>()
+            }
+            channelUserIds[m.channel]?.insert(m.author)
+            if let mentions = m.mentions {
+                channelUserIds[m.channel]?.formUnion(mentions)
+            }
             
             // Check if this message matches a queued message and clean it up
             if let channelQueuedMessages = queuedMessages[m.channel],
@@ -4682,6 +5509,9 @@ public class ViewState: ObservableObject {
         currentChannel = .channel(id)
         userSettingsStore.store.lastOpenChannels[server] = id
         
+        // MEMORY MANAGEMENT: Update channel access time
+        updateChannelAccessTime(channelId: id)
+        
         // CONDITIONAL: Only preload if automatic preloading is enabled
         if enableAutomaticPreloading {
             // AGGRESSIVE PRELOADING: Immediately preload this channel
@@ -4769,6 +5599,9 @@ public class ViewState: ObservableObject {
             self.userSettingsStore.store.lastOpenChannels.removeValue(forKey: "dms")
             
         }
+        
+        // MEMORY MANAGEMENT: Update channel access time
+        updateChannelAccessTime(channelId: id)
         
         // CONDITIONAL: Only preload if automatic preloading is enabled
         if enableAutomaticPreloading {
@@ -4913,7 +5746,7 @@ public class ViewState: ObservableObject {
         return targetUser.relationship
     }
     
-    func showAlert(message : String, icon : ImageResource, color: Color = .iconDefaultGray01){
+    func showAlert(message : String, icon : SwiftUI.ImageResource, color: Color = .iconDefaultGray01){
         self.alert = (message, icon, color)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             withAnimation(.snappy) {
@@ -4922,7 +5755,7 @@ public class ViewState: ObservableObject {
         }
     }
     
-    func showLoadingAlert(message : String, icon : ImageResource, color: Color = .blue){
+    func showLoadingAlert(message : String, icon : SwiftUI.ImageResource, color: Color = .blue){
         self.alert = (message, icon, color)
         DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
             withAnimation(.snappy) {

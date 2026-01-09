@@ -176,6 +176,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 // Force stop any audio playback for this cell
                 audioPlayerView.stopPlayback()
             }
+            // MEMORY MANAGEMENT: Clean up VideoPlayerView AVAsset references
+            // VideoPlayerView deinit will handle AVAsset cleanup when view is removed
             fileView.removeFromSuperview() // Ensure removal from view hierarchy
         }
         fileAttachmentViews.removeAll(keepingCapacity: false) // Don't keep capacity
