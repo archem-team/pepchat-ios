@@ -103,7 +103,8 @@ class MessageTableViewDataSource: NSObject, UITableViewDataSource {
 class LocalMessagesDataSource: NSObject, UITableViewDataSource {
     private var localMessages: [String] = []
     private var viewModelRef: MessageableChannelViewModel
-    private var viewControllerRef: MessageableChannelViewController
+    // CRITICAL FIX: Make viewControllerRef weak to break retain cycle with MessageableChannelViewController
+    private weak var viewControllerRef: MessageableChannelViewController?
     
     init(viewModel: MessageableChannelViewModel, viewController: MessageableChannelViewController, localMessages: [String]) {
         self.localMessages = localMessages
@@ -122,7 +123,7 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
         print("📊 LOCAL DATA SOURCE: Returning \(count) rows")
         
         // Update empty state visibility
-        viewControllerRef.updateEmptyStateVisibility()
+        viewControllerRef?.updateEmptyStateVisibility()
         
         return count
     }
@@ -176,7 +177,7 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                 }
                 
                 let member = viewModelRef.getMember(message: message).wrappedValue
-                let isContinuation = viewControllerRef.shouldGroupWithPreviousMessage(at: indexPath)
+                let isContinuation = viewControllerRef?.shouldGroupWithPreviousMessage(at: indexPath) ?? false
                 
                 cell.configure(with: message, 
                              author: author, 
@@ -189,26 +190,26 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                 let isPending = channelQueuedMessages.contains { $0.nonce == message.id }
                 cell.isPendingMessage = isPending
                 
-                cell.onMessageAction = { [weak viewController = viewControllerRef] action, message in
-                    viewController?.handleMessageAction(action, message: message)
+                cell.onMessageAction = { [weak viewControllerRef] action, message in
+                    viewControllerRef?.handleMessageAction(action, message: message)
                 }
                 
-                cell.onImageTapped = { [weak self] image in
-                    self?.viewControllerRef.showFullScreenImage(image)
+                cell.onImageTapped = { [weak viewControllerRef] image in
+                    viewControllerRef?.showFullScreenImage(image)
                 }
                 
                 // Present user sheet on avatar tap
-                cell.onAvatarTap = { [weak viewController = viewControllerRef] in
-                    guard let viewController = viewController else { return }
+                cell.onAvatarTap = { [weak viewControllerRef] in
+                    guard let viewControllerRef = viewControllerRef else { return }
                     // Use the SwiftUI UserSheet instead of UIKit version
-                    viewController.viewModel.viewState.openUserSheet(user: author, member: member)
+                    viewControllerRef.viewModel.viewState.openUserSheet(user: author, member: member)
                 }
                 
                 // Present user sheet on username tap
-                cell.onUsernameTap = { [weak viewController = viewControllerRef] in
-                    guard let viewController = viewController else { return }
+                cell.onUsernameTap = { [weak viewControllerRef] in
+                    guard let viewControllerRef = viewControllerRef else { return }
                     // Use the SwiftUI UserSheet instead of UIKit version
-                    viewController.viewModel.viewState.openUserSheet(user: author, member: member)
+                    viewControllerRef.viewModel.viewState.openUserSheet(user: author, member: member)
                 }
                 
                 cell.textViewContent.delegate = viewControllerRef

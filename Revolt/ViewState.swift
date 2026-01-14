@@ -327,14 +327,11 @@ public class ViewState: ObservableObject {
         didSet {
             // MEMORY MANAGEMENT: Use debounced save (memory limits disabled for users)
             // Move JSON encoding off main thread to prevent app hanging
-            let users = self.users
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(users) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "users", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and perform encoding ONLY in the debounced work item.
+            // This ensures we don't re-encode on every tiny change or for each user removal.
+            let usersSnapshot = self.users
+            debouncedSave(key: "users") {
+                try? JSONEncoder().encode(usersSnapshot)
             }
 //            saveUsersToSharedContainer()
         }
@@ -394,21 +391,18 @@ public class ViewState: ObservableObject {
         didSet {
             // MEMORY MANAGEMENT: Use debounced save for channelMessages
             // Move JSON encoding off main thread to prevent app hanging
-            let channelMessages = self.channelMessages
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-            if let data = try? JSONEncoder().encode(channelMessages) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "channelMessages", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only once per debounce window.
+            let channelMessagesSnapshot = self.channelMessages
+            debouncedSave(key: "channelMessages") {
+                try? JSONEncoder().encode(channelMessagesSnapshot)
             }
             
             // Check if we should turn off loading state
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
                 if self.isLoadingChannelMessages {
                     if case .channel(let channelId) = self.currentChannel {
-                        let hasMessages = (channelMessages[channelId]?.count ?? 0) > 0
+                        let hasMessages = (self.channelMessages[channelId]?.count ?? 0) > 0
                         if hasMessages {
                             self.setChannelLoadingState(isLoading: false)
                         }
@@ -458,14 +452,10 @@ public class ViewState: ObservableObject {
     @Published var emojis: [String: Emoji] {
         didSet {
             // OPTIMIZED: Move encoding to background thread with debouncing
-            let emojis = self.emojis
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(emojis) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "emojis", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only inside debounced work item.
+            let emojisSnapshot = self.emojis
+            debouncedSave(key: "emojis") {
+                try? JSONEncoder().encode(emojisSnapshot)
             }
         }
     }
@@ -473,14 +463,10 @@ public class ViewState: ObservableObject {
     @Published var currentUser: Types.User? = nil {
         didSet {
             // OPTIMIZED: Move encoding to background thread with debouncing
-            let currentUser = self.currentUser
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(currentUser) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "currentUser", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only inside debounced work item.
+            let currentUserSnapshot = self.currentUser
+            debouncedSave(key: "currentUser") {
+                try? JSONEncoder().encode(currentUserSnapshot)
             }
         }
     }
@@ -551,14 +537,10 @@ public class ViewState: ObservableObject {
     @Published var currentSelection: MainSelection {
         didSet {
             // OPTIMIZED: Move encoding to background thread with debouncing
-            let currentSelection = self.currentSelection
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(currentSelection) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "currentSelection", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only inside debounced work item.
+            let currentSelectionSnapshot = self.currentSelection
+            debouncedSave(key: "currentSelection") {
+                try? JSONEncoder().encode(currentSelectionSnapshot)
             }
         }
     }
@@ -566,14 +548,10 @@ public class ViewState: ObservableObject {
     @Published var currentChannel: ChannelSelection {
         didSet {
             // OPTIMIZED: Move encoding to background thread with debouncing
-            let currentChannel = self.currentChannel
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(currentChannel) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "currentChannel", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only inside debounced work item.
+            let currentChannelSnapshot = self.currentChannel
+            debouncedSave(key: "currentChannel") {
+                try? JSONEncoder().encode(currentChannelSnapshot)
             }
             
             // MEMORY MANAGEMENT: Clear messages from previous channel when switching channels
@@ -589,14 +567,10 @@ public class ViewState: ObservableObject {
     @Published var theme: Theme {
         didSet {
             // OPTIMIZED: Move encoding to background thread with debouncing
-            let theme = self.theme
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(theme) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "theme", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only inside debounced work item.
+            let themeSnapshot = self.theme
+            debouncedSave(key: "theme") {
+                try? JSONEncoder().encode(themeSnapshot)
             }
         }
     }
@@ -604,14 +578,10 @@ public class ViewState: ObservableObject {
     @Published var currentLocale: Locale? {
         didSet {
             // OPTIMIZED: Move encoding to background thread with debouncing
-            let currentLocale = self.currentLocale
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(currentLocale) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "locale", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only inside debounced work item.
+            let currentLocaleSnapshot = self.currentLocale
+            debouncedSave(key: "locale") {
+                try? JSONEncoder().encode(currentLocaleSnapshot)
             }
         }
     }
@@ -661,12 +631,16 @@ public class ViewState: ObservableObject {
     private let enableAutomaticPreloading = false // DISABLED: No automatic preloading
     
     // MEMORY MANAGEMENT: Helper methods
-    private func debouncedSave(key: String, data: Data) {
+    /// Debounced save helper that defers heavy JSON encoding to the background queue
+    /// and ensures only the *latest* snapshot for a given key is encoded.
+    private func debouncedSave(key: String, makeData: @escaping () -> Data?) {
         // Cancel any existing save operation for this key
         saveWorkItems[key]?.cancel()
         
         // Create a new work item
         let workItem = DispatchWorkItem { [weak self] in
+            guard let data = makeData() else { return }
+            
             UserDefaults.standard.set(data, forKey: key)
             DispatchQueue.main.async {
                 self?.saveWorkItems.removeValue(forKey: key)
