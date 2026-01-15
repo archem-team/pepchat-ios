@@ -222,6 +222,28 @@ struct ChannelIconDM: View {
     var frameSize: (CGFloat, CGFloat) = (32, 32)
     
     var font: PeptideFont = .peptideCallout
+    
+    /// State variables to store recipient and unread count, loaded asynchronously
+    @State private var recipient: Types.User? = nil
+    @State private var unread: UnreadCount? = nil
+    
+    /// Loads the recipient and unread count asynchronously to avoid modifying state during view updates
+    private func loadRecipientAndUnread() {
+        // Use Task to defer state modifications outside the view update cycle
+        Task { @MainActor in
+            guard case .dm_channel(let c) = channel else { return }
+            
+            // Load recipient asynchronously - this may modify state but it's now outside view body evaluation
+            let loadedRecipient = viewState.getDMPartnerName(channel: c)
+            
+            // Load unread count (this is read-only, but keeping it consistent)
+            let loadedUnread = viewState.getUnreadCountFor(channel: channel)
+            
+            // Update state variables on main thread
+            recipient = loadedRecipient
+            unread = loadedUnread
+        }
+    }
 
     /// The body of the `ChannelIcon`.
     ///
@@ -335,17 +357,15 @@ struct ChannelIconDM: View {
                                 
             case .dm_channel(let c):
                 
-                // CRITICAL FIX: Always show something, even if recipient is nil
-                let recipient = viewState.getDMPartnerName(channel: c)
-                let unread = viewState.getUnreadCountFor(channel: channel)
-                
+                // Use state variables instead of calling state-modifying methods directly
+                // This prevents "Publishing changes from within view updates" error
                 ZStack(alignment: .leading){
                     if let recipient = recipient {
                         Avatar(user: recipient, withPresence: withUserPresence)
                             .frame(width: frameSize.0, height: frameSize.1)
                             .padding(.leading, .padding16)
                     } else {
-                        // Fallback icon when recipient is nil
+                        // Fallback icon when recipient is nil (during loading or if not found)
                         PeptideIcon(iconName: .peptideUsers,
                                     size: initialSize.0,
                                     color: .iconDefaultGray01)
@@ -429,6 +449,14 @@ struct ChannelIconDM: View {
             }
         }
         .padding(top: .padding8, bottom: .padding8)
+        .onAppear {
+            // Load recipient and unread count asynchronously when view appears
+            loadRecipientAndUnread()
+        }
+        .onChange(of: channel.id) { _ in
+            // Reload if channel changes
+            loadRecipientAndUnread()
+        }
     }
 }
 

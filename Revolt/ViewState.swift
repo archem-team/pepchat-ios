@@ -4843,21 +4843,20 @@ public class ViewState: ObservableObject {
             return user
         }
         
-        // Try to load from stored event data
+        // Try to load from stored event data - return directly without mutating @Published state
         if let storedUser = allEventUsers[otherUserId] {
-            users[otherUserId] = storedUser
             return storedUser
         }
         
-        // Create placeholder user to prevent empty spaces
-        let placeholderUser = Types.User(
+        // Create placeholder user to prevent empty spaces - return directly without mutating @Published state
+        // Note: Both lookups are O(1) dictionary reads, so "caching" in users provides no performance benefit
+        // Writing to users triggers a global app re-render (since it's @Published), which is expensive
+        return Types.User(
             id: otherUserId,
             username: "Unknown User",
             discriminator: "0000",
             relationship: .None
         )
-        users[otherUserId] = placeholderUser
-        return placeholderUser
     }
     
     /// Checks if the current user has a friendship with the specified user
@@ -6048,9 +6047,10 @@ extension Channel {
             if let otherUser = viewState.users[otherUserId] {
                 return otherUser.username
             } else {
-                // Try to load user if missing
+                // Try to load user if missing - return directly without mutating @Published state
+                // Note: Both lookups are O(1) dictionary reads, so "caching" in users provides no performance benefit
+                // Writing to users triggers a global app re-render (since it's @Published), which is expensive
                 if let storedUser = viewState.allEventUsers[otherUserId] {
-                    viewState.users[otherUserId] = storedUser
                     return storedUser.username
                 }
                 return "Unknown User"
