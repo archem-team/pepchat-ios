@@ -89,7 +89,7 @@ func getMessageIntent(_ notification: UNNotificationContent) -> INSendMessageInt
 
 func loadSharedUsers() -> [String: User]? {
     guard let sharedURL = FileManager.default
-        .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared")?
+        .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared.data")?
         .appendingPathComponent("users.json") else {
         print("❌ Shared container not found")
         return nil
@@ -208,7 +208,7 @@ class NotificationService: UNNotificationServiceExtension {
     // Called to load the users
     func loadSharedUsers() -> [String: User]? {
         guard let sharedURL = FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared")?
+            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared.data")?
             .appendingPathComponent("users.json") else {
             print("❌ Shared container not found")
             return nil

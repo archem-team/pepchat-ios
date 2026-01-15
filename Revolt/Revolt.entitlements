@@ -19,7 +19,7 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.pepchat.shared</string>
+		<string>group.pepchat.shared.data</string>
 	</array>
 </dict>
 </plist>
