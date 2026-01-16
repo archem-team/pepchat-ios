@@ -79,7 +79,7 @@ struct Welcome: View {
                             //Spacer()
                             
                             Image(.peptideWelcome)
-                                .padding(.vertical, .size52)
+                                .padding(.vertical, .size40)
                             
                            //Spacer()
 
@@ -163,7 +163,28 @@ struct Welcome: View {
                                 .foregroundStyle(.textYellow07)
                             
                         }
-                        .padding(top: .padding24, bottom: .padding32)
+                        .padding(top: .padding24, bottom: .padding12)
+                        
+                        VStack(spacing: .size2) {
+                            if let url = URL(string: "https://zeko.chat/terms") {
+                                Link(destination: url) {
+                                    PeptideText(text: "Terms of Service", font: .peptideSubhead, textColor: .textGray06)
+                                }
+                            }
+                            
+                            if let url = URL(string: "https://zeko.chat/privacy") {
+                                Link(destination: url) {
+                                    PeptideText(text: "Privacy Policy", font: .peptideSubhead, textColor: .textGray06)
+                                }
+                            }
+                            
+                            if let url = URL(string: "https://zeko.chat/community-guidelines") {
+                                Link(destination: url) {
+                                    PeptideText(text: "Community Guidelines", font: .peptideSubhead, textColor: .textGray06)
+                                }
+                            }
+                        }
+                        .padding(.bottom, .padding24)
                         
                         //Spacer()
                         

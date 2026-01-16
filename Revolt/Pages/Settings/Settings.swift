@@ -79,6 +79,17 @@ struct Settings: View {
                     }
                 }
                 
+                PeptideDivider()
+                    .padding(.leading, 0)
+                
+                if let url = URL(string: "https://zeko.chat/delete-account") {
+                    Link(destination: url) {
+                        PeptideActionButton(icon: .peptideTrashDelete,
+                                            title: "Delete Account",
+                                            hasArrow: true)
+                    }
+                }
+                
                 
             }
             .backgroundGray11(verticalPadding: .padding4)
