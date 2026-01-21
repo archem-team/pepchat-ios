@@ -40,7 +40,7 @@ struct UserSheetHeader: View {
                             ZStack {
                                 GeometryReader { geometry in
                                     LazyImage(source: .file(banner), clipTo: RoundedRectangle(cornerRadius: .zero))
-                                        .aspectRatio(contentMode: .fit)
+                                        .aspectRatio(contentMode: .fill)
                                         .frame(width: geometry.size.width, height: 130)
                                         .clipped()
                                 }

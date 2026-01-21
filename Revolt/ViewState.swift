@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import SwiftUI
 import Alamofire
 import ULID
@@ -8,7 +9,7 @@ import Sentry
 import UserNotifications
 import KeychainAccess
 import Darwin
-
+import Network
 
 
 enum UserStateError: Error {
@@ -278,6 +279,7 @@ class QueuedMessage: ObservableObject {
 
 @MainActor
 public class ViewState: ObservableObject {
+    var cancellables = Set<AnyCancellable>()
     static var shared: ViewState? = nil
     
 #if os(iOS)
@@ -325,15 +327,13 @@ public class ViewState: ObservableObject {
         didSet {
             // MEMORY MANAGEMENT: Use debounced save (memory limits disabled for users)
             // Move JSON encoding off main thread to prevent app hanging
-            let users = self.users
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(users) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "users", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and perform encoding ONLY in the debounced work item.
+            // This ensures we don't re-encode on every tiny change or for each user removal.
+            let usersSnapshot = self.users
+            debouncedSave(key: "users") {
+                try? JSONEncoder().encode(usersSnapshot)
             }
+//            saveUsersToSharedContainer()
         }
     }
     
@@ -391,21 +391,18 @@ public class ViewState: ObservableObject {
         didSet {
             // MEMORY MANAGEMENT: Use debounced save for channelMessages
             // Move JSON encoding off main thread to prevent app hanging
-            let channelMessages = self.channelMessages
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-            if let data = try? JSONEncoder().encode(channelMessages) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "channelMessages", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only once per debounce window.
+            let channelMessagesSnapshot = self.channelMessages
+            debouncedSave(key: "channelMessages") {
+                try? JSONEncoder().encode(channelMessagesSnapshot)
             }
             
             // Check if we should turn off loading state
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
                 if self.isLoadingChannelMessages {
                     if case .channel(let channelId) = self.currentChannel {
-                        let hasMessages = (channelMessages[channelId]?.count ?? 0) > 0
+                        let hasMessages = (self.channelMessages[channelId]?.count ?? 0) > 0
                         if hasMessages {
                             self.setChannelLoadingState(isLoading: false)
                         }
@@ -455,14 +452,10 @@ public class ViewState: ObservableObject {
     @Published var emojis: [String: Emoji] {
         didSet {
             // OPTIMIZED: Move encoding to background thread with debouncing
-            let emojis = self.emojis
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(emojis) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "emojis", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only inside debounced work item.
+            let emojisSnapshot = self.emojis
+            debouncedSave(key: "emojis") {
+                try? JSONEncoder().encode(emojisSnapshot)
             }
         }
     }
@@ -470,14 +463,10 @@ public class ViewState: ObservableObject {
     @Published var currentUser: Types.User? = nil {
         didSet {
             // OPTIMIZED: Move encoding to background thread with debouncing
-            let currentUser = self.currentUser
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(currentUser) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "currentUser", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only inside debounced work item.
+            let currentUserSnapshot = self.currentUser
+            debouncedSave(key: "currentUser") {
+                try? JSONEncoder().encode(currentUserSnapshot)
             }
         }
     }
@@ -548,14 +537,10 @@ public class ViewState: ObservableObject {
     @Published var currentSelection: MainSelection {
         didSet {
             // OPTIMIZED: Move encoding to background thread with debouncing
-            let currentSelection = self.currentSelection
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(currentSelection) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "currentSelection", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only inside debounced work item.
+            let currentSelectionSnapshot = self.currentSelection
+            debouncedSave(key: "currentSelection") {
+                try? JSONEncoder().encode(currentSelectionSnapshot)
             }
         }
     }
@@ -563,14 +548,10 @@ public class ViewState: ObservableObject {
     @Published var currentChannel: ChannelSelection {
         didSet {
             // OPTIMIZED: Move encoding to background thread with debouncing
-            let currentChannel = self.currentChannel
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(currentChannel) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "currentChannel", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only inside debounced work item.
+            let currentChannelSnapshot = self.currentChannel
+            debouncedSave(key: "currentChannel") {
+                try? JSONEncoder().encode(currentChannelSnapshot)
             }
             
             // MEMORY MANAGEMENT: Clear messages from previous channel when switching channels
@@ -586,14 +567,10 @@ public class ViewState: ObservableObject {
     @Published var theme: Theme {
         didSet {
             // OPTIMIZED: Move encoding to background thread with debouncing
-            let theme = self.theme
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(theme) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "theme", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only inside debounced work item.
+            let themeSnapshot = self.theme
+            debouncedSave(key: "theme") {
+                try? JSONEncoder().encode(themeSnapshot)
             }
         }
     }
@@ -601,14 +578,10 @@ public class ViewState: ObservableObject {
     @Published var currentLocale: Locale? {
         didSet {
             // OPTIMIZED: Move encoding to background thread with debouncing
-            let currentLocale = self.currentLocale
-            Task.detached(priority: .background) { [weak self] in
-                guard let self = self else { return }
-                if let data = try? JSONEncoder().encode(currentLocale) {
-                    await MainActor.run {
-                        self.debouncedSave(key: "locale", data: data)
-                    }
-                }
+            // CRITICAL FIX: Capture value directly and encode only inside debounced work item.
+            let currentLocaleSnapshot = self.currentLocale
+            debouncedSave(key: "locale") {
+                try? JSONEncoder().encode(currentLocaleSnapshot)
             }
         }
     }
@@ -658,14 +631,20 @@ public class ViewState: ObservableObject {
     private let enableAutomaticPreloading = false // DISABLED: No automatic preloading
     
     // MEMORY MANAGEMENT: Helper methods
-    private func debouncedSave(key: String, data: Data) {
+    /// Debounced save helper that defers heavy JSON encoding to the background queue
+    /// and ensures only the *latest* snapshot for a given key is encoded.
+    private func debouncedSave(key: String, makeData: @escaping () -> Data?) {
         // Cancel any existing save operation for this key
         saveWorkItems[key]?.cancel()
         
         // Create a new work item
         let workItem = DispatchWorkItem { [weak self] in
+            guard let data = makeData() else { return }
+            
             UserDefaults.standard.set(data, forKey: key)
-            self?.saveWorkItems.removeValue(forKey: key)
+            DispatchQueue.main.async {
+                self?.saveWorkItems.removeValue(forKey: key)
+            }
         }
         
         // Store and schedule the work item
@@ -1186,7 +1165,15 @@ public class ViewState: ObservableObject {
         
         self.users = ViewState.decodeUserDefaults(forKey: "users", withDecoder: decoder, defaultingTo: [:])
         // Force refresh servers and channels from backend instead of using cached data
-        self.servers = [:] // ViewState.decodeUserDefaults(forKey: "servers", withDecoder: decoder, defaultingTo: [:])
+        /*self.servers = [:]*/ // ViewState.decodeUserDefaults(forKey: "servers", withDecoder: decoder, defaultingTo: [:])
+        let cachedServers = ViewState.loadServersCacheSync()
+        
+        if !cachedServers.isEmpty {
+            self.servers = cachedServers
+        } else {
+            self.servers = [:]
+        }
+        
         self.channels = [:] // ViewState.decodeUserDefaults(forKey: "channels", withDecoder: decoder, defaultingTo: [:])
         /*self.messages = ViewState.decodeUserDefaults(forKey: "messages", withDecoder: decoder, defaultingTo: [:])
          self.channelMessages = ViewState.decodeUserDefaults(forKey: "channelMessages", withDecoder: decoder, defaultingTo: [:])*/
@@ -1271,6 +1258,7 @@ public class ViewState: ObservableObject {
                 self?.cleanupStaleUnreads()
             }
         }
+        self.setupInternetObservation()
     }
     
     // MARK: - Channel Preloading
@@ -4275,15 +4263,34 @@ public class ViewState: ObservableObject {
         } })
         
         if channel == nil {
-            channel = try! await http.openDm(user: user).get()
-            await MainActor.run {
-                dms.append(channel!)
+            // Try to open DM without force-unwrapping to avoid crashes when the API fails
+            let openDmResult = await http.openDm(user: user)
+            switch openDmResult {
+            case .success(let openedChannel):
+                channel = openedChannel
+                await MainActor.run {
+                    dms.append(openedChannel)
+                }
+            case .failure(let error):
+                // Log and show a safe error to the user instead of crashing
+                print("⚠️ openDm failed for user \(user): \(error)")
+                await MainActor.run {
+                    showAlert(message: "Failed to open DM.", icon: .peptideWarningCircle)
+                }
+                // Keep channel as nil and continue gracefully
             }
         }
         
-        await MainActor.run {
-            currentSelection = .dms
-            currentChannel = .channel(channel!.id)
+        if let safeChannel = channel {
+            await MainActor.run {
+                currentSelection = .dms
+                currentChannel = .channel(safeChannel.id)
+            }
+        } else {
+            // Failed to open DM — avoid force-unwrapping and crash.
+            await MainActor.run {
+                showAlert(message: "Failed to open DM.", icon: .peptideWarningCircle)
+            }
         }
     }
     
@@ -5494,10 +5501,180 @@ public class ViewState: ObservableObject {
         
         return result
     }
+    // MARK: - Message queue processing state
+    private var isProcessingQueue: [String: Bool] = [:] // Prevent concurrent processing per channel
+    
+    // Check the internet status
+    func setupInternetObservation() {
+        InternetMonitor.shared.$isConnected
+            .sink { isConnected in
+                if isConnected {
+                    print("🌐 Internet restored → trying to flush queue")
+                    self.trySendingQueuedMessages()
+                }
+            }
+            .store(in: &cancellables)
+        }
+    
+    // Function to send the queuing of messages
+    func trySendingQueuedMessages() {
+        print("👍🏻 Entered trySendingQueuedMessages")
+        guard InternetMonitor.shared.isConnected else { 
+            print("❌ Not connected, aborting queue send")
+            return 
+        }
+
+        print("📌 queuedMessages count:", queuedMessages.count)
+        
+        // Get a snapshot of channels to process (avoid concurrent modification)
+        let channelsToProcess = Array(queuedMessages.keys)
+        
+        // Process each channel sequentially with concurrency guard
+        for channelId in channelsToProcess {
+            // Skip if already processing this channel
+            if isProcessingQueue[channelId] == true {
+                print("⏭️ Skipping channel \(channelId) - already processing")
+                continue
+            }
+            
+            // Create a task for this channel to maintain message order
+            Task {
+                // Mark channel as being processed
+                await MainActor.run {
+                    self.isProcessingQueue[channelId] = true
+                }
+                
+                defer {
+                    // Always clear the processing flag when done
+                    Task { @MainActor in
+                        self.isProcessingQueue[channelId] = false
+                    }
+                }
+                
+                var sentCount = 0
+                
+                // Keep sending from the front of the queue until it's empty or send fails
+                while await MainActor.run(body: { self.queuedMessages[channelId]?.isEmpty == false }) {
+                    // Safely get and remove the first message atomically
+                    let msg = await MainActor.run { () -> QueuedMessage? in
+                        guard let first = self.queuedMessages[channelId]?.first else {
+                            return nil
+                        }
+                        // Remove it immediately to prevent duplicate sends
+                        self.queuedMessages[channelId]?.removeFirst()
+                        return first
+                    }
+                    
+                    guard let msg = msg else {
+                        break
+                    }
+                    
+                    sentCount += 1
+                    print("📌 Sending queued message \(sentCount) for channel \(channelId) - nonce: \(msg.nonce)")
+                    
+                    do {
+                        print("👍🏻 Sending message: \(msg.content)")
+                        let _ = try await http.sendMessage(
+                            channel: channelId,
+                            replies: msg.replies,
+                            content: msg.content,
+                            attachments: [],
+                            nonce: msg.nonce
+                        ).get()
+                        print("📤 Sent queued message \(sentCount) successfully - nonce: \(msg.nonce)")
+                    } catch {
+                        print("❌ Failed to send queued message - nonce: \(msg.nonce), error: \(error)")
+                        // Re-add the message back to the front of the queue on failure
+                        await MainActor.run {
+                            self.queuedMessages[channelId]?.insert(msg, at: 0)
+                        }
+                        // Stop trying to send remaining messages in this channel if one fails
+                        break
+                    }
+                }
+                
+                // Clean up empty queue entries
+                await MainActor.run {
+                    if self.queuedMessages[channelId]?.isEmpty == true {
+                        self.queuedMessages.removeValue(forKey: channelId)
+                    }
+                    print("👍🏻 Finished processing channel \(channelId) - sent \(sentCount) messages")
+                }
+            }
+        }
+        print("👍🏻 Exiting trySendingQueueMessage")
+    }
 }
+
+// This is used for notifications @mention issue fetches the corresponding @mention user from users.json. Testing is pending.
+//extension ViewState {
+//    func saveUsersToSharedContainer() {
+//        guard let sharedURL = FileManager.default
+//            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared")?
+//            .appendingPathComponent("users.json") else {
+//            print("❌ Failed to get App Group container URL")
+//            return
+//        }
+//
+//        do {
+//            let data = try JSONEncoder().encode(self.users)
+//            try data.write(to: sharedURL, options: .atomic)
+//            print("✅ Shared users.json updated")
+//        } catch {
+//            print("❌ Failed to write users.json:", error)
+//        }
+//    }
+//}
 
 
 extension ViewState {
+    
+    // Defining the path of the cache and type of the cache
+    static func serversCacheURL() -> URL? {
+        let fileManager = FileManager.default
+        guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let dir = appSupport.appendingPathComponent(Bundle.main.bundleIdentifier ?? "ZekoChat")
+        do {
+            try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            print("❌ Failed to create Application Support directory:", error)
+            return nil
+        }
+        return dir.appendingPathComponent("servers_cache.json")
+    }
+    
+    // Load the cache when app boots up
+    static func loadServersCacheSync() -> OrderedDictionary <String, Server> {
+        guard let url = serversCacheURL(), FileManager.default.fileExists(atPath: url.path) else {
+            return [:]
+        }
+        do {
+            let data  = try Data(contentsOf: url)
+            let decoder = JSONDecoder()
+            return try decoder.decode(OrderedDictionary<String, Server>.self, from: data)
+        } catch {
+            print("❌ Failed to load servers cache:", error)
+            return [:]
+        }
+    }
+    
+    func saveServersCacheAsync() {
+        let serversSnapshot = self.servers
+        Task.detached(priority: .background) {
+            do {
+                let encoder = JSONEncoder()
+                let data = try encoder.encode(serversSnapshot)
+                if let url = await ViewState.serversCacheURL() {
+                    try data.write(to: url, options: .atomic)
+                    print("✅ Saved servers cache to \(url.path)")
+                }
+            } catch {
+                print("❌ Failed to write servers cache:", error)
+            }
+        }
+    }
+    
+    
     func applyServerOrdering() {
         let ordering = self.userSettingsStore.cache.orderSettings.servers
         let allServers = Array(self.servers.values)
@@ -5828,6 +6005,7 @@ extension ViewState {
         }
         
         // print("🚀 VIEWSTATE: Final servers count after merge: \(self.servers.count)")
+        self.saveServersCacheAsync()
     }
 }
 

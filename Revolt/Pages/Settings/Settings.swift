@@ -49,7 +49,7 @@ struct Settings: View {
                         viewState.path.append(NavigationDestination.profile_setting)
                     }, label: {
                         PeptideActionButton(icon: .peptideRoleIdCard,
-                                            title: "profile",
+                                            title: "Profile",
                                             hasArrow: true)
                     })
                     
@@ -67,6 +67,28 @@ struct Settings: View {
                                         title: "Sessions",
                                         hasArrow: true)
                 })
+                
+                PeptideDivider()
+                    .padding(.leading, 0)
+                
+                if let url = URL(string: "https://zeko.chat/privacy") {
+                    Link(destination: url) {
+                        PeptideActionButton(icon: .peptideLock,
+                                            title: "Privacy Policy",
+                                            hasArrow: true)
+                    }
+                }
+                
+                PeptideDivider()
+                    .padding(.leading, 0)
+                
+                if let url = URL(string: "https://zeko.chat/delete-account") {
+                    Link(destination: url) {
+                        PeptideActionButton(icon: .peptideTrashDelete,
+                                            title: "Delete Account",
+                                            hasArrow: true)
+                    }
+                }
                 
                 
             }

@@ -25,101 +25,183 @@ struct ConfirmationSheet : View{
     var onConfirm: () -> Void
     
     var body: some View {
-        VStack{
+        VStack {
+            if showCloseButton {
             
-            ZStack(alignment: .topTrailing){
-            
-                VStack(spacing: .zero){
-                
-                    VStack(alignment: .leading){
-                        
-                        PeptideText(
-                            text: title,
-                            font: .peptideTitle3,
-                            textColor: .textDefaultGray01,
-                            alignment: .leading
-                        )
-                        .padding(.bottom, self.titleButtomPadding)
-                        
-                        PeptideText(
-                            text: subTitle,
-                            font: .peptideBody3,
-                            textColor: .textGray06,
-                            alignment: .leading
-                        )
-                        
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, .size24)
-                        .padding(.top, .size24)
-                        .padding(.bottom, .size32)
+                HStack{
+                    Spacer(minLength: .zero)
                     
-                    Divider()
-                        .frame(height: 1.5)
-                        .background(.borderGray10)
-                    
-                    HStack{
-                    
-                        PeptideButton(
-                            title: dismissText,
-                            bgColor: .clear,
-                            contentColor: .textDefaultGray01,
-                            isFullWidth: false
-                        ){
-                            if(popOnDismiss){
-                                isPresented.toggle()
-                            }
-                            if let onDismiss = onDismiss {
-                                onDismiss()
-                            }
+                    PeptideIconButton(icon: .peptideCloseLiner, size: 24){
+                        
+                        if(popOnDismiss){
+                            isPresented.toggle()
                         }
-                        
-                        PeptideButton(
-                            title: confirmText,
-                            bgColor: .bgRed07,
-                            contentColor: .textDefaultGray01,
-                            buttonState: isLoading ? .loading : .default,
-                            isFullWidth: false
-                        ){
-                            if(popOnConfirm){
-                                isPresented.toggle()
-                            }
-                            onConfirm()
-                            
+                        if let onDismiss = onDismiss {
+                            onDismiss()
                         }
                         
                     }
-                    .frame(maxWidth: .infinity, alignment: buttonAlignment)
-                    .padding(.all, .size24)
-                    
-                }
-                
-                if showCloseButton {
-                
-                    HStack{
-                        Spacer(minLength: .zero)
-                        
-                        PeptideIconButton(icon: .peptideCloseLiner, size: 24){
-                            
-                            if(popOnDismiss){
-                                isPresented.toggle()
-                            }
-                            if let onDismiss = onDismiss {
-                                onDismiss()
-                            }
-                            
-                        }
-                        .padding(.all, .size16)
-                    }
-                    
                 }
                 
             }
             
-        }
+            VStack(alignment: .leading) {
+                PeptideText(
+                    text: title,
+                    font: .peptideTitle3,
+                    textColor: .textDefaultGray01,
+                    alignment: .leading
+                )
+                .padding(.bottom, self.titleButtomPadding)
+                
+                PeptideText(
+                    text: subTitle,
+                    font: .peptideBody3,
+                    textColor: .textGray06,
+                    alignment: .leading
+                ).padding(.bottom, self.titleButtomPadding)
+                
+            }
             .frame(maxWidth: .infinity, alignment: .leading)
+            
+            Divider()
+                .frame(height: 1.5)
+                .background(.borderGray10)
+            
+            HStack{
+            
+                PeptideButton(
+                    title: dismissText,
+                    bgColor: .clear,
+                    contentColor: .textDefaultGray01,
+                    isFullWidth: false
+                ){
+                    if(popOnDismiss){
+                        isPresented.toggle()
+                    }
+                    if let onDismiss = onDismiss {
+                        onDismiss()
+                    }
+                }
+                
+                PeptideButton(
+                    title: confirmText,
+                    bgColor: .bgRed07,
+                    contentColor: .textDefaultGray01,
+                    buttonState: isLoading ? .loading : .default,
+                    isFullWidth: false
+                ){
+                    if(popOnConfirm){
+                        isPresented.toggle()
+                    }
+                    onConfirm()
+                    
+                }
+                
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }.padding()
+            .frame(maxWidth: .infinity)
             .background(.bgGray11, in: RoundedRectangle(cornerRadius: .size16))
-            .padding(.all, .size16)
+            .padding()
+        
+        
+//        VStack{
+//            
+//            ZStack(alignment: .topTrailing){
+//            
+//                VStack(spacing: .zero){
+//                    
+//                    if showCloseButton {
+//                    
+//                        HStack{
+//                            Spacer(minLength: .zero)
+//                            
+//                            PeptideIconButton(icon: .peptideCloseLiner, size: 24){
+//                                
+//                                if(popOnDismiss){
+//                                    isPresented.toggle()
+//                                }
+//                                if let onDismiss = onDismiss {
+//                                    onDismiss()
+//                                }
+//                                
+//                            }
+//                            .padding()
+////                            .padding(.all, .size16)
+//                        }
+//                        
+//                    }
+//                    
+//                
+//                    VStack(alignment: .leading){
+//                        
+//                        PeptideText(
+//                            text: title,
+//                            font: .peptideTitle3,
+//                            textColor: .textDefaultGray01,
+//                            alignment: .leading
+//                        )
+//                        .padding(.bottom, self.titleButtomPadding)
+//                        
+//                        PeptideText(
+//                            text: subTitle,
+//                            font: .peptideBody3,
+//                            textColor: .textGray06,
+//                            alignment: .leading
+//                        )
+//                        
+//                    }
+//                    .frame(maxWidth: .infinity, alignment: .leading)
+//                        .padding(.horizontal, .size24)
+//                        .padding(.top, .size24)
+//                        .padding(.bottom, .size32)
+//                    
+//                    Divider()
+//                        .frame(height: 1.5)
+//                        .background(.borderGray10)
+//                    
+//                    HStack{
+//                    
+//                        PeptideButton(
+//                            title: dismissText,
+//                            bgColor: .clear,
+//                            contentColor: .textDefaultGray01,
+//                            isFullWidth: false
+//                        ){
+//                            if(popOnDismiss){
+//                                isPresented.toggle()
+//                            }
+//                            if let onDismiss = onDismiss {
+//                                onDismiss()
+//                            }
+//                        }
+//                        
+//                        PeptideButton(
+//                            title: confirmText,
+//                            bgColor: .bgRed07,
+//                            contentColor: .textDefaultGray01,
+//                            buttonState: isLoading ? .loading : .default,
+//                            isFullWidth: false
+//                        ){
+//                            if(popOnConfirm){
+//                                isPresented.toggle()
+//                            }
+//                            onConfirm()
+//                            
+//                        }
+//                        
+//                    }
+//                    .frame(maxWidth: .infinity, alignment: buttonAlignment)
+//                    .padding(.all, .size24)
+//                    
+//                }
+//            }
+//            
+//        }
+//            .frame(maxWidth: .infinity, alignment: .leading)
+//            .background(.bgGray11, in: RoundedRectangle(cornerRadius: .size16))
+//            .padding(.all, .size16)
     }
     
 }

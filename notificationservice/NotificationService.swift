@@ -68,11 +68,13 @@ func getMessageIntent(_ notification: UNNotificationContent) -> INSendMessageInt
         // TODO: Implement attachment handling by retrieving instance config and generating URLs.
     }
     
+    var content = message.content
+    
     // Construct the message intent
     let intent = INSendMessageIntent(
         recipients: nil,
         outgoingMessageType: .outgoingMessageText,
-        content: message.content,
+        content: content,
         speakableGroupName: speakableGroupName,
         conversationIdentifier: message.channel,
         serviceName: nil,
@@ -83,6 +85,22 @@ func getMessageIntent(_ notification: UNNotificationContent) -> INSendMessageInt
     // TODO: Set custom avatars for direct message groups if applicable.
     
     return intent
+}
+
+func loadSharedUsers() -> [String: User]? {
+    guard let sharedURL = FileManager.default
+        .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared.data")?
+        .appendingPathComponent("users.json") else {
+        print("❌ Shared container not found")
+        return nil
+    }
+
+    guard let data = try? Data(contentsOf: sharedURL) else {
+        print("❌ No users.json found")
+        return nil
+    }
+
+    return try? JSONDecoder().decode([String: User].self, from: data)
 }
 
 // NotificationService class handles push notification modification
@@ -185,5 +203,22 @@ class NotificationService: UNNotificationServiceExtension {
         if let contentHandler = contentHandler, let bestAttemptContent =  bestAttemptContent {
             contentHandler(bestAttemptContent)
         }
+    }
+    
+    // Called to load the users
+    func loadSharedUsers() -> [String: User]? {
+        guard let sharedURL = FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: "group.pepchat.shared.data")?
+            .appendingPathComponent("users.json") else {
+            print("❌ Shared container not found")
+            return nil
+        }
+
+        guard let data = try? Data(contentsOf: sharedURL) else {
+            print("❌ No users.json found")
+            return nil
+        }
+
+        return try? JSONDecoder().decode([String: User].self, from: data)
     }
 }

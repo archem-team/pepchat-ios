@@ -134,11 +134,20 @@ struct ChannelSearch: View {
                                         .frame(height: .padding16)
                                     
                                     ForEach(results) { result in
+                                        
+                                        let author = viewState.users[result.author] ?? User(
+                                            id: result.author,
+                                            username: "Unknown User",
+                                            discriminator: "0000",
+                                            relationship: .None
+                                        )
+                                        //viewState.users[result.author]!
+                                        
                                         MessageView(
                                             viewModel: .init(
                                                 viewState: viewState, // Passes the view state to the message view.
                                                 message: .constant(result), // The message object being displayed.
-                                                author: .constant(viewState.users[result.author]!), // The author of the message.
+                                                author: .constant(author), // The author of the message.
                                                 member: .constant(channel.server.flatMap({ viewState.members[$0]?[result.author] })), // The member associated with the author.
                                                 server: server, // The server associated with the channel.
                                                 channel: $channel, // A binding to the channel.
@@ -403,7 +412,8 @@ struct ChannelSearch: View {
                     if let members = response.members {
                         for member in members {
                             if !(viewState.members[member.id.server]?.keys.contains(member.id.user) ?? false) {
-                                viewState.members[member.id.server]![member.id.user] = member
+                                // Ensure the server map exists to avoid unexpected nil unwrap
+                                viewState.members[member.id.server, default: [:]][member.id.user] = member
                             }
                         }
                     }

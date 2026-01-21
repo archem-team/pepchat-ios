@@ -526,7 +526,22 @@ class AudioPlayerManager: NSObject, ObservableObject {
         let targetTime = CMTime(seconds: clampedTime, preferredTimescale: 600)
         
         // Simple seek without tolerance for better accuracy
-        player.seek(to: targetTime)
+        player.seek(
+            to: targetTime,
+            toleranceBefore: CMTime(seconds: 0.1, preferredTimescale: 600),
+            toleranceAfter: CMTime(seconds: 0.1, preferredTimescale: 600)
+        ) { [weak self] finished in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                let actualSeconds = self.player?.currentTime().seconds ?? clampedTime
+                self.currentTime = actualSeconds
+                
+                if !finished {
+                    print("⚠️ Seek to \(clampedTime)s did not finish (finished=\(finished))")
+                }
+            }
+        }
         
         // Update current time immediately for UI responsiveness
         currentTime = clampedTime
@@ -1071,8 +1086,10 @@ class AudioPlayerManager: NSObject, ObservableObject {
                 
                 // Visual progress bar in console
                 let barWidth = 30
-                let filledCount = Int(Float(barWidth) * bufferingProgress)
-                let bar = String(repeating: "█", count: filledCount) + String(repeating: "▒", count: barWidth - filledCount)
+                let safeProgress = min(max(bufferingProgress, 0), 1.0)
+                let filledCount = Int(Float(barWidth) * safeProgress)
+                let emptyCount = barWidth - filledCount
+                let bar = String(repeating: "█", count: filledCount) + String(repeating: "▒", count: emptyCount)
                 // print("  ↳ [\(bar)] \(Int(bufferingProgress * 100))%")
                 
                 // Log if there was a significant change

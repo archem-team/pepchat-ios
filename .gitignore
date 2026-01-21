@@ -1,5 +1,9 @@
-/DerivedData
-./build
-./Pods
-./Rebuild.sh
-./Rebuild.sh
+.DS_Store
+*.xcuserstate
+xcuserdata/
+build/
+DerivedData/
+.build/
+Packages/
+Pods/
+CrashLog.txt
