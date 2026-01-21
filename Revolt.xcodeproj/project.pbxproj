@@ -264,6 +264,12 @@
 		36D461CF77D84B97B94929A9 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 03268FCCFC7D4D1F8B6E9F6F /* Sentry */; };
 		5C950CA0787B4F15B7A6C6E9922080C7 /* PlatformConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */; };
 		7031993BD3D264C895FFB466 /* CreateServerRoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F75CCC5D94FA80B2DCBD7821 /* CreateServerRoleView.swift */; };
+		77AC56512F1F677B00070CCE /* MessageableChannelViewController+NSFW.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AC56502F1F677B00070CCE /* MessageableChannelViewController+NSFW.swift */; };
+		77AC56532F1F683200070CCE /* NSFWOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AC56522F1F683200070CCE /* NSFWOverlayView.swift */; };
+		77AC56552F1F976F00070CCE /* MessageableChannelViewController+NotificationBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AC56542F1F976F00070CCE /* MessageableChannelViewController+NotificationBanner.swift */; };
+		77AC56572F1F97D800070CCE /* MessageableChannelViewController+MessageCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AC56562F1F97D700070CCE /* MessageableChannelViewController+MessageCell.swift */; };
+		77AC56592F1F9AB100070CCE /* MessageSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AC56582F1F9AB100070CCE /* MessageSkeletonView.swift */; };
+		77CFE81E2F1F60EF0050A516 /* MessageableChannelViewController+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77CFE81D2F1F60EF0050A516 /* MessageableChannelViewController+Extensions.swift */; };
 		911131412D8807F500667031 /* DeleteMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911131402D8807F500667031 /* DeleteMessageView.swift */; };
 		911A24B72D5B83C200ADD85D /* BlockUserPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */; };
 		912539CB2D79E569003BAA57 /* Assets 2.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 912539CA2D79E569003BAA57 /* Assets 2.xcassets */; };
@@ -615,6 +621,12 @@
 		17F555262AFC229900958F2F /* ServerSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSettings.swift; sourceTree = "<group>"; };
 		17F9D7622C9208B500D0BB6F /* MessageReactionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageReactionsSheet.swift; sourceTree = "<group>"; };
 		56C3A459C46C9725691178F3 /* RoleColorPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleColorPickerSheet.swift; sourceTree = "<group>"; };
+		77AC56502F1F677B00070CCE /* MessageableChannelViewController+NSFW.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+NSFW.swift"; sourceTree = "<group>"; };
+		77AC56522F1F683200070CCE /* NSFWOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSFWOverlayView.swift; sourceTree = "<group>"; };
+		77AC56542F1F976F00070CCE /* MessageableChannelViewController+NotificationBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+NotificationBanner.swift"; sourceTree = "<group>"; };
+		77AC56562F1F97D700070CCE /* MessageableChannelViewController+MessageCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+MessageCell.swift"; sourceTree = "<group>"; };
+		77AC56582F1F9AB100070CCE /* MessageSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageSkeletonView.swift; sourceTree = "<group>"; };
+		77CFE81D2F1F60EF0050A516 /* MessageableChannelViewController+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+Extensions.swift"; sourceTree = "<group>"; };
 		911131402D8807F500667031 /* DeleteMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteMessageView.swift; sourceTree = "<group>"; };
 		911A24B62D5B83C200ADD85D /* BlockUserPopup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockUserPopup.swift; sourceTree = "<group>"; };
 		912539CA2D79E569003BAA57 /* Assets 2.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets 2.xcassets"; sourceTree = "<group>"; };
@@ -1050,6 +1062,9 @@
 				059B24B22DE5BAB3007ACFFB /* MessageableChannelViewController+TableView.swift */,
 				05F3042E2DCF486D0058E80E /* UIViewExtensions.swift */,
 				05F3042C2DCF48640058E80E /* NSLockExtensions.swift */,
+				77CFE81D2F1F60EF0050A516 /* MessageableChannelViewController+Extensions.swift */,
+				77AC56502F1F677B00070CCE /* MessageableChannelViewController+NSFW.swift */,
+				77AC56562F1F97D700070CCE /* MessageableChannelViewController+MessageCell.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -1169,8 +1184,11 @@
 				059B24BC2DE5BB0B007ACFFB /* Managers */,
 				05E4A6892DD9FF88002D6BD9 /* Mention */,
 				0570B52B2DC4D4690029105C /* MessageableChannelViewModel.swift */,
+				77AC56582F1F9AB100070CCE /* MessageSkeletonView.swift */,
 				0570B5292DC4D4420029105C /* MessageableChannelViewControllerRepresentable.swift */,
 				0570B5272DC4D0B40029105C /* MessageableChannelViewController.swift */,
+				77AC56542F1F976F00070CCE /* MessageableChannelViewController+NotificationBanner.swift */,
+				77AC56522F1F683200070CCE /* NSFWOverlayView.swift */,
 				9161D3702D732B1C00E690E8 /* NSFWConfirmationSheet.swift */,
 				056EFBD82D04598D00E45E3C /* Attachments */,
 				0505E7CE2D022E8B00B12713 /* ChannelInfo */,
@@ -1804,8 +1822,10 @@
 				05416D922D21DAB1001858B0 /* DeleteServerSheet.swift in Sources */,
 				05104E9F2CE13BAF00B9147B /* OnboardingStage.swift in Sources */,
 				176FA6E82C9336A900EF73C0 /* ViewInvite.swift in Sources */,
+				77AC56532F1F683200070CCE /* NSFWOverlayView.swift in Sources */,
 				0570B52A2DC4D4480029105C /* MessageableChannelViewControllerRepresentable.swift in Sources */,
 				0581CFAF2CF5F2F80088DBD0 /* PeptideActionButton.swift in Sources */,
+				77AC56512F1F677B00070CCE /* MessageableChannelViewController+NSFW.swift in Sources */,
 				0555DD472CE3E5BA00D7E40D /* MfaItem.swift in Sources */,
 				912BBA5F2D4FB2E200BB8FC3 /* ValidatePasswordView.swift in Sources */,
 				173D698E2C7FF7FC00030E62 /* ChannelSearch.swift in Sources */,
@@ -1818,6 +1838,7 @@
 				5C950CA0787B4F15B7A6C6E9922080C7 /* PlatformConfigService.swift in Sources */,
 				05BA2FF32D316ADB005D307D /* BotSetting.swift in Sources */,
 				05BA2FF42D316ADB005D307D /* BotSettings.swift in Sources */,
+				77CFE81E2F1F60EF0050A516 /* MessageableChannelViewController+Extensions.swift in Sources */,
 				05BA2FF52D316ADB005D307D /* PresenceSheet.swift in Sources */,
 				05BA2FF62D316ADB005D307D /* StatusSheet.swift in Sources */,
 				05BA2FF72D316ADB005D307D /* YouView.swift in Sources */,
@@ -1972,6 +1993,7 @@
 				05D04FD72CD659BA00EA65D5 /* VerifyEmail.swift in Sources */,
 				172F2CFF2C22ED3A00948C00 /* Bundle.swift in Sources */,
 				052EE7F92D283BEC00E3A61B /* SystemMessageSheet.swift in Sources */,
+				77AC56572F1F97D800070CCE /* MessageableChannelViewController+MessageCell.swift in Sources */,
 				DA99EC4C29D5F35500419FDA /* ViewState.swift in Sources */,
 				055B33E02D310FC8006BC9EB /* PeptideSectionHeader.swift in Sources */,
 				91FD56E92D5237F600BA58D5 /* RemoveAuthenticatorAppSheet.swift in Sources */,
@@ -1985,6 +2007,7 @@
 				05F285522CF735D50071746A /* DiscoverItem.swift in Sources */,
 				05523E0A2CE7497F003F4607 /* MfaRecovery.swift in Sources */,
 				17C444582B06CC5400F97E4A /* ForgotPassword.swift in Sources */,
+				77AC56592F1F9AB100070CCE /* MessageSkeletonView.swift in Sources */,
 				05F3042F2DCF486E0058E80E /* UIViewExtensions.swift in Sources */,
 				05EEF2022CFCAAF6002E5255 /* Section.swift in Sources */,
 				17CE2E142AE709CE0059FB3A /* UserSheet.swift in Sources */,
@@ -1992,6 +2015,7 @@
 				1764856E2CA383BD00AF8141 /* ServerRolesSettings.swift in Sources */,
 				05F3042B2DCF485C0058E80E /* MarkdownProcessor.swift in Sources */,
 				059B24BB2DE5BB02007ACFFB /* MessageableChannelViewController+Permissions.swift in Sources */,
+				77AC56552F1F976F00070CCE /* MessageableChannelViewController+NotificationBanner.swift in Sources */,
 				17429D992B4C931D0036105A /* ChannelOverviewSettings.swift in Sources */,
 				05BB3E182D58C8A200C3BA3B /* MessageEmojisReact.swift in Sources */,
 				17966B652AE0842A00BAEC58 /* ChannelIcon.swift in Sources */,
@@ -2401,7 +2425,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
 				DEVELOPMENT_TEAM = "";
@@ -2432,7 +2456,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.1;
 				NEW_SETTING = "";
 				NEW_SETTING1 = "";
 				ON_DEMAND_RESOURCES_INITIAL_INSTALL_TAGS = Resources;
@@ -2466,7 +2490,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
 				DEVELOPMENT_TEAM = "";
@@ -2496,7 +2520,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.1;
 				NEW_SETTING = "";
 				NEW_SETTING1 = "";
 				ON_DEMAND_RESOURCES_INITIAL_INSTALL_TAGS = Resources;

@@ -464,10 +464,17 @@ class ServerChatDataFetcher {
                 do {
                     let csv = try CSV<Named>(string: csvString)
                     
+                    let checkForIDHeader = csv.header.contains("id")
+                    
+                    if !checkForIDHeader {
+                        print("⚠️ [ServerChatDataFetcher] 'id' header missing, using empty string key")
+                    }
+                    
                     print("📊 [ServerChatDataFetcher] Parsing CSV with \(csv.rows.count) rows")
+                    print("📊 This is the CSV data: \(csv)")
                     
                     let serverChats = csv.rows.compactMap { row -> ServerChat? in
-                        guard let id = row["id"],
+                        guard let id = row["id"] ?? row[""],
                               let name = row["name"],
                               let description = row["description"],
                               let inviteCode = row["inviteCode"],
