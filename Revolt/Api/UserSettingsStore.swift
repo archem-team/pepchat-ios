@@ -495,6 +495,13 @@ class UserSettingsData {
         self.cacheState = .cached // Update cache state to cached.
         writeCacheToFile() // Write updated cache to file.
         
+        // Apply server ordering if viewState is available and ordering was updated
+        if let orderingEntry = settingsValues["ordering"], 
+           let viewState = self.viewState {
+            Task { @MainActor in
+                viewState.applyServerOrdering()
+            }
+        }
     }
     
     

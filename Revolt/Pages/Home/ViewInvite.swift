@@ -136,6 +136,8 @@ struct ViewInvite: View {
                 } else {
                     await MainActor.run {
                         self.viewState.selectServer(withId: join.server.id)
+                        // CRITICAL FIX: Also select the invite channel
+                        self.viewState.selectChannel(inServer: join.server.id, withId: serverInfo.channel_id)
                     }
                 }
                 
