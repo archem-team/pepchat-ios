@@ -1221,6 +1221,11 @@ public class ViewState: ObservableObject {
         self.userSettingsStore.viewState = self // this is a cursed workaround
         ViewState.shared = self
         
+        // Apply server ordering after all properties are initialized
+        if !self.servers.isEmpty && !self.userSettingsStore.cache.orderSettings.servers.isEmpty {
+            self.applyServerOrdering()
+        }
+        
         self.baseEmojis = loadEmojis()
         
         // Load any pending notification token
@@ -6005,6 +6010,8 @@ extension ViewState {
         }
         
         // print("🚀 VIEWSTATE: Final servers count after merge: \(self.servers.count)")
+        // Apply ordering before saving cache to ensure correct order is persisted
+        self.applyServerOrdering()
         self.saveServersCacheAsync()
     }
 }
