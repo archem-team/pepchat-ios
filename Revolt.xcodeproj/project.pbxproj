@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -680,6 +680,10 @@
 		F5F8E4022E127E6B00D0D201 /* VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerView.swift; sourceTree = "<group>"; };
 		F75CCC5D94FA80B2DCBD7821 /* CreateServerRoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateServerRoleView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		777FA4392F2E187400EF8969 /* ViewState+Extensions */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "ViewState+Extensions"; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		175465C72C42147B0076B393 /* Frameworks */ = {
@@ -1509,6 +1513,7 @@
 				D49B705229C4D3FE009494A5 /* RevoltApp.swift */,
 				17E019D42AF1937400AB4663 /* Theme.swift */,
 				DA99EC4B29D5F35500419FDA /* ViewState.swift */,
+				777FA4392F2E187400EF8969 /* ViewState+Extensions */,
 				17DFB4622AE06A3200E1D417 /* Api */,
 				175E01DC2ADAB3EA004F6431 /* Components */,
 				17772C162C30AF6D000D1EDA /* Delegates */,
@@ -1630,6 +1635,9 @@
 				17F3EFAF2B13D042002C34B5 /* PBXTargetDependency */,
 				1773C02A2C07DC32007B8867 /* PBXTargetDependency */,
 				175465D02C42147B0076B393 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				777FA4392F2E187400EF8969 /* ViewState+Extensions */,
 			);
 			name = Revolt;
 			packageProductDependencies = (
@@ -2117,7 +2125,7 @@
 				CLANG_USE_OPTIMIZATION_PROFILE = YES;
 				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -2139,7 +2147,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = chat.zeko.app.notifications;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Zeko_Chat_Notifications;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Zeko_Dev_Manual_Profile_Notifications;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -2158,7 +2166,7 @@
 				CLANG_USE_OPTIMIZATION_PROFILE = YES;
 				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -2180,7 +2188,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = chat.zeko.app.notifications;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Zeko_Chat_Notifications;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Zeko_Dev_Manual_Profile_Notifications;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -2423,9 +2431,9 @@
 				CLANG_USE_OPTIMIZATION_PROFILE = NO;
 				CODE_SIGN_ENTITLEMENTS = Revolt/Revolt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
 				DEVELOPMENT_TEAM = "";
@@ -2456,14 +2464,14 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				NEW_SETTING = "";
 				NEW_SETTING1 = "";
 				ON_DEMAND_RESOURCES_INITIAL_INSTALL_TAGS = Resources;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.zeko.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Chat_Zeko_App;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Zeko_Dev_Manual_Profile;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -2488,9 +2496,9 @@
 				CLANG_USE_OPTIMIZATION_PROFILE = NO;
 				CODE_SIGN_ENTITLEMENTS = Revolt/Revolt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
 				DEVELOPMENT_TEAM = "";
@@ -2520,14 +2528,14 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				NEW_SETTING = "";
 				NEW_SETTING1 = "";
 				ON_DEMAND_RESOURCES_INITIAL_INSTALL_TAGS = Resources;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.zeko.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Chat_Zeko_App;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Zeko_Dev_Manual_Profile;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
