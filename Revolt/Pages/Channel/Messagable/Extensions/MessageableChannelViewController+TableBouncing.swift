@@ -1,0 +1,158 @@
+//
+//  MessageableChannelViewController+TableBouncing.swift
+//  Revolt
+//
+//  Created by Akshat Srivastava on 02/02/26.
+//
+
+import Combine
+import Kingfisher
+import ObjectiveC
+import SwiftUI
+import Types
+import UIKit
+import ULID
+
+extension MessageableChannelViewController {
+    // MARK: - Helper method to update table view bouncing behavior
+    internal func updateTableViewBouncing() {
+        // First check if table view is ready
+        guard tableView.window != nil else { return }
+
+        // CRITICAL FIX: Don't update bouncing during target message operations
+        if targetMessageProtectionActive {
+            print("📏 BOUNCE_BLOCKED: Bouncing update blocked - target message protection active")
+            return
+        }
+
+        let rowCount = tableView.numberOfRows(inSection: 0)
+
+        // If no rows, disable scrolling completely
+        guard rowCount > 0 else {
+            tableView.isScrollEnabled = false
+            tableView.alwaysBounceVertical = false
+            tableView.bounces = false
+            tableView.showsVerticalScrollIndicator = false
+            tableView.contentInset = .zero
+            tableView.scrollIndicatorInsets = .zero
+            // Remove header to prevent scrolling
+            if tableView.tableHeaderView != nil {
+                tableView.tableHeaderView = nil
+            }
+            print("📏 Disabled scrolling - no messages")
+            return
+        }
+
+        // Calculate actual content height by summing row heights
+        var actualContentHeight: CGFloat = 0
+        for i in 0..<rowCount {
+            let indexPath = IndexPath(row: i, section: 0)
+            actualContentHeight += tableView.rectForRow(at: indexPath).height
+        }
+
+        // Add header/footer heights only if they are visible
+        if let header = tableView.tableHeaderView, !header.isHidden {
+            actualContentHeight += header.frame.height
+        }
+        if let footer = tableView.tableFooterView, !footer.isHidden {
+            actualContentHeight += footer.frame.height
+        }
+
+        // Calculate visible height
+        let visibleHeight = tableView.bounds.height - keyboardHeight
+
+        // Be very strict - only enable scrolling if content truly exceeds visible area
+        let shouldEnableScrolling = actualContentHeight > visibleHeight + 10  // 10px margin
+
+        // Force update scrolling and bouncing settings
+        if shouldEnableScrolling {
+            tableView.isScrollEnabled = true
+            tableView.alwaysBounceVertical = true
+            tableView.bounces = true
+            tableView.showsVerticalScrollIndicator = true
+
+            // Re-add header only if it was removed AND we are loading
+            if tableView.tableHeaderView == nil && isLoadingMore {
+                tableView.tableHeaderView = loadingHeaderView
+            }
+
+        } else {
+            // Completely disable scrolling when content fits
+            tableView.isScrollEnabled = false
+            tableView.alwaysBounceVertical = false
+            tableView.bounces = false
+            tableView.showsVerticalScrollIndicator = false
+            // CRITICAL: Remove all content insets when scrolling is disabled
+            tableView.contentInset = .zero
+            tableView.scrollIndicatorInsets = .zero
+
+            // Remove header to prevent any scrolling
+            if tableView.tableHeaderView != nil {
+                tableView.tableHeaderView = nil
+            }
+
+            // CRITICAL FIX: Don't reset scroll position during target message operations
+            if !targetMessageProtectionActive {
+                // Reset scroll position to top
+                tableView.contentOffset = .zero
+            }
+
+            print(
+                "📏 Disabled scrolling completely - actual content: \(actualContentHeight), visible: \(visibleHeight), rows: \(rowCount)"
+            )
+        }
+    }
+
+    // MARK: - Position Table at Bottom Before Showing
+    internal func positionTableAtBottomBeforeShowing() {
+        // COMPREHENSIVE TARGET MESSAGE PROTECTION
+        if targetMessageProtectionActive {
+            print(
+                "🎯 [POSITION] Target message protection active, just showing table without positioning"
+            )
+            showTableViewWithFade()
+            return
+        }
+
+        // Force layout to calculate content size
+        tableView.layoutIfNeeded()
+
+        let rowCount = tableView.numberOfRows(inSection: 0)
+        let messagesCount = localMessages.count
+
+        // print("📊 [POSITION] Positioning table: rows=\(rowCount), messages=\(messagesCount)")
+
+        // If no messages, just show the table
+        guard rowCount > 0, messagesCount > 0 else {
+            // print("📊 [POSITION] No messages, showing empty table")
+            showTableViewWithFade()
+            return
+        }
+
+        // Update bouncing behavior based on content
+        updateTableViewBouncing()
+
+        // Position at bottom (newest messages) only if no target message
+        let lastRowIndex = rowCount - 1
+        let indexPath = IndexPath(row: lastRowIndex, section: 0)
+        tableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
+        // print("🔽 [POSITION] Positioned at bottom (newest messages)")
+
+        // Show the table view now that it's properly positioned
+        showTableViewWithFade()
+
+        // CRITICAL FIX: Check for missing reply content after positioning with longer delay
+        Task {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)  // 1.0 seconds
+            await self.checkAndFetchMissingReplies()
+        }
+    }
+
+    // Helper method to show table view with smooth fade-in
+    internal func showTableViewWithFade() {
+        UIView.animate(withDuration: 0.2) {
+            self.tableView.alpha = 1.0
+        }
+        // print("✨ [POSITION] Table view shown with fade-in")
+    }
+}

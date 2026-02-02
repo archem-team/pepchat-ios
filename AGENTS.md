@@ -8,6 +8,7 @@
 - `Revolt/Resources/` stores assets, xcassets catalogs, and localized strings (`Localizable.xcstrings`).
 - `Revolt/1Storage/` contains local storage managers (e.g., `MessageCacheManager` for SQLite-based message caching).
 - `Revolt/Pages/Features/Core/` contains base architecture components (e.g., `BaseViewModel` for MVVM pattern).
+- `Revolt/ViewState+Extensions/` contains ViewState extensions split by responsibility (see State Management section below).
 - `Revolt/Pages/Channel/Messagable/` is organized into subdirectories:
   - `Managers/` - Business logic managers (PermissionsManager, RepliesManager, TypingIndicatorManager, ScrollPositionManager, etc.)
   - `Models/` - Data models specific to messageable channels
@@ -31,6 +32,19 @@
 - `ViewState` (`Revolt/ViewState.swift`) is a singleton `ObservableObject` managing global app state (users, channels, messages, websocket connection, etc.).
 - ViewState persists data to UserDefaults and Keychain, with debounced saves for performance.
 - Memory management: automatic cleanup of old messages/users with configurable limits (maxMessagesInMemory, maxUsersInMemory).
+- **ViewState Extensions** (`Revolt/ViewState+Extensions/`): The ViewState class is split across multiple extension files for easier navigation:
+  - `ViewState+Types.swift` - Supporting types: `LoginState`, `MainSelection`, `ChannelSelection`, `NavigationDestination`, `QueuedMessage`, etc.
+  - `ViewState+Memory.swift` - Memory limits, cleanup, and preloading (`enforceMemoryLimits`, `smartMessageCleanup`, `cleanupChannelFromMemory`, etc.)
+  - `ViewState+WebSocketEvents.swift` - WebSocket event processing (`processEvent` switch and event handlers)
+  - `ViewState+UsersAndDms.swift` - User/DM loading (`processUsers`, `loadUsersForDmBatch`, `processDMs`, etc.)
+  - `ViewState+Navigation.swift` - Selection and navigation (`selectServer`, `selectChannel`, `selectDm`, `handleChannelChange`)
+  - `ViewState+Unreads.swift` - Unread counts and badges (`getUnreadCountFor`, `cleanupStaleUnreads`, `forceMarkAllAsRead`)
+  - `ViewState+Auth.swift` - Authentication (`signIn`, `signOut`, `destroyCache`)
+  - `ViewState+ServerCache.swift` - Server cache persistence (`loadServersCacheSync`, `saveServersCacheAsync`)
+  - `ViewState+ReadyEvent.swift` - Ready event processing (`extractNeededDataFromReadyEvent`, `processReadyData`)
+  - `ViewState+Notifications.swift` - Push tokens and app badge (`updateAppBadgeCount`, `retryUploadNotificationToken`)
+  - `ViewState+QueuedMessages.swift` - Message queuing (`queueMessage`, `trySendingQueuedMessages`)
+  - `ViewState+DMChannel.swift` - DM channel operations (`deactivateDMChannel`, `closeDMGroup`, `removeChannel`)
 
 ### View Model Pattern
 - `BaseViewModel<State, Action>` (`Revolt/Pages/Features/Core/BaseViewModel.swift`) provides MVVM foundation with `UiAction` and `UiEvent` protocols.
@@ -96,3 +110,7 @@
 - Debounced saves: Large data structures (users, emojis, messages) use debounced UserDefaults saves to prevent UI blocking.
 - Background operations: Heavy operations (cache updates, data encoding) are performed on background queues.
 - Channel preloading: Important channels are preloaded in the background for faster access.
+
+## Code Organization Notes
+- **ViewState refactoring**: The main `ViewState.swift` file contains class properties and init. Logic is split into extension files in `Revolt/ViewState+Extensions/` for easier navigation and maintainability.
+- When adding new ViewState functionality, place it in the appropriate extension file based on responsibility (e.g., memory-related code in `ViewState+Memory.swift`).
