@@ -62,11 +62,27 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         viewModel.viewState.messages[messageNonce] = queued.toTemporaryMessage()
     }
     
+    private static let messageTooLongAlertMessage = "Your message is too long. Please limit it to 2000 characters."
+
+    private func isPayloadTooLargeError(_ error: Error) -> Bool {
+        guard let revoltError = error as? RevoltError,
+              case .HTTPError(let body, let code) = revoltError,
+              code == 422 else { return false }
+        return body?.contains("PayloadTooLarge") == true
+    }
+
+    private func removeFailedMessageFromQueue(nonce: String, channelId: String) {
+        viewModel.viewState.queuedMessages[channelId]?.removeAll { $0.nonce == nonce }
+        viewModel.viewState.channelMessages[channelId]?.removeAll { $0 == nonce }
+        viewModel.viewState.messages[nonce] = nil
+        NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: nil)
+    }
+
     func checkForCharacterLimit(text: String) {
         guard let viewController = viewController else { return }
         
         guard text.count <= 2000 else {
-            viewController.showErrorAlert(message: "Your message is too long. Please limit it to 2000 characters.")
+            viewController.showErrorAlert(message: Self.messageTooLongAlertMessage)
             return
         }
     }
@@ -192,9 +208,15 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                     }
                 } catch {
                     print("❌ MESSAGE_INPUT_HANDLER: Error sending message: \(error)")
-                    DispatchQueue.main.async {
-                        // Use viewController's showError method instead
-                        viewController.showErrorAlert(message: "Failed to send message: \(error.localizedDescription)")
+                    let channelId = viewModel.channel.id
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        self.removeFailedMessageFromQueue(nonce: messageNonce, channelId: channelId)
+                        if self.isPayloadTooLargeError(error) {
+                            viewController.showErrorAlert(message: Self.messageTooLongAlertMessage)
+                        } else {
+                            viewController.showErrorAlert(message: "Failed to send message: \(error.localizedDescription)")
+                        }
                     }
                 }
             }
@@ -312,19 +334,23 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                     }
                 } catch {
                     print("❌ MESSAGE_INPUT_HANDLER: Error sending message with attachments: \(error)")
-                    DispatchQueue.main.async {
-                        viewController.showErrorAlert(message: "Failed to send message: \(error.localizedDescription)")
-                        
+                    let channelId = viewModel.channel.id
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        self.removeFailedMessageFromQueue(nonce: messageNonce, channelId: channelId)
+                        if self.isPayloadTooLargeError(error) {
+                            viewController.showErrorAlert(message: Self.messageTooLongAlertMessage)
+                        } else {
+                            viewController.showErrorAlert(message: "Failed to send message: \(error.localizedDescription)")
+                        }
                         // Clear attachments even on failure
                         print("📝 MESSAGE_INPUT_HANDLER: viewController is \(viewController == nil ? "nil" : "not nil")")
-                        
                         if let messageInputView = viewController.messageInputView {
                             print("📝 MESSAGE_INPUT_HANDLER: messageInputView found on error, calling onAttachmentsUploadComplete")
                             messageInputView.onAttachmentsUploadComplete()
                         } else {
                             print("❌ MESSAGE_INPUT_HANDLER: messageInputView is nil on error!")
                         }
-                        
                         print("📝 MESSAGE_INPUT_HANDLER: Error handler finished")
                     }
                 }
@@ -376,9 +402,13 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                 }
             } catch {
                 print("❌ MESSAGE_INPUT_HANDLER: Failed to edit message: \(error)")
-                // Show an error alert or notification to the user
-                DispatchQueue.main.async {
-                    viewController.showErrorAlert(message: "Failed to edit message: \(error.localizedDescription)")
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    if self.isPayloadTooLargeError(error) {
+                        viewController.showErrorAlert(message: Self.messageTooLongAlertMessage)
+                    } else {
+                        viewController.showErrorAlert(message: "Failed to edit message: \(error.localizedDescription)")
+                    }
                 }
             }
         }

@@ -128,7 +128,8 @@ struct MessageView: View {
     }
     
     var body: some View {
-        SwipeToReplyView(enableSwipe: enableSwipe, onReply: viewModel.reply){
+        // When isStatic (e.g. search results), disable swipe so the parent list scroll receives vertical drags. See Scrolling.md.
+        SwipeToReplyView(enableSwipe: enableSwipe && !isStatic, onReply: viewModel.reply){
             VStack(alignment: .leading, spacing: .zero) {
                 
                 if let replies = viewModel.message.replies {

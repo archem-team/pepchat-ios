@@ -125,59 +125,45 @@ struct ChannelSearch: View {
                             .padding(.horizontal, .padding16)
 
                         } else {
-                            List {
-                                // Displays each message found in the search results.
-                                
-                                Section {
-                                    
+                            // Use ScrollView + LazyVStack instead of List so the list scroll is not
+                            // blocked by inner gesture consumers (e.g. long message content). See Scrolling.md.
+                            ScrollView {
+                                LazyVStack(spacing: 0) {
                                     Color.bgGray12
                                         .frame(height: .padding16)
                                     
                                     ForEach(results) { result in
-                                        
                                         let author = viewState.users[result.author] ?? User(
                                             id: result.author,
                                             username: "Unknown User",
                                             discriminator: "0000",
                                             relationship: .None
                                         )
-                                        //viewState.users[result.author]!
-                                        
                                         MessageView(
                                             viewModel: .init(
-                                                viewState: viewState, // Passes the view state to the message view.
-                                                message: .constant(result), // The message object being displayed.
-                                                author: .constant(author), // The author of the message.
-                                                member: .constant(channel.server.flatMap({ viewState.members[$0]?[result.author] })), // The member associated with the author.
-                                                server: server, // The server associated with the channel.
-                                                channel: $channel, // A binding to the channel.
-                                                replies: .constant([]), // Currently no replies are shown.
-                                                channelScrollPosition: .empty, // Placeholder for channel scroll position.
-                                                editing: .constant(nil) // No message is currently being edited.
+                                                viewState: viewState,
+                                                message: .constant(result),
+                                                author: .constant(author),
+                                                member: .constant(channel.server.flatMap({ viewState.members[$0]?[result.author] })),
+                                                server: server,
+                                                channel: $channel,
+                                                replies: .constant([]),
+                                                channelScrollPosition: .empty,
+                                                editing: .constant(nil)
                                             ),
                                             isStatic: true
                                         )
                                         .padding(.horizontal, .padding16)
-                                        .contentShape(Rectangle()) // Make the entire message area tappable
+                                        .contentShape(Rectangle())
                                         .onTapGesture {
                                             navigateToMessage(result)
                                         }
                                     }
                                 }
-                                .listRowInsets(.init())
-                                .listRowSeparator(.hidden)
-                                .listRowSpacing(0)
-                                .listRowBackground(Color.clear)
-                                
-                                
                             }
-                            .environment(\.defaultMinListRowHeight, 0)
                             .frame(maxWidth: .infinity)
-                            .scrollContentBackground(.hidden)
-                            .listStyle(.plain)
+                            .scrollIndicators(.visible)
                             .background(Color.bgGray12)
-                            .listStyle(.plain)
-                            .listRowSeparator(.hidden)
                         }
                     }
                     
