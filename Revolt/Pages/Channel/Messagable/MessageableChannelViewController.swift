@@ -1626,6 +1626,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             }
         }
 
+        /// Removes the cached message for the given ID so the next cell configuration reads the latest from viewState (e.g. after message edit).
+        func invalidateMessageCache(forMessageId messageId: String) {
+            cacheQueue.sync(flags: .barrier) {
+                messageCache.removeValue(forKey: messageId)
+            }
+        }
+
         func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
             return cacheQueue.sync {
                 let count = localMessages.count
@@ -2134,6 +2141,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     // Add a method to handle message actions
     internal func handleMessageAction(_ action: MessageCell.MessageAction, message: Types.Message) {
         repliesManager.handleMessageAction(action, message: message)
+    }
+
+    /// Invalidates the table data source's message cache for the given ID so the next reload shows the latest content (e.g. after edit).
+    internal func invalidateMessageCache(forMessageId messageId: String) {
+        if let localDataSource = dataSource as? LocalMessagesDataSource {
+            localDataSource.invalidateMessageCache(forMessageId: messageId)
+        }
     }
 
     // Legacy method for compatibility (can be removed after testing)

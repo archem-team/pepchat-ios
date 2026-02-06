@@ -396,6 +396,8 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                         updatedMessage.content = newText
                         viewModel.viewState.messages[message.id] = updatedMessage
                         
+                        // Invalidate data source cache for this message so reload shows the new content
+                        viewController.invalidateMessageCache(forMessageId: message.id)
                         // Reload the table view to show the updated message
                         viewController.tableView.reloadData()
                     }

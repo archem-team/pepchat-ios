@@ -302,6 +302,7 @@ class MessageInputView: UIView {
     func setText(_ text: String?) {
         textView.text = text
         updateTextViewHeight()
+        NotificationCenter.default.post(name: UITextView.textDidChangeNotification, object: textView)
     }
     
     func insertText(_ text: String) {
@@ -408,6 +409,7 @@ class MessageInputView: UIView {
             // Set text for editing
             if let content = message?.content {
                 textView.text = content
+                NotificationCenter.default.post(name: UITextView.textDidChangeNotification, object: textView)
                 // Make sure send button is enabled
                 updateSendButtonState()
                 updateTextViewHeight()
