@@ -95,6 +95,8 @@ public class ViewState: ObservableObject {
             // }
         }
     }
+    /// Persisted cache of server ID -> membership for Discover screen. Loaded on launch for instant UI; updated when user joins/leaves (local or via WebSocket).
+    @Published var discoverMembershipCache: [String: Bool] = [:]
     @Published var channels: [String: Channel] {
         didSet {
             // DISABLED: Don't save channels to UserDefaults to force refresh from backend
@@ -550,7 +552,8 @@ public class ViewState: ObservableObject {
         } else {
             self.servers = [:]
         }
-        
+        self.discoverMembershipCache = ViewState.loadMembershipCacheSync()
+
         self.channels = [:] // ViewState.decodeUserDefaults(forKey: "channels", withDecoder: decoder, defaultingTo: [:])
         /*self.messages = ViewState.decodeUserDefaults(forKey: "messages", withDecoder: decoder, defaultingTo: [:])
          self.channelMessages = ViewState.decodeUserDefaults(forKey: "channelMessages", withDecoder: decoder, defaultingTo: [:])*/
@@ -2123,7 +2126,10 @@ public class ViewState: ObservableObject {
         
         // Try to load from stored event data
         if let storedUser = allEventUsers[otherUserId] {
-            users[otherUserId] = storedUser
+            // Defer write to avoid "Publishing changes from within view updates"
+            DispatchQueue.main.async { [weak self] in
+                self?.users[otherUserId] = storedUser
+            }
             return storedUser
         }
         
@@ -2134,7 +2140,10 @@ public class ViewState: ObservableObject {
             discriminator: "0000",
             relationship: .None
         )
-        users[otherUserId] = placeholderUser
+        // Defer write to avoid "Publishing changes from within view updates"
+        DispatchQueue.main.async { [weak self] in
+            self?.users[otherUserId] = placeholderUser
+        }
         return placeholderUser
     }
     

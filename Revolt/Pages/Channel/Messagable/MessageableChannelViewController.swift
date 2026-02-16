@@ -107,6 +107,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
     // Track whether we're returning from search to prevent unnecessary cleanup
     var isReturningFromSearch: Bool = false
+    
+    var isViewDisappearing: Bool = false
 
     // Target message ID to scroll to
     var targetMessageId: String? {
@@ -161,7 +163,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     private lazy var repliesManager = RepliesManager(viewModel: viewModel, viewController: self)
     private lazy var typingIndicatorManager = TypingIndicatorManager(
         viewModel: viewModel, viewController: self)
-    private lazy var scrollPositionManager = ScrollPositionManager(viewController: self)
+    internal lazy var scrollPositionManager = ScrollPositionManager(viewController: self)
     internal lazy var messageInputHandler = MessageInputHandler(
         viewModel: viewModel, viewController: self, repliesManager: repliesManager)
 
@@ -1096,6 +1098,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
     // Legacy method for compatibility (can be removed after testing)
     private func scrollToBottomLegacy(animated: Bool) {
+        guard !isViewDisappearing else { return }
         // First check if we have messages
         // print("🔽 SCROLL_TO_BOTTOM: Starting forced scroll to bottom (animated: \(animated))")
 
@@ -1178,6 +1181,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                 let lastRowIndex = numberOfRows - 1
                 let indexPath = IndexPath(row: lastRowIndex, section: 0)
 
+                let currentRows = self.tableView.numberOfRows(inSection: 0)
+                guard !self.isViewDisappearing, self.tableView.dataSource != nil, currentRows > 0 else { return }
+                IndexPath(row: currentRows - 1, section: 0)
                 // Use multiple scroll approaches to guarantee scrolling
                 // First try scrollToRow
                 self.tableView.scrollToRow(at: indexPath, at: .bottom, animated: animated)
@@ -1626,6 +1632,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             }
         }
 
+        /// Removes the cached message for the given ID so the next cell configuration reads the latest from viewState (e.g. after message edit).
+        func invalidateMessageCache(forMessageId messageId: String) {
+            cacheQueue.sync(flags: .barrier) {
+                messageCache.removeValue(forKey: messageId)
+            }
+        }
+
         func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
             return cacheQueue.sync {
                 let count = localMessages.count
@@ -1835,11 +1848,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             }
 
             // Return the first task that completes
-            let result = try await group.next()!
-
-            // Cancel all remaining tasks
+            guard let result = try await group.next() else {
+                group.cancelAll()
+                throw TimeoutError()
+            }
             group.cancelAll()
-
             return result
         }
     }
@@ -2134,6 +2147,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     // Add a method to handle message actions
     internal func handleMessageAction(_ action: MessageCell.MessageAction, message: Types.Message) {
         repliesManager.handleMessageAction(action, message: message)
+    }
+
+    /// Invalidates the table data source's message cache for the given ID so the next reload shows the latest content (e.g. after edit).
+    internal func invalidateMessageCache(forMessageId messageId: String) {
+        if let localDataSource = dataSource as? LocalMessagesDataSource {
+            localDataSource.invalidateMessageCache(forMessageId: messageId)
+        }
     }
 
     // Legacy method for compatibility (can be removed after testing)

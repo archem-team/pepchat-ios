@@ -38,53 +38,40 @@ struct ReplyView: View {
     /// The body of the ReplyView, which displays the reply details, user avatar, content, and controls for mentions and removal.
     @ViewBuilder
     var body: some View {
-        
-        let user = viewState.users[reply.message.author]!
-        let member = server.flatMap { viewState.members[$0.id]?[user.id] }
-        
-        
+        if let user = viewState.users[reply.message.author] {
+            let member = server.flatMap { viewState.members[$0.id]?[user.id] }
+            replyRowContent(displayName: reply.message.masquerade?.name ?? member?.nickname ?? user.display_name ?? user.username)
+        } else {
+            replyRowContent(displayName: "Unknown user")
+        }
+    }
+
+    @ViewBuilder
+    private func replyRowContent(displayName: String) -> some View {
         // Horizontal stack to display the reply information
         HStack(spacing: .padding4) {
             // Button to remove the reply
             Button(action: remove) {
-                
                 PeptideIcon(iconName: .peptideClose,
                             size: .size24, color: .iconGray07)
-                
             }
             .padding(.trailing, .padding4)
-            
+
             PeptideText(text: "Replying to",
                         font: .peptideBody4,
                         textColor: .textGray04,
                         lineLimit: 1)
 
-            
-            // Avatar for the user who made the reply
-            //Avatar(user: user, width: 16, height: 16)
-            
-            // Display the name of the user or a nickname
-            
-            
-            /*Text(reply.message.masquerade?.name ?? member?.nickname ?? user.display_name ?? user.username)
-                .font(.caption)
-                .lineLimit(1)
-                .foregroundStyle(member?.displayColour(theme: viewState.theme, server: server!) ?? AnyShapeStyle(viewState.theme.foreground.color))*/
-            
-            PeptideText(textVerbatim: reply.message.masquerade?.name ?? member?.nickname ?? user.display_name ?? user.username,
+            PeptideText(textVerbatim: displayName,
                         font: .peptideCallout,
                         textColor: .textDefaultGray01)
-            
-            
-            
+
             // Display an attachment icon if the message contains attachments
             if !(reply.message.attachments?.isEmpty ?? true) {
-                
                 PeptideIcon(iconName: .peptideAttachment,
                             size: .size24, color: .iconGray07)
-                
             }
-            
+
             // Display the content of the reply, if it exists
             if let content = Binding($reply.message.content) {
                 Contents(text: content,
@@ -94,25 +81,19 @@ struct ReplyView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
-            
+
             Spacer(minLength: .size8)
-            
+
             // Button to toggle the mention status of the reply
             Button(action: { reply.mention.toggle() }) {
-                    
-                    HStack(spacing: .spacing2){
-                        
-                        PeptideIcon(iconName: .peptideAt,
-                                    size: .size20,
-                                    color: reply.mention ?  .iconYellow07 : .iconGray07)
-                        
-                        PeptideText(text: reply.mention ? "On" : "Off",
-                                    font: .peptideFootnote,
-                                    textColor: reply.mention ? .textYellow07 : .textGray07)
-                        
-                    }
-                  
-               
+                HStack(spacing: .spacing2) {
+                    PeptideIcon(iconName: .peptideAt,
+                                size: .size20,
+                                color: reply.mention ? .iconYellow07 : .iconGray07)
+                    PeptideText(text: reply.mention ? "On" : "Off",
+                                font: .peptideFootnote,
+                                textColor: reply.mention ? .textYellow07 : .textGray07)
+                }
             }
         }
         .padding(.horizontal, .padding16)
@@ -255,22 +236,21 @@ struct MessageBox: View {
     func getAutocompleteValues(fromType type: AutocompleteType) -> AutocompleteValues {
         switch type {
         case .user:
-            let users: [(User, Member?)]
-            
+            var users: [(User, Member?)]
             switch channel {
             case .saved_messages(_):
-                users = [(viewState.currentUser!, nil)]
-                
+                users = viewState.currentUser.map { [($0, nil)] } ?? []
             case .dm_channel(let dMChannel):
-                users = dMChannel.recipients.map({ (viewState.users[$0]!, nil) })
-                
+                users = dMChannel.recipients.compactMap { viewState.users[$0].map { ($0, nil) } }
             case .group_dm_channel(let groupDMChannel):
-                users = groupDMChannel.recipients.map({ (viewState.users[$0]!, nil) })
-                
+                users = groupDMChannel.recipients.compactMap { viewState.users[$0].map { ($0, nil) } }
             case .text_channel(_), .voice_channel(_):
-                users = viewState.members[server!.id]!.values.map({ m in (viewState.users[m.id.user]!, m) })
+                if let server = server, let members = viewState.members[server.id] {
+                    users = members.values.compactMap { m in viewState.users[m.id.user].map { ($0, m) } }
+                } else {
+                    users = []
+                }
             }
-            
             return AutocompleteValues.users(users.filter { pair in
                 (pair.0.display_name?.lowercased().starts(with: autocompleteSearchValue.lowercased()) ?? false)
                 || (pair.1?.nickname?.lowercased().starts(with: autocompleteSearchValue.lowercased()) ?? false)
@@ -278,12 +258,11 @@ struct MessageBox: View {
             })
         case .channel:
             let channels: [Channel]
-            
             switch channel {
             case .saved_messages(_), .dm_channel(_), .group_dm_channel(_):
                 channels = [channel]
             case .text_channel(_), .voice_channel(_):
-                channels = server!.channels.compactMap({ viewState.channels[$0] })
+                channels = server.map { $0.channels.compactMap { viewState.channels[$0] } } ?? []
             }
             
             return AutocompleteValues.channels(channels.filter { channel in
@@ -973,13 +952,15 @@ struct MessageBox_Previews: PreviewProvider {
     
     /// Previews the MessageBox with a mock channel and server data.
     static var previews: some View {
-        let channel = viewState.channels["0"]!
-        let server = viewState.servers["0"]!
-        
-        // Display the MessageBox in the preview
-        MessageBox(channel: channel, server: server, channelReplies: $replies, focusState: $focused, showingSelectEmoji: $showingSelectEmoji, editing: .constant(nil))
-            .applyPreviewModifiers(withState: viewState)
-            .preferredColorScheme(.dark)
+        Group {
+            if let channel = viewState.channels["0"], let server = viewState.servers["0"] {
+                MessageBox(channel: channel, server: server, channelReplies: $replies, focusState: $focused, showingSelectEmoji: $showingSelectEmoji, editing: .constant(nil))
+                    .applyPreviewModifiers(withState: viewState)
+                    .preferredColorScheme(.dark)
+            } else {
+                Text("Preview unavailable — channel or server not in preview state")
+            }
+        }
     }
 }
 

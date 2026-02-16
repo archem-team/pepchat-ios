@@ -248,8 +248,9 @@ extension ViewState {
         // print("🚀 VIEWSTATE: Processing \(servers.count) servers from WebSocket")
         // print("🚀 VIEWSTATE: Existing servers count: \(self.servers.count)")
         
-        // CRITICAL FIX: Don't clear existing servers - merge instead
-        // Keep existing servers and update/add new ones from WebSocket
+        let readyServerIds = Set(servers.map { $0.id })
+        
+        // Merge Ready servers into self.servers
         for server in servers {
             self.servers[server.id] = server
             if members[server.id] == nil {
@@ -257,7 +258,21 @@ extension ViewState {
             }
         }
         
-        // print("🚀 VIEWSTATE: Final servers count after merge: \(self.servers.count)")
+        // Treat Ready as authoritative: remove servers not in payload (e.g. left on another device)
+        for key in self.servers.keys.filter({ !readyServerIds.contains($0) }) {
+            self.servers.removeValue(forKey: key)
+        }
+        
+        // Sync membership cache: user is member of all servers in Ready payload
+        for server in servers {
+            updateMembershipCache(serverId: server.id, isMember: true)
+        }
+        
+        // Reconcile membership cache: mark as non-member any cached server not in Ready payload
+        for serverId in discoverMembershipCache.keys where !readyServerIds.contains(serverId) {
+            updateMembershipCache(serverId: serverId, isMember: false)
+        }
+        
         // Apply ordering before saving cache to ensure correct order is persisted
         self.applyServerOrdering()
         self.saveServersCacheAsync()

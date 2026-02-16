@@ -123,6 +123,7 @@ extension MessageableChannelViewController {
 
     /// Restores the scroll position so the anchor cell appears at the same visual position
     private func restoreScrollPositionToAnchor(_ anchor: AnchorCellInfo, insertedCount: Int) {
+        guard !isViewDisappearing else { return }
         // The anchor cell's index has shifted down by the number of inserted rows
         let newIndexPath = IndexPath(row: anchor.indexPath.row + insertedCount, section: 0)
 

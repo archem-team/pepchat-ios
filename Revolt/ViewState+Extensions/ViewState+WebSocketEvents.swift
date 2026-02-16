@@ -397,12 +397,14 @@ extension ViewState {
             updateUser(with: e)
         case .server_create(let e):
             self.servers[e.id] = e.server
+            self.updateMembershipCache(serverId: e.id, isMember: true)
             for channel in e.channels {
                 self.channels[channel.id] = channel
                 self.channelMessages[channel.id] = []
             }
             
         case .server_delete(let e):
+            self.updateMembershipCache(serverId: e.id, isMember: false)
             if case .server(let string) = currentSelection {
                 if string == e.id {
                     self.path = .init()
@@ -804,6 +806,9 @@ extension ViewState {
             }
             
         case .server_member_leave(let e):
+                if e.user == self.currentUser?.id {
+                    self.updateMembershipCache(serverId: e.id, isMember: false)
+                }
                 guard var serverMembers = self.members[e.id] else {
                     return
                 }

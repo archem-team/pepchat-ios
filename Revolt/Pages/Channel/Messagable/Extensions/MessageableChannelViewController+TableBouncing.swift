@@ -19,11 +19,16 @@ extension MessageableChannelViewController {
         // First check if table view is ready
         guard tableView.window != nil else { return }
 
-        // CRITICAL FIX: Don't update bouncing during target message operations
-        if targetMessageProtectionActive {
-            print("📏 BOUNCE_BLOCKED: Bouncing update blocked - target message protection active")
-            return
-        }
+        // FIX (search result scroll freeze): When target message protection is active we still
+        // must apply scroll/bounce settings. Previously we returned here and never set
+        // isScrollEnabled = true after the nearby load, so the table stayed non-scrollable.
+        // We now run the full logic; the only protection-specific behavior remains at the
+        // "content fits" branch below (we do not reset contentOffset when protection is active).
+        
+//        if targetMessageProtectionActive {
+//            print("📏 BOUNCE_BLOCKED: Bouncing update blocked - target message protection active")
+//            return
+//        }
 
         let rowCount = tableView.numberOfRows(inSection: 0)
 
@@ -135,6 +140,8 @@ extension MessageableChannelViewController {
         // Position at bottom (newest messages) only if no target message
         let lastRowIndex = rowCount - 1
         let indexPath = IndexPath(row: lastRowIndex, section: 0)
+        guard tableView.dataSource != nil else { return }
+        guard tableView.numberOfSections > 0, lastRowIndex < tableView.numberOfRows(inSection: 0) else { return }
         tableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
         // print("🔽 [POSITION] Positioned at bottom (newest messages)")
 

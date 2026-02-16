@@ -238,6 +238,9 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
     }
     
     func scrollToBottom(animated: Bool) {
+        
+        guard !isViewDisappearing else { return }
+        
         print("🔍 SCROLL_TO_BOTTOM: Called with animated: \(animated)")
         debugTargetMessageProtection()
         
@@ -279,13 +282,19 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
             // For few messages with keyboard visible, use proper positioning
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
+                // Re-validate immediately before scroll to avoid stale index path (Message Link crash fix)
                 let lastIndex = self.localMessages.count - 1
-                guard lastIndex >= 0 && lastIndex < self.tableView.numberOfRows(inSection: 0) else { return }
-                
+                guard lastIndex >= 0,
+                      self.tableView.numberOfSections > 0,
+                      lastIndex < self.tableView.numberOfRows(inSection: 0) else { return }
                 let indexPath = IndexPath(row: lastIndex, section: 0)
-                
+
                 // Check keyboard state even for few messages
                 if self.isKeyboardVisible {
+                    
+                    guard !self.isViewDisappearing, self.tableView.dataSource != nil else { return }
+                    guard self.tableView.numberOfSections > 0, lastIndex < self.tableView.numberOfRows(inSection: 0) else { return }
+                    
                     // When keyboard is visible, ensure message appears above input
                     self.tableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
                     // print("📊 CONSERVATIVE_SCROLL: Scrolled to bottom with keyboard for \(messageCount) messages")
@@ -317,23 +326,32 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
             self.view.layoutIfNeeded()
             self.tableView.layoutIfNeeded()
             
+            // Re-validate immediately before scroll to avoid invalid index path (Message Link crash fix)
             let lastIndex = self.localMessages.count - 1
-            let indexPath = IndexPath(row: lastIndex, section: 0)
-            
-            // Check if the index path is valid
-            guard lastIndex >= 0 && lastIndex < self.tableView.numberOfRows(inSection: 0) else {
-                // print("📊 SCROLL_TO_BOTTOM: Invalid index path \(indexPath)")
+            guard lastIndex >= 0,
+                  self.tableView.numberOfSections > 0,
+                  lastIndex < self.tableView.numberOfRows(inSection: 0) else {
                 return
             }
+            let indexPath = IndexPath(row: lastIndex, section: 0)
             
+            guard !self.isViewDisappearing, self.tableView.dataSource != nil else { return }
+            guard self.tableView.numberOfSections > 0, lastIndex < self.tableView.numberOfRows(inSection: 0) else { return }
             // Always use .bottom positioning when keyboard is visible
             self.tableView.scrollToRow(at: indexPath, at: .bottom, animated: animated)
             
-            // For keyboard visible state, do an extra scroll after animation
+            // For keyboard visible state, do an extra scroll after animation (recompute index path in block to avoid stale path)
             if self.isKeyboardVisible && animated {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                    guard let self = self else { return }
+                    let lastIndex = self.localMessages.count - 1
+                    guard lastIndex >= 0,
+                          self.tableView.numberOfSections > 0,
+                          lastIndex < self.tableView.numberOfRows(inSection: 0) else { return }
+                    let indexPath = IndexPath(row: lastIndex, section: 0)
+                    guard !self.isViewDisappearing, self.tableView.dataSource != nil else { return }
+                    guard self.tableView.numberOfSections > 0, lastIndex < self.tableView.numberOfRows(inSection: 0) else { return }
                     self.tableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
-                    // print("📊 SCROLL_TO_BOTTOM: Extra scroll for keyboard visibility")
                 }
             }
         }

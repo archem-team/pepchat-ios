@@ -209,7 +209,8 @@ struct ViewInvite: View {
     private func updateServerAndChannels(join: JoinResponse) async {
         await MainActor.run {
             viewState.servers[join.server.id] = join.server
-            
+            viewState.updateMembershipCache(serverId: join.server.id, isMember: true)
+
             for channel in join.channels {
                 viewState.channels[channel.id] = channel
                 viewState.channelMessages[channel.id] = []
@@ -224,6 +225,7 @@ struct ViewInvite: View {
     private func fetchAndProcessMembers(join: JoinResponse, serverInfo: ServerInfoResponse) async {
         await MainActor.run {
             self.viewState.servers[join.server.id] = join.server
+            self.viewState.updateMembershipCache(serverId: join.server.id, isMember: true)
             for channel in join.channels {
                 self.viewState.channels[channel.id] = channel
             }

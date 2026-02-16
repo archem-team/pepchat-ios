@@ -190,13 +190,18 @@ struct MessageContentsView: View {
         return canSendMessages
     }
     
+    /// When isStatic (e.g. search results), disable swipe so the parent list scroll receives vertical drags. See Scrolling.md.
+    private var effectiveEnableSwipe: Bool {
+        enableToSwipe && !isStatic
+    }
+    
     /// The body of the `MessageContentsView`.
     ///
     /// Displays the message content, reactions, and embeds, and provides context menu actions such as reply, react, copy, edit, and delete.
     var body: some View {
         
         
-        SwipeToReplyView(enableSwipe: enableToSwipe, onReply: viewModel.reply){
+        SwipeToReplyView(enableSwipe: effectiveEnableSwipe, onReply: viewModel.reply){
             HStack(spacing: .zero){
                 
                 VStack(alignment: .leading, spacing: .zero) {

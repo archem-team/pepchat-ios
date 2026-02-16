@@ -57,6 +57,7 @@ struct ServerMembersView: View {
                 if isLoading {
                     // Show loading state
                     PeptideLoading()
+//                    ProgressView()
                 } else {
                     // Search Bar
                     
@@ -180,7 +181,7 @@ struct ServerMembersView: View {
                                     
                                     if index != filteredMembers.count - 1 {
                                         PeptideDivider()
-                                            .padding(.leading, .padding48)
+                                            .padding(.horizontal, .padding24)
                                     }
                                 }
                             }
