@@ -24,7 +24,11 @@ struct DiscoverScrollView: View {
     var body: some View {
         content
             .background(backgroundView)
-            .onAppear(perform: loadData)
+            .onAppear {
+                // Sync from persisted cache for instant UI before any async work
+                membershipCache = viewState.discoverMembershipCache
+                loadData()
+            }
     }
     
     // MARK: - View Components
@@ -318,7 +322,18 @@ struct DiscoverScrollView: View {
             return
         }
         
-        // Skip if we already have cached membership info
+        // Skip if we already have membership cached by server ID (from CSV item.id); seed inviteCache so UI uses fast path
+        if viewState.discoverMembershipCache[item.id] != nil || membershipCache[item.id] != nil {
+            let cached = viewState.discoverMembershipCache[item.id] ?? membershipCache[item.id]!
+            await MainActor.run {
+                inviteCache[item.code] = item.id
+                membershipCache[item.id] = cached
+            }
+            print("   ⏭️ [checkAndCacheMembership] SKIP - Already cached for serverId (item.id): \(item.id)")
+            return
+        }
+        
+        // Skip if we already have cached membership info (from inviteCache + membershipCache)
         let cachedServerId = inviteCache[item.code]
         let cachedMembership = cachedServerId != nil ? membershipCache[cachedServerId!] : nil
         print("   🔎 Checking cache - ServerId: \(cachedServerId ?? "nil"), CachedMembership: \(cachedMembership?.description ?? "nil")")
@@ -378,6 +393,7 @@ struct DiscoverScrollView: View {
                 
                 await MainActor.run {
                     membershipCache[serverId] = isMember
+                    viewState.updateMembershipCache(serverId: serverId, isMember: isMember, persist: false)
                     checkingInvites.remove(item.code)
                 }
                 print("   💾 [checkAndCacheMembership] Updated membershipCache[\(serverId)] = \(isMember)")
@@ -421,49 +437,38 @@ struct DiscoverScrollView: View {
         print("🏁 [checkAndCacheMembership] END - Item: \(item.title), Code: \(item.code)")
     }
         
-    // Enhanced membership check with caching and API verification
+    // Enhanced membership check: ViewState servers first, then persisted cache, then local/API.
+    // Uses inviteCache[item.code] ?? item.id so persisted cache is used on launch (inviteCache empty).
     private func checkIfUserIsMember(item: DiscoverItem) -> Bool {
-        // First check if we have cached invite -> server ID mapping
-        if let serverId = inviteCache[item.code] {
-            // Check cached membership status
-            if let cachedMembership = membershipCache[serverId] {
-                return cachedMembership
-            }
-            
-            if viewState.servers[serverId] != nil {
-                DispatchQueue.main.async {
-                    self.membershipCache[serverId] = true
-                }
-                return true
-            }
-            
-            // Check membership using the server ID
-            guard let currentUser = viewState.currentUser else {
-                return false
-            }
-            
+        let serverId = inviteCache[item.code] ?? item.id
+        // 1) Server in joined list => member (source of truth; stays in sync with web/Android via WebSocket)
+        if viewState.servers[serverId] != nil {
+            return true
+        }
+        // 2) Persisted membership cache (instant on launch; updated when user joins/leaves)
+        if let cached = viewState.discoverMembershipCache[serverId] {
+            return cached
+        }
+        // 3) Local in-memory cache (from this session)
+        if let cached = membershipCache[serverId] {
+            return cached
+        }
+        // 4) Members dictionary (may be unloaded for server)
+        if let currentUser = viewState.currentUser {
             let isMember = viewState.getMember(byServerId: serverId, userId: currentUser.id) != nil
-            
-            // Cache the result after the view update to avoid mutating state during rendering
             DispatchQueue.main.async {
                 self.membershipCache[serverId] = isMember
             }
-
             return isMember
         }
-        
-        // Check if we have a cached result for this invite code directly
-        if let cachedMembership = membershipCache[item.code] {
-            return cachedMembership
+        // Fallbacks when serverId from item.id had no cache and no currentUser
+        if let cached = membershipCache[item.code] {
+            return cached
         }
-        
-        // Fallback to name-based matching (legacy method)
-        let nameMembership = viewState.servers.values.contains { server in
-            server.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) == 
+        return viewState.servers.values.contains { server in
+            server.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ==
             item.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        
-        return nameMembership
     }
 }
 

@@ -379,6 +379,8 @@ struct ServerInfoSheet: View {
             Button {
                 dismiss()
                 onNavigation(.members, server.id)
+                print("Members button is tapped 🎉🎉🎉🎉🎉")
+                viewState.path.append(NavigationDestination.server_members_view(server.id))
             } label: {
                 PeptideActionButton(icon: .peptideTeamUsers, title: "Members", hasArrow: true)
             }
@@ -390,6 +392,8 @@ struct ServerInfoSheet: View {
                 Button {
                     dismiss()
                     onNavigation(.invite, server.id)
+                    print("Invites button is tapped 🎉🎉🎉🎉🎉")
+                    viewState.path.append(NavigationDestination.server_invites(server.id))
                 } label: {
                     PeptideActionButton(icon: .peptideMail, title: "Invites", hasArrow: true)
                 }

@@ -70,6 +70,7 @@ extension ViewState {
     
     func removeServer(with serverID: String) {
         Task { @MainActor in
+            updateMembershipCache(serverId: serverID, isMember: false)
             servers.removeValue(forKey: serverID)
             selectDms()
         }
