@@ -2123,7 +2123,10 @@ public class ViewState: ObservableObject {
         
         // Try to load from stored event data
         if let storedUser = allEventUsers[otherUserId] {
-            users[otherUserId] = storedUser
+            // Defer write to avoid "Publishing changes from within view updates"
+            DispatchQueue.main.async { [weak self] in
+                self?.users[otherUserId] = storedUser
+            }
             return storedUser
         }
         
@@ -2134,7 +2137,10 @@ public class ViewState: ObservableObject {
             discriminator: "0000",
             relationship: .None
         )
-        users[otherUserId] = placeholderUser
+        // Defer write to avoid "Publishing changes from within view updates"
+        DispatchQueue.main.async { [weak self] in
+            self?.users[otherUserId] = placeholderUser
+        }
         return placeholderUser
     }
     

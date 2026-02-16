@@ -16,6 +16,8 @@ import ULID
 extension MessageableChannelViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        
+        isViewDisappearing = false
 
         // CRITICAL FIX: Check if we have a target message from ViewState that we need to restore
         if targetMessageId == nil,
@@ -259,6 +261,12 @@ extension MessageableChannelViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
 
+        isViewDisappearing = true
+        
+        scrollToBottomWorkItem?.cancel()
+        scrollToBottomWorkItem = nil
+        scrollPositionManager.cancelScrollToBottom()
+        
         // Show navigation bar when leaving this view
         navigationController?.setNavigationBarHidden(false, animated: animated)
 
@@ -342,6 +350,9 @@ extension MessageableChannelViewController {
         forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey: Any]?,
         context: UnsafeMutableRawPointer?
     ) {
+        guard !isViewDisappearing else {
+            return
+        }
         if keyPath == "contentSize" && object as? UITableView === tableView {
             // Update bouncing behavior whenever content size changes
             updateTableViewBouncing()

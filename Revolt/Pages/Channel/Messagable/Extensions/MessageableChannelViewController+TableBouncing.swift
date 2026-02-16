@@ -140,6 +140,8 @@ extension MessageableChannelViewController {
         // Position at bottom (newest messages) only if no target message
         let lastRowIndex = rowCount - 1
         let indexPath = IndexPath(row: lastRowIndex, section: 0)
+        guard tableView.dataSource != nil else { return }
+        guard tableView.numberOfSections > 0, lastRowIndex < tableView.numberOfRows(inSection: 0) else { return }
         tableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
         // print("🔽 [POSITION] Positioned at bottom (newest messages)")
 

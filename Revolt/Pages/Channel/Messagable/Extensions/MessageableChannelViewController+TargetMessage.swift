@@ -258,7 +258,8 @@ extension MessageableChannelViewController {
                             print(
                                 "🎯 SCROLL_TO_TARGET: Scrolling to target message at index \(validatedIndex)"
                             )
-                            self.tableView.scrollToRow(at: indexPath, at: .middle, animated: false)
+//                            self.tableView.scrollToRow(at: indexPath, at: .middle, animated: false)
+                            self.safeScrollToRow(at: indexPath, at: .middle, animated: false, reason: "target message")
                             // print("📍 scrollToRow completed")
 
                             // CRITICAL FIX: Force immediate layout update to prevent any delay
@@ -325,11 +326,10 @@ extension MessageableChannelViewController {
             }
 
             // If not in localMessages but in viewState.messages, add it to localMessages
-            if self.viewModel.viewState.messages[targetId] != nil {
+            if let _ = self.viewModel.viewState.messages[targetId] {
                 // print("🔄 Adding target message to localMessages array")
 
                 // Add to beginning or end based on timestamp
-                let targetMessage = self.viewModel.viewState.messages[targetId]!
                 let targetDate = createdAt(id: targetId)
 
                 if !localMessages.isEmpty {
@@ -456,7 +456,8 @@ extension MessageableChannelViewController {
         if safeTargetIndex >= 0 && safeTargetIndex < tableRows {
             // Scroll to the target message
             let indexPath = IndexPath(row: safeTargetIndex, section: 0)
-            tableView.scrollToRow(at: indexPath, at: .middle, animated: animated)
+//            tableView.scrollToRow(at: indexPath, at: .middle, animated: animated)
+            safeScrollToRow(at: indexPath, at: .middle, animated: animated, reason: "scroll to specific message")
             // print("🎯 Scrolled to target message at index \(safeTargetIndex)")
 
             // For emphasis, highlight the message temporarily
@@ -650,7 +651,10 @@ extension MessageableChannelViewController {
                 }
 
                 // Return the first result
-                let result = try await group.next()!
+                guard let result = try await group.next() else {
+                    group.cancelAll()
+                    throw TimeoutError()
+                }
                 group.cancelAll()
                 return result
             }
@@ -849,7 +853,8 @@ extension MessageableChannelViewController {
                         self.tableView.layoutIfNeeded()
 
                         // Perform the scroll
-                        self.tableView.scrollToRow(at: indexPath, at: .top, animated: false)
+//                        self.tableView.scrollToRow(at: indexPath, at: .top, animated: false)
+                        self.safeScrollToRow(at: indexPath, at: .top, animated: false, reason: "reference message")
 
                         // print("🎯 REFERENCE_SCROLL: Successfully scrolled to reference message at index \(targetIndex) (attempt \(attempt))")
 
@@ -993,6 +998,18 @@ extension MessageableChannelViewController {
         at indexPath: IndexPath, at position: UITableView.ScrollPosition, animated: Bool,
         reason: String
     ) {
+        guard !isViewDisappearing else {
+            return
+        }
+        guard tableView.dataSource != nil else {
+            return
+        }
+        guard tableView.numberOfSections > 0, indexPath.section < tableView.numberOfSections else {
+            return
+        }
+        guard indexPath.row >= 0, indexPath.row < tableView.numberOfRows(inSection: indexPath.section) else {
+            return
+        }
         print(
             "🔍 SCROLL_ATTEMPT: \(reason) - target row: \(indexPath.row), position: \(position), animated: \(animated)"
         )

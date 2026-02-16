@@ -76,6 +76,7 @@ class ScrollPositionManager {
             let lastIndex = viewController.localMessages.count - 1
             let indexPath = IndexPath(row: lastIndex, section: 0)
             
+            guard viewController.tableView.dataSource != nil, lastIndex < viewController.tableView.numberOfRows(inSection: 0) else { return }
             // Check if the index path is valid
             guard lastIndex >= 0 && lastIndex < viewController.tableView.numberOfRows(inSection: 0) else {
                 // print("📊 SCROLL_TO_BOTTOM: Invalid index path \(indexPath)")
@@ -250,6 +251,7 @@ class ScrollPositionManager {
         
         // Scroll to the adjusted position
         if newIndexPath.row < viewController.tableView.numberOfRows(inSection: 0) {
+            guard viewController.tableView.dataSource != nil else { return }
             viewController.tableView.scrollToRow(at: newIndexPath, at: .top, animated: false)
             
             // Fine-tune the offset
