@@ -1,6 +1,6 @@
 # App Features
 
-This document summarizes the major product features visible in the current codebase. It reflects what is implemented in `Revolt/Pages/`, `Revolt/Components/`, and related modules.
+This document summarizes the major product features visible in the current codebase. It reflects what is implemented in `Revolt/Pages/`, `Revolt/Components/`, and related modules. For project structure, architecture, and development guidelines, see `AGENTS.md`.
 
 ## Onboarding & Account
 - Intro/first-run experience (`Revolt/Pages/Features/Intro/`).
@@ -9,7 +9,7 @@ This document summarizes the major product features visible in the current codeb
 
 ## Core Messaging
 - Text channels and direct messages with message timelines (`Revolt/Pages/Channel/`, `Revolt/Pages/Channels/`).
-- Message composer, attachments, and link previews (`Revolt/Pages/Channel/Messagable/Views/`).
+- Message composer, attachments, and link previews (`Revolt/Pages/Channel/Messagable/Views/`). Pending attachments managed before send via `PendingAttachmentsManager` (`Revolt/Pages/Channel/Messagable/Managers/1PendingAttachmentsManager.swift`).
 - Message replies, reaction sheets, and swipe-to-reply (`Revolt/Components/MessageRenderer/`).
 - Typing indicators and system messages (`Revolt/Pages/Channel/Messagable/Views/TypingIndicatorView.swift`, `SystemMessageCell.swift`).
 - Mentions input and channel search (`Revolt/Pages/Channel/Messagable/Mention/`, `ChannelSearch.swift`).
@@ -25,6 +25,7 @@ This document summarizes the major product features visible in the current codeb
 - Audio/video playback components (`Revolt/Components/AudioPlayer/`).
 
 ## Servers, Channels, and Community
+- Discover servers: CSV-backed server list for peptide.chat with membership cache for instant UI on launch; join/leave state synced across devices via WebSocket (`Revolt/Components/Home/Discover/` — `DiscoverScrollView`, `DiscoverItem`, `DiscoverItemView`, `ServerChatDataFetcher`; `ViewState+MembershipCache.swift`).
 - Server/channel navigation, discovery, and invites (`Revolt/Pages/Home/Discovery.swift`, `ViewInvite.swift`).
 - Server settings: overview, categories, roles/permissions, emoji, members, bans, system messages (`Revolt/Pages/Channel/Settings/Server/`).
 - Channel settings and permissions (`Revolt/Pages/Channel/Settings/Channel/`).
@@ -48,6 +49,7 @@ This document summarizes the major product features visible in the current codeb
 
 ## Performance & Caching
 - SQLite-based message caching for instant channel loading (`Revolt/1Storage/MessageCacheManager.swift`).
+- Discover membership cache: server join/leave state persisted to disk for instant Discover UI; updated on local or WebSocket join/leave events (`ViewState+MembershipCache.swift`).
 - Automatic cache cleanup of old messages to manage storage size.
 - Background message preloading for frequently accessed channels.
 - Memory management: automatic cleanup of old messages/users to prevent memory issues.
