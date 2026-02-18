@@ -148,6 +148,8 @@ public class ViewState: ObservableObject {
             }
         }
     }
+    /// Channel ID -> set of message IDs that have been deleted (soft delete); used by WebSocket and cache so deleted IDs are not shown.
+    var deletedMessageIds: [String: Set<String>] = [:]
     @Published var members: [String: [String: Member]] {
         didSet {
             // DISABLED: Don't save members to UserDefaults to force refresh from backend
@@ -552,7 +554,11 @@ public class ViewState: ObservableObject {
         } else {
             self.servers = [:]
         }
-        self.discoverMembershipCache = ViewState.loadMembershipCacheSync()
+        if Keychain(service: "chat.peptide.app")["sessionToken"] != nil {
+            self.discoverMembershipCache = ViewState.loadMembershipCacheSync()
+        } else {
+            self.discoverMembershipCache = [:]
+        }
 
         self.channels = [:] // ViewState.decodeUserDefaults(forKey: "channels", withDecoder: decoder, defaultingTo: [:])
         /*self.messages = ViewState.decodeUserDefaults(forKey: "messages", withDecoder: decoder, defaultingTo: [:])

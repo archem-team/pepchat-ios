@@ -325,6 +325,8 @@
 		DAAA4C0929F2974300F41E52 /* Http.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAA4C0829F2974300F41E52 /* Http.swift */; };
 		DAAA4C0B29F2CF1200F41E52 /* Websocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAAA4C0A29F2CF1200F41E52 /* Websocket.swift */; };
 		DAF84FFD2A0EFE1B00B01682 /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = DAF84FFC2A0EFE1B00B01682 /* Starscream */; };
+		F0A1B2C3D4E5F60718293A4C /* MessageCacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F60718293A4B /* MessageCacheManager.swift */; };
+		F0A1B2C4D4E5F60718293A4C /* MessageCacheWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C4D4E5F60718293A4B /* MessageCacheWriter.swift */; };
 		F545878D2E1504BD00797AC1 /* AttachmentPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F545878C2E1504BB00797AC1 /* AttachmentPreviewView.swift */; };
 		F54587942E152E6300797AC1 /* OggDecoder in Frameworks */ = {isa = PBXBuildFile; productRef = F54587932E152E6300797AC1 /* OggDecoder */; };
 		F54587972E15304600797AC1 /* OggDecoder in Frameworks */ = {isa = PBXBuildFile; productRef = F54587962E15304600797AC1 /* OggDecoder */; };
@@ -695,6 +697,8 @@
 		DAAA4C0A29F2CF1200F41E52 /* Websocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Websocket.swift; sourceTree = "<group>"; };
 		DAAA4C0C29F2D16B00F41E52 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformConfigService.swift; sourceTree = "<group>"; };
+		F0A1B2C3D4E5F60718293A4B /* MessageCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCacheManager.swift; sourceTree = "<group>"; };
+		F0A1B2C4D4E5F60718293A4B /* MessageCacheWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCacheWriter.swift; sourceTree = "<group>"; };
 		F545878C2E1504BB00797AC1 /* AttachmentPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentPreviewView.swift; sourceTree = "<group>"; };
 		F57D4C052E27D735004B7EF6 /* ChannelLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelLoadingView.swift; sourceTree = "<group>"; };
 		F57D4C092E2E49BA004B7EF6 /* EmojiParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiParser.swift; sourceTree = "<group>"; };
@@ -1555,6 +1559,7 @@
 				17E019D42AF1937400AB4663 /* Theme.swift */,
 				DA99EC4B29D5F35500419FDA /* ViewState.swift */,
 				777FA4392F2E187400EF8969 /* ViewState+Extensions */,
+				F0A1B2C5D4E5F60718293A4B /* 1Storage */,
 				17DFB4622AE06A3200E1D417 /* Api */,
 				175E01DC2ADAB3EA004F6431 /* Components */,
 				17772C162C30AF6D000D1EDA /* Delegates */,
@@ -1579,6 +1584,15 @@
 				96017C7CA30648B3AFA706AFCB3CC1B4 /* PlatformConfig.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		F0A1B2C5D4E5F60718293A4B /* 1Storage */ = {
+			isa = PBXGroup;
+			children = (
+				F0A1B2C3D4E5F60718293A4B /* MessageCacheManager.swift */,
+				F0A1B2C4D4E5F60718293A4B /* MessageCacheWriter.swift */,
+			);
+			path = 1Storage;
 			sourceTree = "<group>";
 		};
 		F57D4C042E27D729004B7EF6 /* Loading */ = {
@@ -2129,6 +2143,8 @@
 				77E66B832F30AFD400522EB9 /* MessageableChannelViewController+MessageLoading.swift in Sources */,
 				7031993BD3D264C895FFB466 /* CreateServerRoleView.swift in Sources */,
 				285F7581BAD6234593D2394F /* RoleDeleteSheet.swift in Sources */,
+				F0A1B2C3D4E5F60718293A4C /* MessageCacheManager.swift in Sources */,
+				F0A1B2C4D4E5F60718293A4C /* MessageCacheWriter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2488,7 +2504,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
 				DEVELOPMENT_TEAM = "";
@@ -2553,7 +2569,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
 				DEVELOPMENT_TEAM = "";

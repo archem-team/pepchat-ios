@@ -369,7 +369,10 @@ class RepliesManager: NSObject {
                     switch result {
                     case .success:
                         print("✅ Message deleted successfully: \(message.id)")
-                        
+                        viewState.deletedMessageIds[channelId, default: Set()].insert(message.id)
+                        if let userId = viewState.currentUser?.id, let baseURL = viewState.baseURL {
+                            MessageCacheWriter.shared.enqueueDeleteMessage(id: message.id, channelId: channelId, userId: userId, baseURL: baseURL)
+                        }
                         // Update local state immediately
                         Task {
                             await viewState.messages.removeValue(forKey: message.id)

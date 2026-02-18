@@ -17,7 +17,7 @@ This document summarizes the major product features visible in the current codeb
 - Scroll position preservation: maintains user's scroll position during message updates (`Revolt/Pages/Channel/Messagable/Managers/ScrollPositionManager.swift`).
 - Target message navigation: jump to specific messages via links or notifications with highlighting.
 - Skeleton loading states for smooth message loading experience (`Revolt/Components/1Loading/MessageSkeletonView.swift`).
-- Instant message loading via SQLite cache (`Revolt/1Storage/MessageCacheManager.swift`).
+- Instant message loading from SQLite cache: messages and users are read from `MessageCacheManager`; all cache writes go through a single session-scoped path (`MessageCacheWriter`) so sends, edits, deletes, and WebSocket updates are persisted safely and sign-out flushes pending writes with a bounded timeout before clearing caches (`Revolt/1Storage/MessageCacheManager.swift`, `MessageCacheWriter.swift`).
 - Channel preloading: frequently accessed channels are preloaded in the background for faster access.
 
 ## Media & Attachments
@@ -48,8 +48,8 @@ This document summarizes the major product features visible in the current codeb
 - Deep linking to specific messages with automatic scroll and highlighting.
 
 ## Performance & Caching
-- SQLite-based message caching for instant channel loading (`Revolt/1Storage/MessageCacheManager.swift`).
-- Discover membership cache: server join/leave state persisted to disk for instant Discover UI; updated on local or WebSocket join/leave events (`ViewState+MembershipCache.swift`).
+- **Message cache**: SQLite-based message cache for instant channel loading (`MessageCacheManager`). Writes are serialized and session-scoped via `MessageCacheWriter` (used by ViewModel, WebSocket, composer, replies, and message content UI); session is bound when connected and invalidated on sign-out with a bounded flush so pending edits/deletes are persisted before caches are cleared. Multi-tenant schema (per user/base URL) with soft deletes (tombstones).
+- **Discover membership cache**: Server join/leave state persisted to disk for instant Discover UI; updated on local or WebSocket join/leave events (`ViewState+MembershipCache.swift`).
 - Automatic cache cleanup of old messages to manage storage size.
 - Background message preloading for frequently accessed channels.
 - Memory management: automatic cleanup of old messages/users to prevent memory issues.

@@ -1,24 +1,25 @@
 <div align="center">
 <h1>
-  Revolt iOS
+  Zeko Chat
   
-  [![Stars](https://img.shields.io/github/stars/revoltchat/ios?style=flat-square&logoColor=white)](https://github.com/revoltchat/ios/stargazers)
-  [![Forks](https://img.shields.io/github/forks/revoltchat/ios?style=flat-square&logoColor=white)](https://github.com/revoltchat/ios/network/members)
-  [![Pull Requests](https://img.shields.io/github/issues-pr/revoltchat/ios?style=flat-square&logoColor=white)](https://github.com/revoltchat/ios/pulls)
-  [![Issues](https://img.shields.io/github/issues/revoltchat/ios?style=flat-square&logoColor=white)](https://github.com/revoltchat/ios/issues)
-  [![Contributors](https://img.shields.io/github/contributors/revoltchat/ios?style=flat-square&logoColor=white)](https://github.com/revoltchat/ios/graphs/contributors)
-  [![License](https://img.shields.io/github/license/revoltchat/ios?style=flat-square&logoColor=white)](https://github.com/revoltchat/ios/blob/main/LICENSE)
+  [![Stars](https://img.shields.io/github/stars/archem-team/pepchat-ios?style=flat-square&logoColor=white)](https://github.com/archem-team/pepchat-ios/stargazers)
+  [![Forks](https://img.shields.io/github/forks/archem-team/pepchat-ios?style=flat-square&logoColor=white)](https://github.com/archem-team/pepchat-ios/network/members)
+  [![Pull Requests](https://img.shields.io/github/issues-pr/archem-team/pepchat-ios?style=flat-square&logoColor=white)](https://github.com/archem-team/pepchat-ios/pulls)
+  [![Issues](https://img.shields.io/github/issues/archem-team/pepchat-ios?style=flat-square&logoColor=white)](https://github.com/archem-team/pepchat-ios/issues)
+  [![Contributors](https://img.shields.io/github/contributors/archem-team/pepchat-ios?style=flat-square&logoColor=white)](https://github.com/archem-team/pepchat-ios/graphs/contributors)
+  [![License](https://img.shields.io/github/license/archem-team/pepchat-ios?style=flat-square&logoColor=white)](https://github.com/archem-team/pepchat-ios/blob/main/LICENSE)
 </h1>
-Native iOS app for Revolt
+Native iOS app for Zeko Chat
 </div>
 <br/>
 
-This repository contains the source code for the native iOS application.
+This repository contains the source code for the Zeko Chat iOS app.
 
 > [!IMPORTANT]
-> This app is still in early stages, and not yet ready for production.
+> The app is now live in production.
 
-[Join the Testflight](https://testflight.apple.com/join/mGSCJe13) to try the app.
+- **[Join the TestFlight beta](https://testflight.apple.com/join/cdQYYD3C)** to try the app.
+- **[Zeko Chat on the App Store](https://apps.apple.com/in/app/zeko-chat/id6756353165)** — download the release version.
 
 ## Development
 
@@ -33,7 +34,7 @@ Follow these instructions to get a copy of the project up and running on your lo
 #### Installation
 
 1. **Clone the repository:** \
-   `git clone https://github.com/revoltchat/ios.git`
+   `git clone https://github.com/archem-team/pepchat-ios.git`
 
 2. **Open the project in Xcode:** \
    Open `Revolt.xcworkspace` in Xcode.
@@ -43,7 +44,7 @@ Follow these instructions to get a copy of the project up and running on your lo
 
 ## License
 
-All content contained within this repository is licensed under the [GNU Affero General Public License v3.0](https://github.com/revoltchat/ios/blob/main/LICENSE). Dependencies may be licensed differently._
+All content contained within this repository is licensed under the [GNU Affero General Public License v3.0](https://github.com/archem-team/pepchat-ios/blob/main/LICENSE). Dependencies may be licensed differently.
 
 # Message Link Navigation Fix
 

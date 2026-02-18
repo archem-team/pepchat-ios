@@ -6,7 +6,7 @@
 - `Types/` holds shared model types.
 - `RevoltTests/`, `RevoltUITests/`, and `Tests/` contain unit/UI tests (XCTest).
 - `Revolt/Resources/` stores assets, xcassets catalogs, and localized strings (`Localizable.xcstrings`).
-- `Revolt/1Storage/` contains local storage managers (e.g., `MessageCacheManager` for SQLite-based message caching).
+- `Revolt/1Storage/` contains local storage managers: `MessageCacheManager` (SQLite-based message cache, reads and internal write API) and `MessageCacheWriter` (single session-scoped write path used by ViewModel, WebSocket, MessageInputHandler, RepliesManager, MessageContentsView).
 - `Revolt/Pages/Features/Core/` contains base architecture components (e.g., `BaseViewModel` for MVVM pattern).
 - `Revolt/ViewState+Extensions/` contains ViewState extensions split by responsibility (see State Management section below).
 - `Revolt/Components/Home/Discover/` contains the Discover servers feature: `DiscoverScrollView`, `DiscoverItem`, `DiscoverItemView`, and `ServerChatDataFetcher` (CSV-backed server list with membership cache).
@@ -40,9 +40,9 @@
   - `ViewState+UsersAndDms.swift` - User/DM loading (`processUsers`, `loadUsersForDmBatch`, `processDMs`, etc.)
   - `ViewState+Navigation.swift` - Selection and navigation (`selectServer`, `selectChannel`, `selectDm`, `handleChannelChange`)
   - `ViewState+Unreads.swift` - Unread counts and badges (`getUnreadCountFor`, `cleanupStaleUnreads`, `forceMarkAllAsRead`)
-  - `ViewState+Auth.swift` - Authentication (`signIn`, `signOut`, `destroyCache`)
+  - `ViewState+Auth.swift` - Authentication (`signIn`, `signOut`, `destroyCache`). `destroyCache()` flushes `MessageCacheWriter` with bounded timeout then invalidates and clears message cache and in-memory state.
   - `ViewState+ServerCache.swift` - Server cache persistence (`loadServersCacheSync`, `saveServersCacheAsync`)
-  - `ViewState+ReadyEvent.swift` - Ready event processing (`extractNeededDataFromReadyEvent`, `processReadyData`)
+  - `ViewState+ReadyEvent.swift` - Ready event processing (`extractNeededDataFromReadyEvent`, `processReadyData`). Binds message cache session via `MessageCacheWriter.shared.setSession(userId:baseURL:)` when connected.
   - `ViewState+Notifications.swift` - Push tokens and app badge (`updateAppBadgeCount`, `retryUploadNotificationToken`)
   - `ViewState+QueuedMessages.swift` - Message queuing (`queueMessage`, `trySendingQueuedMessages`)
   - `ViewState+DMChannel.swift` - DM channel operations (`deactivateDMChannel`, `closeDMGroup`, `removeChannel`)
@@ -54,9 +54,8 @@
 - Used in feature screens under `Revolt/Pages/Features/`.
 
 ### Local Caching
-- `MessageCacheManager` (`Revolt/1Storage/MessageCacheManager.swift`) provides SQLite-based local message caching for instant loading.
-- Caches messages, users, and channel metadata with automatic cleanup of old data.
-- Supports preloading frequently accessed channels and cache statistics.
+- **MessageCacheWriter** (`Revolt/1Storage/MessageCacheWriter.swift`): Single serialized, session-scoped cache write path. All cache writes from ViewModel, WebSocket events, MessageInputHandler, RepliesManager, and MessageContentsView go through this writer to prevent races and cross-account leakage. Session is bound via `setSession(userId:baseURL:)` (called from `ViewState+ReadyEvent` when connected); on sign-out, `ViewState.destroyCache()` calls `invalidate(flushFirst: true)` to flush pending writes with a bounded timeout (e.g. 4s) then clear caches. When adding new cache write call sites, use the writer’s `enqueue*` methods rather than writing directly to `MessageCacheManager`.
+- **MessageCacheManager** (`Revolt/1Storage/MessageCacheManager.swift`): SQLite-based local message cache. Handles reads (`loadCachedMessages`, `loadCachedUsers`, `cachedMessageCount`, `hasCachedMessages`) and internal write implementation; all persistent writes are invoked via `MessageCacheWriter`. Schema v2 is multi-tenant (messages, users, channel_info, tombstones keyed by `channel_id` + `user_id` + `base_url`); soft deletes use a tombstones table. Caches messages, users, and channel metadata with automatic cleanup and preloading of frequently accessed channels.
 
 ### Manager Pattern
 - Complex view controllers (e.g., `MessageableChannelViewController`) use dedicated manager classes:
@@ -113,7 +112,7 @@
 - UserDefaults is used for non-sensitive app state persistence (with debounced saves for performance).
 
 ## Performance Considerations
-- Message caching: `MessageCacheManager` provides instant message loading from SQLite cache.
+- Message caching: `MessageCacheManager` provides instant message loading from SQLite cache. All cache writes go through `MessageCacheWriter` for serialization and session safety; sign-out flushes pending writes with a bounded timeout before clearing caches.
 - Discover membership cache: `ViewState+MembershipCache` persists server join/leave state to disk for instant Discover UI on launch; updated on join/leave events (local or via WebSocket).
 - Memory management: ViewState implements automatic cleanup of old messages/users to prevent memory issues.
 - Debounced saves: Large data structures (users, emojis, messages) use debounced UserDefaults saves to prevent UI blocking.
@@ -123,4 +122,5 @@
 ## Code Organization Notes
 - **ViewState refactoring**: The main `ViewState.swift` file contains class properties and init. Logic is split into extension files in `Revolt/ViewState+Extensions/` for easier navigation and maintainability.
 - When adding new ViewState functionality, place it in the appropriate extension file based on responsibility (e.g., memory-related code in `ViewState+Memory.swift`).
+- **Message cache writes**: Any new code that should persist messages/users to the SQLite cache must use `MessageCacheWriter.shared` (e.g. `enqueueCacheMessagesAndUsers`, `enqueueUpdateMessage`, `enqueueDeleteMessage`), not direct `MessageCacheManager` write APIs, to avoid races and cross-account leakage.
 - **Scroll/Navigation safety**: When modifying `MessageableChannelViewController`, `ScrollPositionManager`, or `MessageableChannelViewController+TargetMessage`, guard scroll operations: ensure `tableView.dataSource != nil` and target row index is valid before `scrollToRow(at:animated:)`. Cancel pending scroll `DispatchWorkItem`s in `viewWillDisappear` to avoid crashes during navigation (see `Sentry.md`).

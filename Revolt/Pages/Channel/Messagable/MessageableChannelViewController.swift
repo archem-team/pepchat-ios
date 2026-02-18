@@ -61,6 +61,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     // CRITICAL FIX: Add property to track when API returns empty messages
     var lastEmptyResponseTime: Date?
 
+    // Cache loading state (session-scoped; used by MessageLoading extension)
+    internal var activeChannelId: String? = nil
+    var cachedMessageTotal: Int = 0
+    var cachedMessageOffset: Int = 0
+    let cachePageSize: Int = 10
+    var cacheLoadTask: Task<Void, Never>? = nil
+
     // CRITICAL: Add flag to protect against scrolling during data source updates
     var isDataSourceUpdating: Bool = false
 
