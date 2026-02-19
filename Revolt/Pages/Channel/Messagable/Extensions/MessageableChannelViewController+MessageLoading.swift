@@ -20,6 +20,13 @@ extension MessageableChannelViewController {
         return union.sorted { createdAt(id: $0) < createdAt(id: $1) }
     }
 
+    /// When loading from cache, prefer ViewState over cached if ViewState has a newer edit (e.g. from a message_update WebSocket event) so edits from other users are not overwritten by stale cache.
+    private func isViewStateMessageNewerThanCached(existing: Message, cached: Message) -> Bool {
+        guard existing.edited != nil else { return false }
+        if cached.edited == nil { return true }
+        return (existing.edited ?? "") >= (cached.edited ?? "")
+    }
+
     internal func loadInitialMessages() async {
         let channelId = viewModel.channel.id
 
@@ -75,6 +82,10 @@ extension MessageableChannelViewController {
                         viewModel.viewState.users[uid] = user
                     }
                     for message in cached {
+                        let existing = viewModel.viewState.messages[message.id]
+                        if let existing = existing, isViewStateMessageNewerThanCached(existing: existing, cached: message) {
+                            continue
+                        }
                         viewModel.viewState.messages[message.id] = message
                     }
                     let deleted = viewModel.viewState.deletedMessageIds[channelId] ?? []
@@ -88,6 +99,10 @@ extension MessageableChannelViewController {
                     tableView.reloadData()
                     hideSkeletonView()
                     tableView.alpha = 1.0
+                    updateTableViewBouncing()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                        self?.updateTableViewBouncing()
+                    }
                 }
             }
         }
@@ -469,15 +484,18 @@ extension MessageableChannelViewController {
                 // Only skip if user has manually scrolled up
                 if !hasManuallyScrolledUp {
                     // CRITICAL FIX: Don't auto-position if target message was recently highlighted
-                    if let highlightTime = self.lastTargetMessageHighlightTime,
-                        Date().timeIntervalSince(highlightTime) < 10.0
-                    {
-                        // Just show table without positioning
-                        self.tableView.alpha = 1.0
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            self.adjustTableInsetsForMessageCount()
-                        }
-                    } else {
+                            if let highlightTime = self.lastTargetMessageHighlightTime,
+                                Date().timeIntervalSince(highlightTime) < 10.0
+                            {
+                                // Just show table without positioning
+                                self.tableView.alpha = 1.0
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    self.adjustTableInsetsForMessageCount()
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                                    self?.updateTableViewBouncing()
+                                }
+                            } else {
                         // Position at bottom and show table
                         self.positionTableAtBottomBeforeShowing()
 
@@ -488,6 +506,9 @@ extension MessageableChannelViewController {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             self.adjustTableInsetsForMessageCount()
                         }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                            self?.updateTableViewBouncing()
+                        }
                     }
                 } else {
                     // print("👆 User has manually scrolled up, showing table without auto-positioning")
@@ -495,6 +516,9 @@ extension MessageableChannelViewController {
                     self.showTableViewWithFade()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         self.adjustTableInsetsForMessageCount()
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                        self?.updateTableViewBouncing()
                     }
                 }
             }
@@ -615,6 +639,7 @@ extension MessageableChannelViewController {
 
                         // Hide skeleton and show messages
                         self.hideSkeletonView()
+                        self.tableView.tableFooterView = nil
 
                         // print("📊 localMessages now has \(self.localMessages.count) messages")
 
@@ -700,6 +725,7 @@ extension MessageableChannelViewController {
 
                         // Hide skeleton and show empty state
                         self.hideSkeletonView()
+                        self.tableView.tableFooterView = nil
 
                         // Show empty state
                         self.updateEmptyStateVisibility()
@@ -878,6 +904,10 @@ extension MessageableChannelViewController {
                 viewModel.viewState.users[uid] = user
             }
             for message in cached {
+                let existing = viewModel.viewState.messages[message.id]
+                if let existing = existing, isViewStateMessageNewerThanCached(existing: existing, cached: message) {
+                    continue
+                }
                 viewModel.viewState.messages[message.id] = message
             }
             let newIds = cached.map { $0.id }

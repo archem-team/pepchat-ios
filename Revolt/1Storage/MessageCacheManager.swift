@@ -356,7 +356,51 @@ class MessageCacheManager {
             self?._updateCachedMessage(id: messageId, content: content, editedAt: editedAt, channelId: channelId, userId: userId, baseURL: baseURL)
         }
     }
-    
+
+    /// Updates a cached message by id when channel is unknown (e.g. message_update WebSocket event and message not in ViewState). Finds the row by id/userId/baseURL then updates it.
+    func updateCachedMessageById(id messageId: String, content: String?, editedAt: Date?, userId: String, baseURL: String) {
+        dbQueue.async { [weak self] in
+            self?._updateCachedMessageById(id: messageId, content: content, editedAt: editedAt, userId: userId, baseURL: baseURL)
+        }
+    }
+
+    private func _updateCachedMessageById(id messageId: String, content: String?, editedAt: Date?, userId: String, baseURL: String) {
+        guard let db = db else { return }
+        let sel = "SELECT message_data, channel_id FROM messages WHERE id = ? AND user_id = ? AND base_url = ?"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sel, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, messageId)
+        bindText(stmt, 2, userId)
+        bindText(stmt, 3, baseURL)
+        guard sqlite3_step(stmt) == SQLITE_ROW else { return }
+        guard let blob = sqlite3_column_blob(stmt, 0) else { return }
+        let size = sqlite3_column_bytes(stmt, 0)
+        let data = Data(bytes: blob, count: Int(size))
+        let channelId = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? ""
+        guard !channelId.isEmpty else { return }
+        guard var message = try? JSONDecoder().decode(Message.self, from: data) else { return }
+        if let content = content { message.content = content }
+        if let editedAt = editedAt { message.edited = ISO8601DateFormatter().string(from: editedAt) }
+        guard let newData = try? JSONEncoder().encode(message) else { return }
+        let upd = "UPDATE messages SET content = ?, edited_at = ?, message_data = ? WHERE id = ? AND channel_id = ? AND user_id = ? AND base_url = ?"
+        var stmt2: OpaquePointer?
+        guard sqlite3_prepare_v2(db, upd, -1, &stmt2, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt2) }
+        bindText(stmt2, 1, message.content)
+        if let ed = message.edited, let d = ISO8601DateFormatter().date(from: ed) {
+            sqlite3_bind_int64(stmt2, 2, Int64(d.timeIntervalSince1970))
+        } else { sqlite3_bind_null(stmt2, 2) }
+        let ptr = UnsafeMutablePointer<UInt8>.allocate(capacity: newData.count)
+        newData.copyBytes(to: ptr, count: newData.count)
+        sqlite3_bind_blob(stmt2, 3, ptr, Int32(newData.count)) { p in p?.deallocate() }
+        bindText(stmt2, 4, messageId)
+        bindText(stmt2, 5, channelId)
+        bindText(stmt2, 6, userId)
+        bindText(stmt2, 7, baseURL)
+        sqlite3_step(stmt2)
+    }
+
     private func _updateCachedMessage(id messageId: String, content: String?, editedAt: Date?, channelId: String, userId: String, baseURL: String) {
         guard let db = db else { return }
         let sel = "SELECT message_data FROM messages WHERE id = ? AND channel_id = ? AND user_id = ? AND base_url = ?"

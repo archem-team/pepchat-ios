@@ -290,17 +290,23 @@ extension ViewState {
             
             if var message = message {
                 message.edited = event.data.edited
-                
-                
                 if let content = event.data.content {
                     message.content = content
                 }
-                
                 messages[event.id] = message
                 if let userId = currentUser?.id, let baseURL = baseURL {
                     let parsedEditedAt = message.edited.flatMap { ISO8601DateFormatter().date(from: $0) }
                     MessageCacheWriter.shared.enqueueUpdateMessage(id: event.id, content: message.content, editedAt: parsedEditedAt, channelId: message.channel, userId: userId, baseURL: baseURL)
                 }
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("MessageContentDidChange"),
+                    object: nil,
+                    userInfo: ["channelId": message.channel, "messageId": event.id]
+                )
+            } else if let userId = currentUser?.id, let baseURL = baseURL {
+                // Message not in ViewState (e.g. user wasn't in channel when another user edited). Still update cache so next open shows the edit.
+                let parsedEditedAt = ISO8601DateFormatter().date(from: event.data.edited)
+                MessageCacheWriter.shared.enqueueUpdateMessageById(id: event.id, content: event.data.content, editedAt: parsedEditedAt, userId: userId, baseURL: baseURL)
             }
             
         case .authenticated:

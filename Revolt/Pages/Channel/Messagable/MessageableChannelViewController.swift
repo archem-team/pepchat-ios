@@ -65,7 +65,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     internal var activeChannelId: String? = nil
     var cachedMessageTotal: Int = 0
     var cachedMessageOffset: Int = 0
-    let cachePageSize: Int = 10
+    /// Initial and pagination page size for cache. Use 50 so the first screen shows a full page (matches typical API limit); user can scroll up to load older messages.
+    let cachePageSize: Int = 50
     var cacheLoadTask: Task<Void, Never>? = nil
 
     // CRITICAL: Add flag to protect against scrolling during data source updates
@@ -980,6 +981,27 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             return abs(velocity.x) > abs(velocity.y) && velocity.x > 0 && translation.x > 0
         }
         return true
+    }
+
+    /// Real-time refresh when a message's content was edited (e.g. by another user). Reloads only the affected row.
+    @objc internal func handleMessageContentDidChange(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let channelId = userInfo["channelId"] as? String,
+              let messageId = userInfo["messageId"] as? String,
+              channelId == viewModel.channel.id else { return }
+        guard let row = localMessages.firstIndex(of: messageId),
+              tableView.dataSource != nil,
+              row < tableView.numberOfRows(inSection: 0) else { return }
+        let messageIdToInvalidate = messageId
+        let rowToReload = row
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            (self.dataSource as? LocalMessagesDataSource)?.invalidateMessageCache(forMessageId: messageIdToInvalidate)
+            let indexPath = IndexPath(row: rowToReload, section: 0)
+            if indexPath.row < self.tableView.numberOfRows(inSection: 0) {
+                self.tableView.reloadRows(at: [indexPath], with: .none)
+            }
+        }
     }
 
     // SUPER FAST: Simplified message change handler

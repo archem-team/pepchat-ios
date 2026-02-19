@@ -113,7 +113,15 @@ final class MessageCacheWriter {
             MessageCacheManager.shared.updateCachedMessage(id: messageId, content: content, editedAt: editedAt, channelId: channelId, userId: userId, baseURL: baseURL)
         }
     }
-    
+
+    /// Updates cache by message id when channel is unknown (e.g. message_update received and message not in ViewState). Use so edits from other users are persisted.
+    func enqueueUpdateMessageById(id messageId: String, content: String?, editedAt: Date?, userId: String, baseURL: String) {
+        enqueue { [weak self] in
+            guard self?.sessionMatches(userId: userId, baseURL: baseURL) == true else { return }
+            MessageCacheManager.shared.updateCachedMessageById(id: messageId, content: content, editedAt: editedAt, userId: userId, baseURL: baseURL)
+        }
+    }
+
     func enqueueDeleteMessage(id messageId: String, channelId: String, userId: String, baseURL: String) {
         enqueue { [weak self] in
             guard self?.sessionMatches(userId: userId, baseURL: baseURL) == true else { return }
