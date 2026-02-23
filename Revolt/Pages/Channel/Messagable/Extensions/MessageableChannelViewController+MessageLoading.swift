@@ -418,13 +418,13 @@ extension MessageableChannelViewController {
                 await loadRegularMessages()
             }
         } else {
-            // No target message ID, load regular messages
-            await loadRegularMessages()
+            // No target message ID, load regular messages (force fetch so cache is refreshed with server messages that arrived while app was closed)
+            await loadRegularMessages(forceFetchFromServer: true)
         }
     }
     
-    // Helper method to load regular messages without a target
-    private func loadRegularMessages() async {
+    /// - Parameter forceFetchFromServer: When true (e.g. initial channel open), always fetch from server and merge with existing (cache). When false, use in-memory messages if present.
+    private func loadRegularMessages(forceFetchFromServer: Bool = false) async {
         // COMPREHENSIVE TARGET MESSAGE PROTECTION
         if targetMessageProtectionActive {
             print("🎯 LOAD_REGULAR: Target message protection active, skipping regular load")
@@ -446,10 +446,15 @@ extension MessageableChannelViewController {
 
         // print("📜 Loading regular messages")
         let channelId = viewModel.channel.id
+        let existingCount = viewModel.viewState.channelMessages[channelId]?.count ?? 0
 
-        // Check if we already have messages in memory
+        // When opening channel (initial load), always fetch from server to get messages that arrived while app was closed; only skip fetch when we have in-memory messages and are not forcing refresh
+        let shouldUseMemoryOnly = !forceFetchFromServer && existingCount > 0
+
+        // Check if we already have messages in memory and we are not forcing a server fetch
         if let existingMessages = viewModel.viewState.channelMessages[channelId],
-            !existingMessages.isEmpty
+            !existingMessages.isEmpty,
+            shouldUseMemoryOnly
         {
             // print("📊 Found \(existingMessages.count) existing messages in memory - using cached data")
 
@@ -526,9 +531,11 @@ extension MessageableChannelViewController {
             // No messages in memory, fetch from server
             // print("🔄 No existing messages, fetching from server")
 
-            // Show skeleton loading view
-            DispatchQueue.main.async {
-                self.showSkeletonView()
+            // Show skeleton only when we have no messages on screen (when force-fetching we already show cache + footer spinner)
+            if existingCount == 0 {
+                DispatchQueue.main.async {
+                    self.showSkeletonView()
+                }
             }
 
             // TIMING: Start measuring API call duration
