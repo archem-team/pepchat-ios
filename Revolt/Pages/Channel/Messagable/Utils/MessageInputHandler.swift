@@ -195,6 +195,12 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                     ).get()
                     print("📝 MESSAGE_INPUT_HANDLER: Successfully sent message to server: \(result)")
                     
+                    // Write sent message to cache so it appears on next session
+                    if let userId = viewModel.viewState.currentUser?.id, let baseURL = viewModel.viewState.baseURL,
+                       let author = viewModel.viewState.users[result.author] ?? viewModel.viewState.currentUser {
+                        MessageCacheWriter.shared.enqueueCacheMessagesAndUsers([result], users: [author], channelId: viewModel.channel.id, userId: userId, baseURL: baseURL, lastMessageId: result.id)
+                    }
+                    
                     // Clear mention data after successful send
                     DispatchQueue.main.async {
                         viewController.messageInputView.clearMentionData()
@@ -309,6 +315,12 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                     ).get()
                     print("📝 MESSAGE_INPUT_HANDLER: Successfully sent message with attachments to server: \(result)")
                     
+                    // Write sent message to cache so it appears on next session
+                    if let userId = viewModel.viewState.currentUser?.id, let baseURL = viewModel.viewState.baseURL,
+                       let author = viewModel.viewState.users[result.author] ?? viewModel.viewState.currentUser {
+                        MessageCacheWriter.shared.enqueueCacheMessagesAndUsers([result], users: [author], channelId: viewModel.channel.id, userId: userId, baseURL: baseURL, lastMessageId: result.id)
+                    }
+                    
                     // Clear mention data after successful send
                     DispatchQueue.main.async {
                         viewController.messageInputView.clearMentionData()
@@ -398,6 +410,9 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                         
                         // Invalidate data source cache for this message so reload shows the new content
                         viewController.invalidateMessageCache(forMessageId: message.id)
+                        if let userId = viewModel.viewState.currentUser?.id, let baseURL = viewModel.viewState.baseURL {
+                            MessageCacheWriter.shared.enqueueUpdateMessage(id: message.id, content: newText, editedAt: Date(), channelId: viewModel.channel.id, userId: userId, baseURL: baseURL)
+                        }
                         // Reload the table view to show the updated message
                         viewController.tableView.reloadData()
                     }

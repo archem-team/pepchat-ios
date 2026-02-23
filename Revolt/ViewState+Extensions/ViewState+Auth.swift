@@ -127,6 +127,9 @@ extension ViewState {
     }
     
     func destroyCache() {
+        // Flush pending cache writes with bounded timeout, then invalidate writer and clear message cache
+        print("📂 [MessageCache] Invalidating writer and clearing cache (sign-out)")
+        MessageCacheWriter.shared.invalidate(flushFirst: true)
         // In future this'll need to delete files too
         path = []
         
@@ -152,7 +155,11 @@ extension ViewState {
         dms.removeAll()
         currentlyTyping.removeAll()
         channelMessages.removeAll()
+        deletedMessageIds.removeAll()
         preloadedChannels.removeAll()
+        
+        discoverMembershipCache = [:]
+        ViewState.clearMembershipCacheFile()
         
         currentUser = nil
         currentSelection = .discover

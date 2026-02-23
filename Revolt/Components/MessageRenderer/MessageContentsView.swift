@@ -73,6 +73,10 @@ class MessageContentsViewModel: ObservableObject, Equatable {
         // If the request was successful, immediately update local state
         if case .success = result {
             await MainActor.run {
+                viewState.deletedMessageIds[channel.id, default: Set()].insert(message.id)
+                if let userId = viewState.currentUser?.id, let baseURL = viewState.baseURL {
+                    MessageCacheWriter.shared.enqueueDeleteMessage(id: message.id, channelId: channel.id, userId: userId, baseURL: baseURL)
+                }
                 // Remove from messages dictionary
                 viewState.messages.removeValue(forKey: message.id)
                 

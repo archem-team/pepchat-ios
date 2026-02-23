@@ -211,26 +211,24 @@ extension MessageableChannelViewController {
                     await self.checkAndFetchMissingReplies()
                 }
             } else {
-                print("🚀 VIEW_DID_APPEAR: No messages found, loading from API IMMEDIATELY")
+                // No messages in memory: use loadInitialMessages() so we get cache check + cache write.
+                // Previously we called loadInitialMessagesImmediate() which bypassed cache entirely.
+                print("🚀 VIEW_DID_APPEAR: No messages found, loading via loadInitialMessages (cache-first + API)")
 
-                // Show skeleton loading view instead of spinner
+                // Show skeleton loading view; loadInitialMessages() will hide it when cache or API result is ready
                 showSkeletonView()
 
-                // Start loading immediately without any delays
                 Task {
-                    print("🚀 IMMEDIATE_LOAD: Starting API call NOW for channel \(channelId)")
-                    await loadInitialMessagesImmediate()
+                    await loadInitialMessages()
 
-                    // Hide skeleton and show messages
+                    // Same follow-up as target-message path: adjust insets and check missing replies
                     DispatchQueue.main.async {
-                        self.hideSkeletonView()
                         self.adjustTableInsetsForMessageCount()
 
-                        // CRITICAL FIX: Check for missing reply content after initial load with delay
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                             Task {
                                 print(
-                                    "🔗 VIEW_APPEARED: Checking for missing replies after delay (second case)"
+                                    "🔗 VIEW_APPEARED: Checking for missing replies after delay (no-target path)"
                                 )
                                 await self.checkAndFetchMissingReplies()
                             }

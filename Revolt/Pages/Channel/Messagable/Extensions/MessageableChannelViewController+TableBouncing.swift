@@ -18,6 +18,8 @@ extension MessageableChannelViewController {
     internal func updateTableViewBouncing() {
         // First check if table view is ready
         guard tableView.window != nil else { return }
+        
+        tableView.layoutIfNeeded()
 
         // FIX (search result scroll freeze): When target message protection is active we still
         // must apply scroll/bounce settings. Previously we returned here and never set
@@ -48,19 +50,20 @@ extension MessageableChannelViewController {
             return
         }
 
-        // Calculate actual content height by summing row heights
-        var actualContentHeight: CGFloat = 0
-        for i in 0..<rowCount {
-            let indexPath = IndexPath(row: i, section: 0)
-            actualContentHeight += tableView.rectForRow(at: indexPath).height
-        }
-
-        // Add header/footer heights only if they are visible
-        if let header = tableView.tableHeaderView, !header.isHidden {
-            actualContentHeight += header.frame.height
-        }
-        if let footer = tableView.tableFooterView, !footer.isHidden {
-            actualContentHeight += footer.frame.height
+        // Use the table's contentSize for actual content height (reliable after layout); fallback to sum of rectForRow if contentSize not yet valid
+        let contentSizeValid = tableView.contentSize.height > 0
+        var actualContentHeight: CGFloat = tableView.contentSize.height
+        if actualContentHeight <= 0 {
+            for i in 0..<rowCount {
+                let indexPath = IndexPath(row: i, section: 0)
+                actualContentHeight += tableView.rectForRow(at: indexPath).height
+            }
+            if let header = tableView.tableHeaderView, !header.isHidden {
+                actualContentHeight += header.frame.height
+            }
+            if let footer = tableView.tableFooterView, !footer.isHidden {
+                actualContentHeight += footer.frame.height
+            }
         }
 
         // Calculate visible height
@@ -69,8 +72,12 @@ extension MessageableChannelViewController {
         // Be very strict - only enable scrolling if content truly exceeds visible area
         let shouldEnableScrolling = actualContentHeight > visibleHeight + 10  // 10px margin
 
+        // Never disable scrolling when we have many rows: contentSize can be read before layout completes (e.g. when re-entering chat), giving a transient low value and leaving scroll stuck disabled.
+        let tooManyRowsToDisable = rowCount >= 5
+
         // Force update scrolling and bouncing settings
-        if shouldEnableScrolling {
+        if shouldEnableScrolling || tooManyRowsToDisable {
+            // Enable scroll when content exceeds visible, or when we have 5+ rows (avoid disabling on transient low contentSize when re-entering chat)
             tableView.isScrollEnabled = true
             tableView.alwaysBounceVertical = true
             tableView.bounces = true
@@ -81,7 +88,8 @@ extension MessageableChannelViewController {
                 tableView.tableHeaderView = loadingHeaderView
             }
 
-        } else {
+        } else if contentSizeValid {
+            // Only disable when we have a reliable measurement and 1–4 rows where "content fits" is unambiguous
             // Completely disable scrolling when content fits
             tableView.isScrollEnabled = false
             tableView.alwaysBounceVertical = false

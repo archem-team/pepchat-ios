@@ -154,6 +154,9 @@ extension ViewState {
         wsCurrentState = .connected
         ws?.currentState = .connected
         ws?.retryCount = 0
+        if let uid = currentUser?.id, let url = baseURL {
+            MessageCacheWriter.shared.setSession(userId: uid, baseURL: url)
+        }
         
         await verifyStateIntegrity()
         

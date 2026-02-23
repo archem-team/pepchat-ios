@@ -26,6 +26,20 @@ extension ViewState {
         return dir.appendingPathComponent("membership_cache.json")
     }
 
+    /// Remove or clear the persisted membership cache file. Call on sign-out so the next account does not see the previous account's Discover membership state.
+    static func clearMembershipCacheFile() {
+        guard let url = membershipCacheURL() else { return }
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: url.path) {
+            do {
+                try fileManager.removeItem(at: url)
+            } catch {
+                // Fallback: overwrite with empty JSON so load returns [:]
+                try? Data("{}".utf8).write(to: url, options: .atomic)
+            }
+        }
+    }
+
     /// Load membership cache synchronously on app launch for instant Discover UI.
     static func loadMembershipCacheSync() -> [String: Bool] {
         guard let url = membershipCacheURL(), FileManager.default.fileExists(atPath: url.path) else {

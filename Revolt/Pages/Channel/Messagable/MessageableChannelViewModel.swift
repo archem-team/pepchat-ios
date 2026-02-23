@@ -255,6 +255,12 @@ extension MessageableChannelViewModel {
         // print("⏱️ TOTAL_DURATION [\(callType)]: \(String(format: "%.2f", totalDuration)) seconds")
         // print("⏱️ BREAKDOWN [\(callType)]: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s")
         
+        // Enqueue cache write via single writer (no Task.detached, no direct MessageCacheManager write)
+        if let userId = viewState.currentUser?.id, let baseURL = viewState.baseURL {
+            let serverLastMessageId: String? = (after != nil || (before == nil && after == nil)) ? result.messages.first?.id : nil
+            MessageCacheWriter.shared.enqueueCacheMessagesAndUsers(result.messages, users: result.users, channelId: channel.id, userId: userId, baseURL: baseURL, lastMessageId: serverLastMessageId)
+        }
+        
         // Return the result for caller to use
         return result
     }

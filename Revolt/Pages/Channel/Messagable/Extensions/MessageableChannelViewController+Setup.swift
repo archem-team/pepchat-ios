@@ -400,6 +400,14 @@ extension MessageableChannelViewController {
             object: nil  // Changed from object: nil to capture all notifications with this name
         )
 
+        // Observe message content edits (e.g. recipient edited message) for real-time UI update
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMessageContentDidChange),
+            name: NSNotification.Name("MessageContentDidChange"),
+            object: nil
+        )
+
         // Add a direct observer to watch the tableView contentSize
         // This helps detect when new content is added
         tableView.addObserver(self, forKeyPath: "contentSize", options: [.new, .old], context: nil)

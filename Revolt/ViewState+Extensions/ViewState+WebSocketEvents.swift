@@ -218,6 +218,12 @@ extension ViewState {
                 }
             }
             
+            // Update message cache so new messages (from this device or others) appear on next session
+            if let userId = currentUser?.id, let baseURL = baseURL,
+               let authorUser = users[m.author] ?? allEventUsers[m.author] ?? m.user {
+                MessageCacheWriter.shared.enqueueCacheMessagesAndUsers([m], users: [authorUser], channelId: m.channel, userId: userId, baseURL: baseURL, lastMessageId: m.id)
+            }
+            
             let channelMessagesAfter = channelMessages[m.channel]?.count ?? 0
             
             // print("📥 VIEWSTATE: Channel messages count - before: \(channelMessagesBefore), after: \(channelMessagesAfter)")
@@ -284,13 +290,23 @@ extension ViewState {
             
             if var message = message {
                 message.edited = event.data.edited
-                
-                
                 if let content = event.data.content {
                     message.content = content
                 }
-                
                 messages[event.id] = message
+                if let userId = currentUser?.id, let baseURL = baseURL {
+                    let parsedEditedAt = message.edited.flatMap { ISO8601DateFormatter().date(from: $0) }
+                    MessageCacheWriter.shared.enqueueUpdateMessage(id: event.id, content: message.content, editedAt: parsedEditedAt, channelId: message.channel, userId: userId, baseURL: baseURL)
+                }
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("MessageContentDidChange"),
+                    object: nil,
+                    userInfo: ["channelId": message.channel, "messageId": event.id]
+                )
+            } else if let userId = currentUser?.id, let baseURL = baseURL {
+                // Message not in ViewState (e.g. user wasn't in channel when another user edited). Still update cache so next open shows the edit.
+                let parsedEditedAt = ISO8601DateFormatter().date(from: event.data.edited)
+                MessageCacheWriter.shared.enqueueUpdateMessageById(id: event.id, content: event.data.content, editedAt: parsedEditedAt, userId: userId, baseURL: baseURL)
             }
             
         case .authenticated:
@@ -315,11 +331,15 @@ extension ViewState {
             currentlyTyping[e.id]?.removeAll(where: { $0 == e.user })
             
         case .message_delete(let e):
+            deletedMessageIds[e.channel, default: Set()].insert(e.id)
             if var channel = channelMessages[e.channel] {
                 if let index = channel.firstIndex(of: e.id) {
                     channel.remove(at: index)
                     channelMessages[e.channel] = channel
                 }
+            }
+            if let userId = currentUser?.id, let baseURL = baseURL {
+                MessageCacheWriter.shared.enqueueDeleteMessage(id: e.id, channelId: e.channel, userId: userId, baseURL: baseURL)
             }
             
         case .channel_ack(let e):
