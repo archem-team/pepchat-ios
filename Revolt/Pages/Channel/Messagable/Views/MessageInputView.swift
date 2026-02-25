@@ -300,8 +300,15 @@ class MessageInputView: UIView {
     
     // Set text in the input field
     func setText(_ text: String?) {
+        // UITextView does not reliably update contentSize when isScrollEnabled is false (e.g. restored draft).
+        textView.isScrollEnabled = true
         textView.text = text
         updateTextViewHeight()
+        // Run again after layout so we get correct height/scroll when the first run had effectiveWidth == 0 (draft restore).
+        DispatchQueue.main.async { [weak self] in
+            self?.updateTextViewHeight()
+        }
+        updateSendButtonState()
         NotificationCenter.default.post(name: UITextView.textDidChangeNotification, object: textView)
     }
     
@@ -622,10 +629,15 @@ class MessageInputView: UIView {
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        
+
         // Make sure text view position is updated whenever layout changes
         updateTextViewPosition()
-        
+
+        // Recompute text view height when we have content (e.g. after draft restore) so multiline height uses real width once laid out
+        if let text = textView.text, !text.isEmpty {
+            updateTextViewHeight()
+        }
+
         // Make sure our bounds height is updated correctly
         invalidateIntrinsicContentSize()
     }
@@ -748,25 +760,44 @@ class MessageInputView: UIView {
     
     // Update text view height based on content
     private func updateTextViewHeight() {
-        let size = textView.sizeThatFits(CGSize(width: textView.frame.width, height: CGFloat.greatestFiniteMagnitude))
+        // When text is set before layout (e.g. draft restore in viewWillAppear), textView.frame.width can be 0,
+        // causing sizeThatFits to return single-line height. Use container width minus siblings (plus 10+40+10, send 10+48+10).
+        let effectiveWidth: CGFloat = {
+            let w = textView.frame.width
+            if w > 0 { return w }
+            let margin: CGFloat = 10 + 40 + 10 + 10 + 48 + 10 // leading, plus, gap, gap, send, trailing
+            return max(0, bounds.width - margin)
+        }()
+        guard effectiveWidth > 0 else { return }
+        let size = textView.sizeThatFits(CGSize(width: effectiveWidth, height: CGFloat.greatestFiniteMagnitude))
         let newHeight = min(max(size.height, minHeight), maxHeight)
         
-        // Enable/disable scrolling based on content height
-        if size.height > maxHeight {
+        // Enable scrolling when content exceeds visible area. Once we're at maxHeight, keep scrolling on so a later layout
+        // pass with a wrong width (e.g. from layoutSubviews) can't turn it off—restored long drafts otherwise lose scrolling.
+        if textViewHeightConstraint.constant >= maxHeight {
             textView.isScrollEnabled = true
         } else {
-            textView.isScrollEnabled = false
+            textView.isScrollEnabled = (newHeight >= maxHeight)
         }
-        
         if textViewHeightConstraint.constant != newHeight {
             textViewHeightConstraint.constant = newHeight
             invalidateIntrinsicContentSize()
-            
+
             // If parent view exists, notify it of layout changes
             if let superview = self.superview {
                 superview.setNeedsLayout()
                 superview.layoutIfNeeded()
             }
+        }
+
+        textView.layoutIfNeeded()
+        // Force UITextView to recompute contentSize for the new frame (it can stay stale when text was set with a smaller frame).
+        if newHeight >= maxHeight {
+            textView.isScrollEnabled = false
+            textView.isScrollEnabled = true
+        }
+        if textView.contentSize.height > textView.bounds.height + 1 {
+            textView.isScrollEnabled = true
         }
     }
     
@@ -776,8 +807,8 @@ class MessageInputView: UIView {
         let text = textView.text ?? ""
         let hasAttachments = pendingAttachmentsManager.hasPendingAttachments
         
-        // Must have either text or attachments
-        guard !text.isEmpty || hasAttachments else { return }
+        // Must have at least one non-whitespace character or attachments
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasAttachments else { return }
         
         if let editingMessage = editingMessage {
             // Handle edit message (attachments not supported for editing)
@@ -848,7 +879,8 @@ class MessageInputView: UIView {
     }
     
     private func updateSendButtonState() {
-        let hasText = !(textView.text?.isEmpty ?? true)
+        let trimmed = textView.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let hasText = !trimmed.isEmpty
         let hasAttachments = pendingAttachmentsManager.hasPendingAttachments
         let canSend = hasText || hasAttachments
         

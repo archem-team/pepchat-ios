@@ -156,6 +156,7 @@ extension ViewState {
         ws?.retryCount = 0
         if let uid = currentUser?.id, let url = baseURL {
             MessageCacheWriter.shared.setSession(userId: uid, baseURL: url)
+            loadDraftsFromUserDefaults(userId: uid, baseURL: url)
         }
         
         await verifyStateIntegrity()

@@ -31,6 +31,14 @@ extension MessageableChannelViewController: UITextViewDelegate {
             
             // Then forward to the original MessageInputView's method
             messageInputView.textViewDidChange(textView)
+            // Draft: debounced save (step 2b)
+            draftSaveWorkItem?.cancel()
+            let channelId = viewModel.channel.id
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.viewModel.viewState.saveDraft(channelId: channelId, text: text)
+            }
+            draftSaveWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: workItem)
         } else {
             // print("DEBUG: This is NOT the messageInputView's textView. Current textView: \(textView)")
             // print("DEBUG: Our messageInputView.textView: \(messageInputView.textView)")

@@ -112,6 +112,11 @@ extension MessageableChannelViewController {
         scrollCheckTimer?.invalidate()
         scrollCheckTimer = nil
 
+        // Draft: save composer text before cleanup (same conditions as above—we did not early return)
+        if let text = messageInputView?.textView.text {
+            viewModel.viewState.saveDraft(channelId: viewModel.channel.id, text: text)
+        }
+
         // CRITICAL FIX: Cleanup MessageInputView references to prevent memory leaks
         messageInputView?.cleanup()
 

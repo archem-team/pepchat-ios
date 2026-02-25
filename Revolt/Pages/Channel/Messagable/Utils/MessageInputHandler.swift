@@ -105,6 +105,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         } else {
             print("Internet Monitor: 😭 😭 😭 😭 😭 Internet not available")
             queueMessage(convertedText)
+            viewModel.viewState.clearDraft(channelId: viewModel.channel.id)
             print("Message sent to Queue: ✅ ✅ ✅ ✅ ✅")
             viewController.showErrorAlert(message: "You're offline. Will send when internet comes back.")
             print("Alert Sent to user: ⚠️ ⚠️ ⚠️ ⚠️ ⚠️")
@@ -147,6 +148,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             
             // Store the temporary message in the messages dictionary for rendering
             viewModel.viewState.messages[messageNonce] = queuedMessage.toTemporaryMessage()
+            viewModel.viewState.clearDraft(channelId: viewModel.channel.id)
             
             print("📝 MESSAGE_INPUT_HANDLER: Sending with \(apiReplies.count) replies")
             
@@ -276,6 +278,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             
             // Store the temporary message in the messages dictionary for rendering
             viewModel.viewState.messages[messageNonce] = queuedMessage.toTemporaryMessage()
+            viewModel.viewState.clearDraft(channelId: viewModel.channel.id)
             
             print("📝 MESSAGE_INPUT_HANDLER: Sending with \(apiReplies.count) replies")
             

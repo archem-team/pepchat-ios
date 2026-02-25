@@ -40,11 +40,12 @@
   - `ViewState+UsersAndDms.swift` - User/DM loading (`processUsers`, `loadUsersForDmBatch`, `processDMs`, etc.)
   - `ViewState+Navigation.swift` - Selection and navigation (`selectServer`, `selectChannel`, `selectDm`, `handleChannelChange`)
   - `ViewState+Unreads.swift` - Unread counts and badges (`getUnreadCountFor`, `cleanupStaleUnreads`, `forceMarkAllAsRead`)
-  - `ViewState+Auth.swift` - Authentication (`signIn`, `signOut`, `destroyCache`). `destroyCache()` flushes `MessageCacheWriter` with bounded timeout then invalidates and clears message cache and in-memory state.
+  - `ViewState+Auth.swift` - Authentication (`signIn`, `signOut`, `destroyCache`). `signOut()` calls `clearAllDraftsForCurrentAccount()` before setting `state = .signedOut`; `destroyCache()` calls it again at the very start, then flushes `MessageCacheWriter` with bounded timeout and clears message cache and in-memory state.
   - `ViewState+ServerCache.swift` - Server cache persistence (`loadServersCacheSync`, `saveServersCacheAsync`)
-  - `ViewState+ReadyEvent.swift` - Ready event processing (`extractNeededDataFromReadyEvent`, `processReadyData`). Binds message cache session via `MessageCacheWriter.shared.setSession(userId:baseURL:)` when connected.
+  - `ViewState+ReadyEvent.swift` - Ready event processing (`extractNeededDataFromReadyEvent`, `processReadyData`). Binds message cache session via `MessageCacheWriter.shared.setSession(userId:baseURL:)` when connected; also loads draft storage via `loadDraftsFromUserDefaults(userId:baseURL:)` so drafts are session-bound.
   - `ViewState+Notifications.swift` - Push tokens and app badge (`updateAppBadgeCount`, `retryUploadNotificationToken`)
   - `ViewState+QueuedMessages.swift` - Message queuing (`queueMessage`, `trySendingQueuedMessages`)
+  - `ViewState+Drafts.swift` - Draft message storage (composer text per channel). Session-bound: loaded in `processReadyData`, cleared in `signOut()` and at the start of `destroyCache()`. Methods: `saveDraft(channelId:text:)`, `loadDraft(channelId:)`, `clearDraft(channelId:)`, `clearAllDraftsForCurrentAccount()`. UserDefaults key `channelDrafts_\(userId)_\(baseURL)`; text-only (no reply/edit context).
   - `ViewState+DMChannel.swift` - DM channel operations (`deactivateDMChannel`, `closeDMGroup`, `removeChannel`)
   - `ViewState+MembershipCache.swift` - Discover server membership cache (`loadMembershipCacheSync`, `saveMembershipCacheAsync`, `updateMembershipCache`) for instant Discover UI on launch and sync across devices via WebSocket
 
@@ -56,6 +57,7 @@
 ### Local Caching
 - **MessageCacheWriter** (`Revolt/1Storage/MessageCacheWriter.swift`): Single serialized, session-scoped cache write path. All cache writes from ViewModel, WebSocket events, MessageInputHandler, RepliesManager, and MessageContentsView go through this writer to prevent races and cross-account leakage. Session is bound via `setSession(userId:baseURL:)` (called from `ViewState+ReadyEvent` when connected); on sign-out, `ViewState.destroyCache()` calls `invalidate(flushFirst: true)` to flush pending writes with a bounded timeout (e.g. 4s) then clear caches. When adding new cache write call sites, use the writer’s `enqueue*` methods rather than writing directly to `MessageCacheManager`.
 - **MessageCacheManager** (`Revolt/1Storage/MessageCacheManager.swift`): SQLite-based local message cache. Handles reads (`loadCachedMessages`, `loadCachedUsers`, `cachedMessageCount`, `hasCachedMessages`) and internal write implementation; all persistent writes are invoked via `MessageCacheWriter`. Schema v2 is multi-tenant (messages, users, channel_info, tombstones keyed by `channel_id` + `user_id` + `base_url`); soft deletes use a tombstones table. Caches messages, users, and channel metadata with automatic cleanup and preloading of frequently accessed channels.
+- **Draft messages** (`ViewState+Drafts.swift`, `ViewState.channelDrafts`): Per-channel composer text only; stored in UserDefaults under `channelDrafts_\(userId)_\(baseURL)`. Not part of the message cache. Session-bound: loaded in `processReadyData` after `setSession`; cleared in `signOut()` and at the start of `destroyCache()`. Saved on leave (viewDidDisappear before cleanup) and via debounced typing; cleared at commit-to-send (offline and online) in `MessageInputHandler`. Restored in `viewWillAppear` when non-empty; when nil/empty the composer is not cleared (preserves same-channel return and return-from-search). See `DraftMessage.md` for full plan and implementation notes.
 
 ### Manager Pattern
 - Complex view controllers (e.g., `MessageableChannelViewController`) use dedicated manager classes:
@@ -81,6 +83,7 @@
 - `FEATURES.md` - Product features summary (onboarding, messaging, servers, settings, etc.).
 - `Sentry.md` - Sentry crash report analysis, root causes, and fix recommendations (scroll/Navigation guards, memory management).
 - `ForceUnwrap.md` - Force unwrap audit (`!`, `as!`, `try!`) by risk level and file location; use when hardening crash-prone paths.
+- `DraftMessage.md` - Message drafts implementation plan and implementation log: composer text saved per channel, session-bound storage, save/restore/clear touchpoints, and what was changed in the codebase (if present in repo; may be gitignored).
 
 ## Build, Test, and Development Commands
 - Open the workspace: `open Revolt.xcworkspace` (recommended for local dev).
@@ -124,3 +127,4 @@
 - When adding new ViewState functionality, place it in the appropriate extension file based on responsibility (e.g., memory-related code in `ViewState+Memory.swift`).
 - **Message cache writes**: Any new code that should persist messages/users to the SQLite cache must use `MessageCacheWriter.shared` (e.g. `enqueueCacheMessagesAndUsers`, `enqueueUpdateMessage`, `enqueueDeleteMessage`), not direct `MessageCacheManager` write APIs, to avoid races and cross-account leakage.
 - **Scroll/Navigation safety**: When modifying `MessageableChannelViewController`, `ScrollPositionManager`, or `MessageableChannelViewController+TargetMessage`, guard scroll operations: ensure `tableView.dataSource != nil` and target row index is valid before `scrollToRow(at:animated:)`. Cancel pending scroll `DispatchWorkItem`s in `viewWillDisappear` to avoid crashes during navigation (see `Sentry.md`).
+- **Draft messages**: Implemented per `DraftMessage.md`. Draft storage lives in `ViewState+Drafts.swift` and `ViewState.channelDrafts`; do not use the message cache for drafts. Clear drafts at commit-to-send (in `MessageInputHandler`), not only after API success; clear on sign-out in both `signOut()` and at the start of `destroyCache()`. When restoring in `viewWillAppear`, if there is no stored draft do not clear the composer (same-channel return and return-from-search). Debounced save uses `draftSaveWorkItem` in `MessageableChannelViewController`; cancel it in `viewWillDisappear`.
