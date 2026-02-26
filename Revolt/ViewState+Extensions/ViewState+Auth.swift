@@ -46,7 +46,7 @@ extension ViewState {
          }*/
         // IMPORTANT: do not destroy the cache/session here. It'll cause the app to crash before it can transition to the welcome screen.
         // The cache is destroyed in RevoltApp.swift:ApplicationSwitcher
-        
+        clearAllDraftsForCurrentAccount()
         state = .signedOut
         return .success(())
     }
@@ -127,6 +127,7 @@ extension ViewState {
     }
     
     func destroyCache() {
+        clearAllDraftsForCurrentAccount()
         // Flush pending cache writes with bounded timeout, then invalidate writer and clear message cache
         print("📂 [MessageCache] Invalidating writer and clearing cache (sign-out)")
         MessageCacheWriter.shared.invalidate(flushFirst: true)

@@ -213,6 +213,8 @@ public class ViewState: ObservableObject {
     @Published var state: ConnectionState = .connecting
     @Published var forceMainScreen: Bool = false
     @Published var queuedMessages: [String: [QueuedMessage]] = [:]
+    /// Per-channel draft text (composer only). Session-bound; loaded in processReadyData, cleared in signOut/destroyCache.
+    var channelDrafts: [String: String] = [:]
     @Published var loadingMessages: Set<String> = Set()
     @Published var currentlyTyping: [String: OrderedSet<String>] = [:]
     @Published var isOnboarding: Bool = false

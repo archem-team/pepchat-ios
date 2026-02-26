@@ -74,6 +74,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
     // Properties moved from managers for compatibility
     var scrollToBottomWorkItem: DispatchWorkItem?
+    /// Debounced draft save (step 2b); cancelled on disappear.
+    var draftSaveWorkItem: DispatchWorkItem?
     var lastManualScrollTime: Date?
     var lastManualScrollUpTime: Date?
     var scrollProtectionTimer: Timer?
@@ -391,6 +393,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
         // Update bouncing behavior in viewWillAppear
         updateTableViewBouncing()
+
+        // Draft: restore stored draft for this channel if any; if no draft, do not clear composer (preserve same-channel return / return-from-search)
+        if let draft = viewModel.viewState.loadDraft(channelId: viewModel.channel.id), !draft.isEmpty {
+            messageInputView.setText(draft)
+        }
     }
 
     /// Performs INSTANT memory cleanup - no delays, no async operations

@@ -292,6 +292,8 @@ extension MessageableChannelViewController {
         // IMMEDIATE: Cancel all pending operations first
         scrollToBottomWorkItem?.cancel()
         scrollToBottomWorkItem = nil
+        draftSaveWorkItem?.cancel()
+        draftSaveWorkItem = nil
         scrollProtectionTimer?.invalidate()
         scrollProtectionTimer = nil
         loadingTask?.cancel()
