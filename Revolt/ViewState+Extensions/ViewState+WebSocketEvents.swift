@@ -169,41 +169,50 @@ extension ViewState {
             messages[m.id] = m
             
             // Check if this message matches a queued message and clean it up
-            if let channelQueuedMessages = queuedMessages[m.channel],
-               let queuedIndex = channelQueuedMessages.firstIndex(where: { queued in
-                   // Match by content, author, and channel for safety
-                   return queued.content == m.content &&
-                          queued.author == m.author &&
-                          queued.channel == m.channel
-               }) {
-                let queuedMessage = channelQueuedMessages[queuedIndex]
-                print("📥 VIEWSTATE: Found matching queued message, cleaning up nonce: \(queuedMessage.nonce)")
-                
-                // Remove the temporary message from messages dictionary (if it exists)
-                messages.removeValue(forKey: queuedMessage.nonce)
-                
-                // For messages without attachments: Replace nonce with real ID in channel messages
-                // For messages with attachments: Add to channel messages for the first time
-                if let nonceMsgIndex = channelMessages[m.channel]?.firstIndex(of: queuedMessage.nonce) {
-                    // This was an optimistic message (no attachments), replace it
-                    channelMessages[m.channel]?[nonceMsgIndex] = m.id
-                    print("📥 VIEWSTATE: Replaced optimistic nonce \(queuedMessage.nonce) with real ID \(m.id)")
-                } else if queuedMessage.hasAttachments {
-                    // This was an attachment message (not shown optimistically), add it now
-                    if channelMessages[m.channel] == nil {
-                        channelMessages[m.channel] = []
+            var matchedQueuedMessage = false
+            if let channelQueuedMessages = queuedMessages[m.channel] {
+                let queuedIndex: Int? = {
+                    if let messageNonce = m.nonce {
+                        return channelQueuedMessages.firstIndex(where: { $0.nonce == messageNonce })
                     }
-                    channelMessages[m.channel]?.append(m.id)
-                    print("📥 VIEWSTATE: Added attachment message \(m.id) to channel messages for first time")
+                    return nil
+                }() ?? channelQueuedMessages.firstIndex(where: { queued in
+                    return queued.content == m.content &&
+                           queued.author == m.author &&
+                           queued.channel == m.channel
+                })
+                if let queuedIndex = queuedIndex {
+                    matchedQueuedMessage = true
+                    let queuedMessage = channelQueuedMessages[queuedIndex]
+                    print("📥 VIEWSTATE: Found matching queued message, cleaning up nonce: \(queuedMessage.nonce)")
+                    
+                    // Remove the temporary message from messages dictionary (if it exists)
+                    messages.removeValue(forKey: queuedMessage.nonce)
+                    
+                    // For messages without attachments: Replace nonce with real ID in channel messages
+                    // For messages with attachments: Add to channel messages for the first time
+                    if let nonceMsgIndex = channelMessages[m.channel]?.firstIndex(of: queuedMessage.nonce) {
+                        // This was an optimistic message (no attachments), replace it
+                        channelMessages[m.channel]?[nonceMsgIndex] = m.id
+                        print("📥 VIEWSTATE: Replaced optimistic nonce \(queuedMessage.nonce) with real ID \(m.id)")
+                    } else if queuedMessage.hasAttachments {
+                        // This was an attachment message (not shown optimistically), add it now
+                        if channelMessages[m.channel] == nil {
+                            channelMessages[m.channel] = []
+                        }
+                        channelMessages[m.channel]?.append(m.id)
+                        print("📥 VIEWSTATE: Added attachment message \(m.id) to channel messages for first time")
+                    }
+                    
+                    // Remove from queued messages for this channel
+                    queuedMessages[m.channel]?.remove(at: queuedIndex)
+                    if queuedMessages[m.channel]?.isEmpty == true {
+                        queuedMessages.removeValue(forKey: m.channel)
+                    }
+                    print("📥 VIEWSTATE: Removed queued message from channel \(m.channel)")
                 }
-                
-                // Remove from queued messages for this channel
-                queuedMessages[m.channel]?.remove(at: queuedIndex)
-                if queuedMessages[m.channel]?.isEmpty == true {
-                    queuedMessages.removeValue(forKey: m.channel)
-                }
-                print("📥 VIEWSTATE: Removed queued message from channel \(m.channel)")
-            } else {
+            }
+            if !matchedQueuedMessage {
                 // Check channel messages array
                 if channelMessages[m.channel] == nil {
                     // print("📥 VIEWSTATE: Creating new channelMessages array for channel \(m.channel)")
@@ -237,7 +246,11 @@ extension ViewState {
             // DISABLED: MEMORY MANAGEMENT: Proactive cleanup
             // checkAndCleanupIfNeeded() - Disabled to prevent black messages
             
-            NotificationCenter.default.post(name: NSNotification.Name("NewMessagesReceived"), object: nil)
+            NotificationCenter.default.post(
+                name: NSNotification.Name("NewMessagesReceived"),
+                object: nil,
+                userInfo: ["channelId": m.channel]
+            )
             
             if let index = dms.firstIndex(where: { $0.id == m.channel }) {
                 let dmChannel = dms.remove(at: index)
@@ -255,19 +268,27 @@ extension ViewState {
                 }
 
                 dms.insert(updatedDM, at: 0)
-                
-                // FIX: Ensure DM list state is maintained
-                if isDmListInitialized && currentSelection == .dms {
-                    // When a DM moves to top, ensure we maintain the loaded batches
-                    // because this change might affect the order
-                    let channelIdIndex = allDmChannelIds.firstIndex(of: m.channel)
-                    if let channelIdIndex = channelIdIndex {
-                        allDmChannelIds.remove(at: channelIdIndex)
-                        allDmChannelIds.insert(m.channel, at: 0)
-                    }
+            }
+
+            // Always keep canonical DM order (most recent at top), even when user is not on DMs tab,
+            // so that when they open DMs the list is correct and does not revert on scroll.
+            let isDM: Bool = {
+                if let ch = channels[m.channel] {
+                    if case .dm_channel = ch { return true }
+                    if case .group_dm_channel = ch { return true }
+                }
+                return false
+            }()
+            if isDM {
+                if let idx = allDmChannelIds.firstIndex(of: m.channel) {
+                    allDmChannelIds.remove(at: idx)
+                    allDmChannelIds.insert(m.channel, at: 0)
+                } else {
+                    // New DM (e.g. from another device) or not yet in list
+                    allDmChannelIds.insert(m.channel, at: 0)
                 }
             }
-            
+
             if var existing = channels[m.channel] {
                 switch existing {
                 case .dm_channel(var c):
@@ -281,6 +302,13 @@ extension ViewState {
                     channels[m.channel] = .text_channel(c)
                 default:
                     break
+                }
+            }
+            if var existing = allEventChannels[m.channel], existing.server != nil {
+                if case .text_channel(var c) = existing {
+                    c.last_message_id = m.id
+                    allEventChannels[m.channel] = .text_channel(c)
+                    saveChannelCacheAsync()
                 }
             }
             
@@ -416,24 +444,44 @@ extension ViewState {
         case .user_update(let e):
             updateUser(with: e)
         case .server_create(let e):
-            self.servers[e.id] = e.server
-            self.updateMembershipCache(serverId: e.id, isMember: true)
             for channel in e.channels {
+                self.allEventChannels[channel.id] = channel
                 self.channels[channel.id] = channel
                 self.channelMessages[channel.id] = []
             }
-            
-        case .server_delete(let e):
-            self.updateMembershipCache(serverId: e.id, isMember: false)
-            if case .server(let string) = currentSelection {
-                if string == e.id {
-                    self.path = .init()
-                    self.selectDms()
+            var server = e.server
+            for channel in e.channels {
+                if !server.channels.contains(channel.id) {
+                    server.channels.append(channel.id)
                 }
             }
+            self.servers[e.id] = server
+            self.updateMembershipCache(serverId: e.id, isMember: true)
+            self.saveChannelCacheAsync()
+            self.saveServersCacheAsync()
             
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
-                self.servers.removeValue(forKey: e.id)
+        case .server_delete(let e):
+            if let server = self.servers[e.id] {
+                for channelId in server.channels {
+                    self.channels.removeValue(forKey: channelId)
+                    self.channelMessages.removeValue(forKey: channelId)
+                    self.unreads.removeValue(forKey: channelId)
+                    self.preloadedChannels.remove(channelId)
+                    self.allEventChannels.removeValue(forKey: channelId)
+                }
+                self.loadedServerChannels.remove(e.id)
+                if case .channel(let id) = self.currentChannel, server.channels.contains(id) {
+                    self.path = .init()
+                    self.currentChannel = .home
+                }
+            }
+            self.servers.removeValue(forKey: e.id)
+            self.updateMembershipCache(serverId: e.id, isMember: false)
+            self.saveChannelCacheAsync()
+            self.saveServersCacheAsync()
+            if case .server(let string) = currentSelection, string == e.id {
+                self.path = .init()
+                self.selectDms()
             }
             
             
@@ -488,7 +536,25 @@ extension ViewState {
                     t.banner = nil
                 }
                 
+                let oldChannelIds = Set(self.servers[e.id]?.channels ?? [])
+                let newChannelIds = Set(t.channels)
+                let removedIds = oldChannelIds.subtracting(newChannelIds)
+                for id in removedIds {
+                    self.channels.removeValue(forKey: id)
+                    self.channelMessages.removeValue(forKey: id)
+                    self.unreads.removeValue(forKey: id)
+                    self.preloadedChannels.remove(id)
+                    self.allEventChannels.removeValue(forKey: id)
+                }
+                if case .channel(let id) = self.currentChannel, removedIds.contains(id) {
+                    self.path = .init()
+                    self.currentChannel = .home
+                }
                 self.servers[e.id] = t
+                if e.data?.channels != nil || e.data?.categories != nil {
+                    self.saveChannelCacheAsync()
+                    self.saveServersCacheAsync()
+                }
             }
             
         case .channel_create(let channel):
@@ -524,35 +590,31 @@ extension ViewState {
                     // print("🔄 LAZY_CHANNEL: Stored new text channel \(channel.id) for lazy loading")
                 }
                 
-                // Update server's channel list
-                if let serverId = channel.server {
-                    self.servers[serverId]?.channels.append(channel.id)
+                // Update server's channel list (duplicate guard §0.37)
+                if let serverId = channel.server, var server = self.servers[serverId], !server.channels.contains(channel.id) {
+                    server.channels.append(channel.id)
+                    self.servers[serverId] = server
                 }
                 
             case .voice_channel(let voiceChannel):
                 // Voice channels: only load if server is currently active
                 if case .server(let currentServerId) = currentSelection,
                    currentServerId == voiceChannel.server {
-                    // Load immediately if this server is active
                     self.channels[channel.id] = channel
-                    // print("📥 VIEWSTATE: Added new voice channel \(channel.id) immediately (server active)")
-                } else {
-                    // Just store for lazy loading later
-                    // print("🔄 LAZY_CHANNEL: Stored new voice channel \(channel.id) for lazy loading")
                 }
-                
-                // Update server's channel list
-                if let serverId = channel.server {
-                    self.servers[serverId]?.channels.append(channel.id)
+                if let serverId = channel.server, var server = self.servers[serverId], !server.channels.contains(channel.id) {
+                    server.channels.append(channel.id)
+                    self.servers[serverId] = server
                 }
                 
             default:
-                // Other channel types - store in event channels
-                print("📥 VIEWSTATE: Stored unknown channel type \(channel.id)")
+                break
             }
             
-            // Update app badge count when new channel is created
-            // This ensures unread messages in the new channel are counted
+            if channel.server != nil {
+                self.saveChannelCacheAsync()
+                self.saveServersCacheAsync()
+            }
             updateAppBadgeCount()
             
         case .channel_update(let e):
@@ -689,7 +751,20 @@ extension ViewState {
                     
                     self.channels[e.id] = .text_channel(t)
                     
+                } else if case .voice_channel(var v) = channel {
+                    if let name = e.data?.name { v.name = name }
+                    if let icon = e.data?.icon { v.icon = icon }
+                    if let description = e.data?.description { v.description = description }
+                    if let nsfw = e.data?.nsfw { v.nsfw = nsfw }
+                    self.channels[e.id] = .voice_channel(v)
                 }
+            }
+            if let ch = self.channels[e.id], ch.server != nil {
+                self.allEventChannels[e.id] = ch
+            }
+            if self.allEventChannels[e.id] != nil || self.channels[e.id]?.server != nil {
+                self.saveChannelCacheAsync()
+                self.saveServersCacheAsync()
             }
             
         case .channel_delete(let e):

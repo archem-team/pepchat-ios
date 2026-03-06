@@ -325,6 +325,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             name: NSNotification.Name("ChannelSearchClosing"),
             object: nil
         )
+
+        // Observer so table refreshes when a message is deleted from another UI (e.g. MessageContentsView)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMessageDeletedLocally(_:)),
+            name: NSNotification.Name("MessageDeletedLocally"),
+            object: nil
+        )
+    }
+
+    @objc private func handleMessageDeletedLocally(_ notification: Notification) {
+        guard let channelId = notification.userInfo?["channelId"] as? String,
+              channelId == viewModel.channel.id else { return }
+        refreshMessagesAfterLocalDelete()
     }
 
     @objc internal func newMessageButtonTapped() {
@@ -2400,6 +2414,17 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     }
 
     // Handle internal peptide.chat links (moved to extension)
+
+    /// Call after a message is deleted locally (API success) so the table view updates immediately.
+    /// Syncs localMessages from ViewState, updates the data source, and reloads the table.
+    internal func refreshMessagesAfterLocalDelete() {
+        syncLocalMessagesWithViewState()
+        if let localDataSource = dataSource as? LocalMessagesDataSource {
+            localDataSource.updateMessages(localMessages)
+        }
+        tableView.reloadData()
+        updateTableViewBouncing()
+    }
 
     // Sync localMessages with viewState to ensure consistency
     internal func syncLocalMessagesWithViewState() {
