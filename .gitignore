@@ -17,16 +17,8 @@ Scrolling.md
 LongMessage.md
 MessageLink.md
 EditMessage.md
-Sentry.md
-ForceUnwrap.md
 DiscoverServerCache.md
 MessageCache.md
-DraftMessage.md
-Channel.md
-ChatOrdering.md
-UIKitImplementation.md
-docs/ProfilePicture.md
-docs/DeleteMessagesIssue.md
 
 # Project documentation (optional local/private)
 .docs/
