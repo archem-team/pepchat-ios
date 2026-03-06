@@ -259,6 +259,13 @@ public class ViewState: ObservableObject {
     
     // MEMORY MANAGEMENT: Add debouncing for UserDefaults saves
     internal var saveWorkItems: [String: DispatchWorkItem] = [:]
+    /// Serialized channel cache save; cancelled on signOut/destroyCache (§0.3, Channel.md).
+    var channelCacheSaveWorkItem: DispatchWorkItem?
+    /// Session token for channel cache writes; invalidated on logout so in-flight saves are skipped (§0.3).
+    var channelCacheSessionToken: (userId: String, baseURL: String)? {
+        guard let uid = currentUser?.id, let base = baseURL else { return nil }
+        return (uid, base)
+    }
     private let saveDebounceInterval: TimeInterval = 2.0 // Save after 2 seconds of no changes
     private let cleanupTriggeredAt = 800 // Start cleanup when 80% full (legacy, not used)
     internal let maxChannelsInMemory = 2000 // Maximum channels to keep in memory (increased to load all servers)
@@ -614,6 +621,18 @@ public class ViewState: ObservableObject {
             self.applyServerOrdering()
         }
         
+        // Load channel cache at launch so cached server channels show before Ready (and when offline). Filter by current servers (§0.6); Ready will replace authoritatively.
+        if let userId = self.currentUser?.id, let base = self.baseURL, !self.servers.isEmpty {
+            let cached = ViewState.loadChannelCacheSync(userId: userId, baseURL: base)
+            for (serverId, channelList) in cached {
+                guard self.servers[serverId] != nil else { continue }
+                let allowedIds = Set(self.servers[serverId]?.channels ?? [])
+                for ch in channelList where allowedIds.contains(ch.id) {
+                    self.allEventChannels[ch.id] = ch
+                }
+            }
+        }
+        
         self.baseEmojis = loadEmojis()
         
         // Load any pending notification token
@@ -864,29 +883,38 @@ public class ViewState: ObservableObject {
     }
     
     
-    /// INSTANT cleanup of unused users - NO DELAYS
+    /// Max message IDs to scan per channel when building usersToKeep (avoids memory spike with large cached state).
+    private static let cleanupUnusedUsersMessageCapPerChannel = 300
+
+    /// INSTANT cleanup of unused users - NO DELAYS. Scopes work to current server + caps message scan to avoid RESOURCE_TYPE_MEMORY crash when offline/cached.
     @MainActor
     internal func cleanupUnusedUsersInstant(excludingChannelId: String) {
         let startTime = CFAbsoluteTimeGetCurrent()
-        
+
         var usersToKeep = Set<String>()
-        
-        // Always keep current user
+
         if let currentUserId = currentUser?.id {
             usersToKeep.insert(currentUserId)
         }
-        
-        // Keep users from all active channels (except the one we're leaving)
-        for (otherChannelId, messageIds) in channelMessages {
+
+        // Only consider channels relevant to current context to avoid iterating all cached channels (memory spike when offline).
+        let channelIdsToConsider: Set<String>
+        if case .server(let serverId) = currentSelection, let server = servers[serverId] {
+            channelIdsToConsider = Set(server.channels).union([excludingChannelId])
+        } else {
+            channelIdsToConsider = Set(channelMessages.keys)
+        }
+
+        for otherChannelId in channelIdsToConsider {
             if otherChannelId == excludingChannelId { continue }
-            
-            // Keep users from channel recipients (for DMs)
+            guard let messageIds = channelMessages[otherChannelId], !messageIds.isEmpty else { continue }
+
             if let channel = channels[otherChannelId] {
                 usersToKeep.formUnion(channel.recipients)
             }
-            
-            // Keep message authors and mentioned users
-            for messageId in messageIds {
+
+            let cappedIds = messageIds.suffix(Self.cleanupUnusedUsersMessageCapPerChannel)
+            for messageId in cappedIds {
                 if let message = messages[messageId] {
                     usersToKeep.insert(message.author)
                     if let mentions = message.mentions {
@@ -895,39 +923,34 @@ public class ViewState: ObservableObject {
                 }
             }
         }
-        
-        // Keep users from servers (owners and members)
+
         for server in servers.values {
             usersToKeep.insert(server.owner)
             if let serverMembers = members[server.id] {
                 usersToKeep.formUnion(serverMembers.keys)
             }
         }
-        
-        // Keep users from DM list
+
         for dm in dms {
             usersToKeep.formUnion(dm.recipients)
         }
-        
-        // IMMEDIATE: Remove users that are no longer needed
+
         let initialUserCount = users.count
         let usersToRemove = users.keys.filter { userId in
             !usersToKeep.contains(userId) && userId != currentUser?.id
         }
-        
+
         for userId in usersToRemove {
             users.removeValue(forKey: userId)
-            
-            // Also remove from members if they exist
             for serverId in members.keys {
                 members[serverId]?.removeValue(forKey: userId)
             }
         }
-        
+
         let finalUserCount = users.count
         let endTime = CFAbsoluteTimeGetCurrent()
         let duration = (endTime - startTime) * 1000
-        
+
         print("⚡ USER_INSTANT_CLEANUP: Removed \(usersToRemove.count) users in \(String(format: "%.2f", duration))ms (\(initialUserCount) -> \(finalUserCount))")
     }
     
@@ -1747,16 +1770,34 @@ public class ViewState: ObservableObject {
 
     
     func deleteChannel(channelId id: String) {
+        // Channel.md §9.7: First resolve serverId and category; then sync-remove from server graph, allEventChannels, channelMessages, unreads, preloadedChannels; enqueue save; delayed block for channels/dms/path only.
+        let channelObj = allEventChannels[id] ?? channels[id]
+        let serverId = channelObj?.server
+        if let serverId = serverId, var server = servers[serverId] {
+            server.channels.removeAll { $0 == id }
+            if var cats = server.categories {
+                for i in cats.indices {
+                    cats[i].channels.removeAll { $0 == id }
+                }
+                server.categories = cats
+            }
+            servers[serverId] = server
+        }
+        allEventChannels.removeValue(forKey: id)
+        channelMessages.removeValue(forKey: id)
+        unreads.removeValue(forKey: id)
+        preloadedChannels.remove(id)
+        saveChannelCacheAsync()
+        saveServersCacheAsync()
+        
         if case .channel(let channelId) = currentChannel, channelId == id {
             DispatchQueue.main.asyncAfter(deadline: .now()) {
                 self.path = .init()
             }
         }
-        
-        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
             self.channels.removeValue(forKey: id)
-            self.dms = self.dms.filter{$0.id != id}
+            self.dms = self.dms.filter { $0.id != id }
         }
     }
     
@@ -1811,14 +1852,15 @@ public class ViewState: ObservableObject {
         let response = try! await http.joinServer(code: code).get()
         
         for channel in response.channels {
+            allEventChannels[channel.id] = channel
             channels[channel.id] = channel
             channelMessages[channel.id] = []
         }
-        
         servers[response.server.id] = response.server
+        saveChannelCacheAsync()
+        saveServersCacheAsync()
         
         // Update app badge count after joining a server
-        // This ensures unread messages in the new channels are counted
         await MainActor.run {
             updateAppBadgeCount()
         }

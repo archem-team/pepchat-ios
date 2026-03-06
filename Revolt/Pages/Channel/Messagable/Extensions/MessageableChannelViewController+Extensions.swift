@@ -150,6 +150,15 @@ extension MessageableChannelViewController {
         let cache = ImageCache.default
         cache.clearMemoryCache()
 
+        let initialUserCount = self.viewModel.viewState.users.count
+        // Skip heavy user iteration when already very high to avoid OOM on leave (offline cached channel); see Channel.md §12.2
+        guard initialUserCount <= 2000 else {
+            let endTime = CFAbsoluteTimeGetCurrent()
+            let duration = (endTime - startTime) * 1000
+            print("⚡ FORCE_IMMEDIATE_CLEANUP: Skipped user cleanup (users=\(initialUserCount) > 2000) in \(String(format: "%.2f", duration))ms")
+            return
+        }
+
         // IMMEDIATE: Aggressive user cleanup - NO Task, NO async
         let channelId = self.viewModel.channel.id
         let isDM = self.viewModel.channel.isDM
@@ -158,7 +167,6 @@ extension MessageableChannelViewController {
         print(
             "👥 INSTANT_USER_CLEANUP: Starting for channel \(channelId) - DM: \(isDM), GroupDM: \(isGroupDM)"
         )
-        let initialUserCount = self.viewModel.viewState.users.count
 
         // Collect all user IDs that should be kept
         var usersToKeep = Set<String>()
@@ -248,10 +256,12 @@ extension MessageableChannelViewController {
         self.tableView.dataSource = nil
         self.tableView.delegate = nil
 
-        // 2. IMMEDIATE: Force ViewState cleanup synchronously (no Task, no async)
-        viewModel.viewState.cleanupChannelFromMemory(
-            channelId: channelId, preserveForNavigation: false)
-        viewModel.viewState.forceMemoryCleanup()
+        // 2. Defer ViewState cleanup to next run loop to avoid blocking teardown (watchdog/OOM on back)
+        let state = viewModel.viewState
+        DispatchQueue.main.async { [state] in
+            state.cleanupChannelFromMemory(channelId: channelId, preserveForNavigation: false)
+            state.forceMemoryCleanup()
+        }
 
         // 3. IMMEDIATE: Aggressive image cache cleanup
         ImageCache.default.clearMemoryCache()

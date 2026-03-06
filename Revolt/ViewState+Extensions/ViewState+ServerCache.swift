@@ -34,6 +34,12 @@ extension ViewState {
         return dir.appendingPathComponent("servers_cache.json")
     }
     
+    /// Removes the servers cache file. Call at start of signOut/destroyCache so server topology does not leak (§0.20, Channel.md §9.12).
+    static func clearServersCacheFile() {
+        guard let url = serversCacheURL() else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+    
     // Load the cache when app boots up
     static func loadServersCacheSync() -> OrderedDictionary <String, Server> {
         guard let url = serversCacheURL(), FileManager.default.fileExists(atPath: url.path) else {

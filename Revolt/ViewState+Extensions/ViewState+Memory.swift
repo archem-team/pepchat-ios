@@ -403,33 +403,28 @@ extension ViewState {
     func cleanupChannelFromMemory(channelId: String, preserveForNavigation: Bool = false) {
         let startTime = CFAbsoluteTimeGetCurrent()
         print("⚡ VIEWSTATE_INSTANT_CLEANUP: Starting IMMEDIATE cleanup for channel \(channelId)")
-        
+
         let initialMessageCount = messages.count
         let initialUserCount = users.count
         let channelMessageCount = channelMessages[channelId]?.count ?? 0
-        
-        // 1. IMMEDIATE: Clear channel messages list
+
+        // 1. Capture message IDs for this channel then clear list (avoids iterating entire messages dict = memory spike)
+        let messageIdsToRemove = channelMessages[channelId] ?? []
         channelMessages.removeValue(forKey: channelId)
-        
-        // 2. IMMEDIATE: Remove all message objects for this channel
-        let messagesToRemove = messages.keys.filter { messageId in
-            if let message = messages[messageId] {
-                return message.channel == channelId
-            }
-            return false
-        }
-        
-        for messageId in messagesToRemove {
+
+        // 2. IMMEDIATE: Remove message objects for this channel only (O(channel size), not O(total messages))
+        for messageId in messageIdsToRemove {
             messages.removeValue(forKey: messageId)
         }
-        
+
         // 3. IMMEDIATE: Clear all related data
         currentlyTyping.removeValue(forKey: channelId)
         preloadedChannels.remove(channelId)
         atTopOfChannel.remove(channelId)
-        
-        // 4. IMMEDIATE: Clean up users if not preserving for navigation
-        if !preserveForNavigation {
+
+        // 4. Skip heavy user cleanup when already memory-heavy to avoid OOM (offline/cached scroll scenario).
+        // Also skip when user count is very high: cleanupUnusedUsersInstant allocates large temporaries and can trigger jetsam (Channel.md §12.2).
+        if !preserveForNavigation, initialMessageCount <= 1500, initialUserCount <= 2000 {
             cleanupUnusedUsersInstant(excludingChannelId: channelId)
         }
         
@@ -543,8 +538,8 @@ extension ViewState {
             }
         }
         
-        // 2. IMMEDIATE: Enforce user limits
-        if users.count > maxUsersInMemory {
+        // 2. IMMEDIATE: Enforce user limits (skip when already very high to avoid OOM spike from cleanupUnusedUsersInstant; see Channel.md §12.2)
+        if users.count > maxUsersInMemory, users.count <= 2000 {
             cleanupUnusedUsersInstant(excludingChannelId: "")
         }
         

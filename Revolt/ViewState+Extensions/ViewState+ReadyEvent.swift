@@ -164,6 +164,35 @@ extension ViewState {
         processReadySpan?.finish()
         launchTransaction?.finish()
         
+        // Channel.md §7.1: At end of processReadyData – authoritative prune, validate currentChannel, reset loadedServerChannels, save caches
+        let authoritativeServerChannelIds = Set(servers.values.flatMap { $0.channels })
+        var toPrune: [String] = []
+        for id in channels.keys {
+            if allEventChannels[id]?.server != nil && !authoritativeServerChannelIds.contains(id) {
+                toPrune.append(id)
+            }
+        }
+        for id in toPrune {
+            channels.removeValue(forKey: id)
+            channelMessages.removeValue(forKey: id)
+            unreads.removeValue(forKey: id)
+            preloadedChannels.remove(id)
+        }
+        if case .channel(let channelId) = currentChannel, !authoritativeServerChannelIds.contains(channelId) && allEventChannels[channelId] == nil {
+            path = []
+            if case .server(let serverId) = currentSelection, let first = servers[serverId]?.channels.first {
+                currentChannel = .channel(first)
+            } else {
+                currentChannel = .home
+            }
+        }
+        loadedServerChannels.removeAll()
+        if case .server(let serverId) = currentSelection {
+            loadServerChannels(serverId: serverId)
+        }
+        saveChannelCacheAsync()
+        saveServersCacheAsync()
+        
         // Check for stale messages
         for channel in channels.values {
             if let last_message_id = channel.last_message_id,

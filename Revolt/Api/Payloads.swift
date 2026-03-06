@@ -39,6 +39,7 @@ struct SendMessage: Encodable {
     var replies: [ApiReply]  // Array of replies to the message
     var content: String       // Content of the message
     var attachments: [String] // Array of attachment IDs
+    var nonce: String         // Unique id for server-side deduplication
 }
 
 /// Payload structure for reporting content.
