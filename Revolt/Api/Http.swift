@@ -267,7 +267,7 @@ struct HTTPClient {
             }
         }
         
-        return await req(method: .post, route: "/channels/\(channel)/messages", parameters: SendMessage(replies: replies, content: content, attachments: attachmentIds))
+        return await req(method: .post, route: "/channels/\(channel)/messages", parameters: SendMessage(replies: replies, content: content, attachments: attachmentIds, nonce: nonce))
     }
     
     

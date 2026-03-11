@@ -31,6 +31,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
     weak var viewController: MessageableChannelViewController?
     private let viewModel: MessageableChannelViewModel
     private let repliesManager: RepliesManager
+    private var isSendingMessage = false
     
     init(viewModel: MessageableChannelViewModel, viewController: MessageableChannelViewController, repliesManager: RepliesManager) {
         self.viewModel = viewModel
@@ -91,6 +92,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
     
     func sendMessage(_ text: String) {
         guard let viewController = viewController else { return }
+        guard !isSendingMessage else { return }
         
         // Convert mentions from display format (@username) to server format (<@USER_ID>)
         let convertedText = viewController.messageInputView.convertTextForSending()
@@ -118,6 +120,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         } else {
             print("Web Socket: ❤️ ❤️ ❤️ ❤️ ❤️ Websocket is connected")
         }
+        isSendingMessage = true
         // Create a queued message immediately for local display (no attachments)
         if let currentUser = viewModel.viewState.currentUser {
             let messageNonce = UUID().uuidString
@@ -213,6 +216,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                         print("📝 MESSAGE_INPUT_HANDLER: Posting MessagesDidChange notification after API success")
                         NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: nil)
                         // Note: No additional scroll here - handleNewMessageSent() already handled it
+                        self.isSendingMessage = false
                     }
                 } catch {
                     print("❌ MESSAGE_INPUT_HANDLER: Error sending message: \(error)")
@@ -225,6 +229,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                         } else {
                             viewController.showErrorAlert(message: "Failed to send message: \(error.localizedDescription)")
                         }
+                        self.isSendingMessage = false
                     }
                 }
             }
@@ -233,11 +238,13 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             repliesManager.clearReplies()
         } else {
             print("⚠️ MESSAGE_INPUT_HANDLER: currentUser is nil, can't send message")
+            isSendingMessage = false
         }
     }
     
     func sendMessageWithAttachments(_ text: String, attachments: [(Data, String)]) {
         guard let viewController = viewController else { return }
+        guard !isSendingMessage else { return }
         
         // Convert mentions from display format (@username) to server format (<@USER_ID>)
         let convertedText = viewController.messageInputView.convertTextForSending()
@@ -247,6 +254,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         
         checkForCharacterLimit(text: convertedText)
         
+        isSendingMessage = true
         // For messages with attachments, show optimistic update with upload progress
         if let currentUser = viewModel.viewState.currentUser {
             let messageNonce = UUID().uuidString
@@ -346,6 +354,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                         }
                         
                         print("📝 MESSAGE_INPUT_HANDLER: Upload complete handler finished")
+                        self.isSendingMessage = false
                     }
                 } catch {
                     print("❌ MESSAGE_INPUT_HANDLER: Error sending message with attachments: \(error)")
@@ -367,6 +376,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                             print("❌ MESSAGE_INPUT_HANDLER: messageInputView is nil on error!")
                         }
                         print("📝 MESSAGE_INPUT_HANDLER: Error handler finished")
+                        self.isSendingMessage = false
                     }
                 }
             }
@@ -375,6 +385,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             repliesManager.clearReplies()
         } else {
             print("⚠️ MESSAGE_INPUT_HANDLER: currentUser is nil, can't send message")
+            isSendingMessage = false
         }
     }
     

@@ -77,14 +77,16 @@ class MessageContentsViewModel: ObservableObject, Equatable {
                 if let userId = viewState.currentUser?.id, let baseURL = viewState.baseURL {
                     MessageCacheWriter.shared.enqueueDeleteMessage(id: message.id, channelId: channel.id, userId: userId, baseURL: baseURL)
                 }
-                // Remove from messages dictionary
                 viewState.messages.removeValue(forKey: message.id)
-                
-                // Remove from channel messages array
                 if var channelMessages = viewState.channelMessages[channel.id] {
                     channelMessages.removeAll { $0 == message.id }
                     viewState.channelMessages[channel.id] = channelMessages
                 }
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("MessageDeletedLocally"),
+                    object: nil,
+                    userInfo: ["channelId": channel.id]
+                )
             }
         }
         

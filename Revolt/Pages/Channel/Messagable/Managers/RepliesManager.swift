@@ -373,21 +373,15 @@ class RepliesManager: NSObject {
                         if let userId = viewState.currentUser?.id, let baseURL = viewState.baseURL {
                             MessageCacheWriter.shared.enqueueDeleteMessage(id: message.id, channelId: channelId, userId: userId, baseURL: baseURL)
                         }
-                        // Update local state immediately
-                        Task {
-                            await viewState.messages.removeValue(forKey: message.id)
-                        
-                        // Remove from channel messages array
-                            if var channelMessages = await viewState.channelMessages[channelId] {
+                        viewState.messages.removeValue(forKey: message.id)
+                        if var channelMessages = viewState.channelMessages[channelId] {
                             channelMessages.removeAll { $0 == message.id }
-                                await viewState.channelMessages[channelId] = channelMessages
-                            }
+                            viewState.channelMessages[channelId] = channelMessages
                         }
-                        
-                        // Show success message
+                        viewController.refreshMessagesAfterLocalDelete()
                         print("Deleted")
                         print("✅ Local state updated after delete")
-                        
+//                        
                     case .failure(let error):
                         print("❌ Failed to delete message: \(error)")
                         print("NOT Deleted")

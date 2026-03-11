@@ -87,14 +87,14 @@ struct AddServerSheet: View {
             
             switch response {
                 case .success(let serverChannel):
-                let server = serverChannel.server
-                    self.viewState.servers[server.id] = server
-                    
-                    // Add the server's channels to ViewState's channels collection
+                    let server = serverChannel.server
                     for channel in serverChannel.channels {
+                        self.viewState.allEventChannels[channel.id] = channel
                         self.viewState.channels[channel.id] = channel
                     }
-                    
+                    self.viewState.servers[server.id] = server
+                    self.viewState.saveChannelCacheAsync()
+                    self.viewState.saveServersCacheAsync()
                     self.isPresented.toggle()
                 
                     withAnimation {

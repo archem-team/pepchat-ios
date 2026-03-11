@@ -754,8 +754,16 @@ struct UserSheet: View {
         .task {
             if let profile = user.profile {
                 self.profile = profile
+                print("[UserSheet] Profile (from cache) for user \(user.id): \(profile)")
             } else {
-                profile = try? await viewState.http.fetchProfile(user: user.id).get()
+                let result = await viewState.http.fetchProfile(user: user.id)
+                switch result {
+                case .success(let fetchedProfile):
+                    self.profile = fetchedProfile
+                    print("[UserSheet] Profile API response for user \(user.id): \(fetchedProfile)")
+                case .failure(let error):
+                    print("[UserSheet] Profile API error for user \(user.id): \(error)")
+                }
             }
         }
         .task {

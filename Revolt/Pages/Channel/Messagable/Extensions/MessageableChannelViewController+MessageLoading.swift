@@ -619,6 +619,18 @@ extension MessageableChannelViewController {
                     // Merge with existing (e.g. from cache): union IDs, dedupe, sort by canonical order
                     let existingIds = await MainActor.run { self.viewModel.viewState.channelMessages[channelId] ?? [] }
                     let apiIds = fetchResult.messages.map { $0.id }
+                    // Reconcile with server: messages we had locally (e.g. from cache) in the same time window as the API page but not returned by the API are treated as deleted (e.g. another user deleted while app was closed). Update ViewState and cache so they disappear from UI and future cache reads.
+                    let oldestApiTimestamp = apiIds.map { createdAt(id: $0) }.min() ?? .distantPast
+                    let apiIdSet = Set(apiIds)
+                    let deletedByServer = existingIds.filter { createdAt(id: $0) >= oldestApiTimestamp && !apiIdSet.contains($0) }
+                    if !deletedByServer.isEmpty, let userId = viewModel.viewState.currentUser?.id, let baseURL = viewModel.viewState.baseURL {
+                        await MainActor.run {
+                            for id in deletedByServer {
+                                self.viewModel.viewState.deletedMessageIds[channelId, default: Set()].insert(id)
+                                MessageCacheWriter.shared.enqueueDeleteMessage(id: id, channelId: channelId, userId: userId, baseURL: baseURL)
+                            }
+                        }
+                    }
                     let sortedIds = await MainActor.run { self.mergeAndSortMessageIds(existing: existingIds, new: apiIds) }
                     let deleted = await MainActor.run { self.viewModel.viewState.deletedMessageIds[channelId] ?? [] }
                     let filteredIds = sortedIds.filter { !deleted.contains($0) }

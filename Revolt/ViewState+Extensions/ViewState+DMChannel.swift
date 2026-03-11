@@ -70,23 +70,59 @@ extension ViewState {
     
     func removeServer(with serverID: String) {
         Task { @MainActor in
-            updateMembershipCache(serverId: serverID, isMember: false)
+            // Channel.md §9.10: Full purge for that server (§0.30)
+            guard let server = servers[serverID] else {
+                updateMembershipCache(serverId: serverID, isMember: false)
+                selectDms()
+                return
+            }
+            for channelId in server.channels {
+                channels.removeValue(forKey: channelId)
+                channelMessages.removeValue(forKey: channelId)
+                unreads.removeValue(forKey: channelId)
+                preloadedChannels.remove(channelId)
+                allEventChannels.removeValue(forKey: channelId)
+            }
+            loadedServerChannels.remove(serverID)
+            if case .channel(let id) = currentChannel, server.channels.contains(id) {
+                path = []
+                currentChannel = .home
+            }
             servers.removeValue(forKey: serverID)
+            updateMembershipCache(serverId: serverID, isMember: false)
+            saveChannelCacheAsync()
+            saveServersCacheAsync()
             selectDms()
         }
     }
     
     @MainActor
-    func removeChannel(with channelID : String, initPath: Bool = true){
-        if(initPath){
-            self.path = .init()
+    func removeChannel(with channelID: String, initPath: Bool = true) {
+        // Channel.md §9.8: If server channel, sync-remove from server graph, allEventChannels, channelMessages, unreads, preloadedChannels; enqueue save; delayed for channels, dms, path, selectDms()
+        let channelObj = allEventChannels[channelID] ?? channels[channelID]
+        if let serverId = channelObj?.server, var server = servers[serverId] {
+            server.channels.removeAll { $0 == channelID }
+            if var cats = server.categories {
+                for i in cats.indices {
+                    cats[i].channels.removeAll { $0 == channelID }
+                }
+                server.categories = cats
+            }
+            servers[serverId] = server
+            allEventChannels.removeValue(forKey: channelID)
+            channelMessages.removeValue(forKey: channelID)
+            unreads.removeValue(forKey: channelID)
+            preloadedChannels.remove(channelID)
+            saveChannelCacheAsync()
+            saveServersCacheAsync()
+        }
+        if initPath {
+            path = .init()
             selectDms()
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            //TODO
             self.channels.removeValue(forKey: channelID)
             self.dms = self.dms.filter { $0.id != channelID }
         }
-        
     }
 }

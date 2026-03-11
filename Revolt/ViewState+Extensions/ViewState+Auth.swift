@@ -34,6 +34,10 @@ extension ViewState {
     
     /// A successful result here means pending (the session has been destroyed but the client still has data cached)
     func signOut(afterRemoveSession : Bool = false) async -> Result<(), UserStateError>  {
+        // Clear channel cache at the very start, before any await (§0.2, Channel.md). So even if signOut returns failure (e.g. invalid_session), cache is already cleared.
+        ViewState.clearChannelCacheFile(userId: currentUser?.id, baseURL: baseURL)
+        channelCacheSaveWorkItem?.cancel()
+        channelCacheSaveWorkItem = nil
         
         if !afterRemoveSession {
             let status = try? await http.signout().get()
@@ -128,6 +132,13 @@ extension ViewState {
     
     func destroyCache() {
         clearAllDraftsForCurrentAccount()
+        // Channel cache: clear at start so no write runs after clear (§0.2, §0.11, Channel.md)
+        ViewState.clearChannelCacheFile(userId: currentUser?.id, baseURL: baseURL)
+        channelCacheSaveWorkItem?.cancel()
+        channelCacheSaveWorkItem = nil
+        // Servers cache file: clear so server topology does not leak (§0.20)
+        ViewState.clearServersCacheFile()
+        
         // Flush pending cache writes with bounded timeout, then invalidate writer and clear message cache
         print("📂 [MessageCache] Invalidating writer and clearing cache (sign-out)")
         MessageCacheWriter.shared.invalidate(flushFirst: true)
@@ -158,6 +169,9 @@ extension ViewState {
         channelMessages.removeAll()
         deletedMessageIds.removeAll()
         preloadedChannels.removeAll()
+        // Lazy-load state: must clear so next session does not see stale channel graph (§0.9, §0.14)
+        allEventChannels.removeAll()
+        loadedServerChannels.removeAll()
         
         discoverMembershipCache = [:]
         ViewState.clearMembershipCacheFile()

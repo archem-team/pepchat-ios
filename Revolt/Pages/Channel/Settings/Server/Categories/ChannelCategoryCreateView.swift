@@ -82,9 +82,14 @@ struct ChannelCategoryCreateView: View {
                                                 
                                                 switch createChannelResponse {
                                                     case .success(let success):
+                                                        viewState.allEventChannels[success.id] = success
                                                         viewState.channels[success.id] = success
-                                                        viewState.servers[server.id]?.channels.append(success.id)
-                                                    
+                                                        if var s = viewState.servers[server.id], !s.channels.contains(success.id) {
+                                                            s.channels.append(success.id)
+                                                            viewState.servers[server.id] = s
+                                                        }
+                                                        viewState.saveChannelCacheAsync()
+                                                        viewState.saveServersCacheAsync()
                                                     if  let selectedCategoryId {
                                                         
                                                         let editServerResponse = await viewState.http.editServer(server: server.id, edits: .init(

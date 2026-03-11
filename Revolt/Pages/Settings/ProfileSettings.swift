@@ -47,6 +47,8 @@ struct ProfileSettings: View {
     
     @State var saveBtnState : ComponentState = .default
     
+    private let maxProfileImageSize = 4 * 1024 * 1024   // 4 MB
+    private let maxCoverImageSize = 6 * 1024 * 1024     // 6 MB
     
     struct ProfileValues: Equatable {
         var avatar: Icon
@@ -95,6 +97,15 @@ struct ProfileSettings: View {
                     
                     return
                     
+                }
+                
+                if case .local(let avatar) = currentValues.avatar, let avatar, avatar.count > maxProfileImageSize {
+                    viewState.showAlert(message: "Profile image size cannot be more than 4MB", icon: .peptideInfo, color: .iconRed07)
+                    return
+                }
+                if case .local(let background) = currentValues.background, let background, background.count > maxCoverImageSize {
+                    viewState.showAlert(message: "Cover image size cannot be more than 6MB", icon: .peptideInfo, color: .iconRed07)
+                    return
                 }
                 
                 Task {

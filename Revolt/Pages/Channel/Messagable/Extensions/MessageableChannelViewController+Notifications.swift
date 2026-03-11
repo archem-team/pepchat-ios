@@ -28,6 +28,20 @@ extension MessageableChannelViewController {
             return
         }
 
+        // If notification includes channelId, only refresh when the new message is for this channel (e.g. message from another device).
+        let channelId = notification.userInfo?["channelId"] as? String
+        if let channelId = channelId, channelId != viewModel.channel.id {
+            return
+        }
+
+        // Sync table from ViewState so messages from other devices (WebSocket) appear immediately.
+        syncLocalMessagesWithViewState()
+        if let localDataSource = dataSource as? LocalMessagesDataSource {
+            localDataSource.updateMessages(localMessages)
+        }
+        tableView.reloadData()
+        updateTableViewBouncing()
+
         let currentMessageCount = viewModel.messages.count
         let storedMessageCount = UserDefaults.standard.integer(
             forKey: "LastMessageCount_\(viewModel.channel.id)")
