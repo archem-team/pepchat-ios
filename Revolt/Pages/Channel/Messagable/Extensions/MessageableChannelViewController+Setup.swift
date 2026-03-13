@@ -236,7 +236,7 @@ extension MessageableChannelViewController {
         tableView.backgroundColor = .bgDefaultPurple13
 
         tableView.keyboardDismissMode = .interactive
-        tableView.estimatedRowHeight = 80  // Reduced for better performance
+        tableView.estimatedRowHeight = 120  // Reduced for better performance
         tableView.rowHeight = UITableView.automaticDimension
 
         // PERFORMANCE: Enable cell prefetching and optimize scrolling
