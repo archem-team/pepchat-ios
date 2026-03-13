@@ -49,7 +49,9 @@ class LinkPreviewView: UIView {
     
     private func setupUI() {
         backgroundColor = .clear
-        
+        // Link preview overlap fix: keep embed content inside bounds (docs/Fix/LinkPreviewImage.md)
+        clipsToBounds = true
+
         // Container view
         containerView.translatesAutoresizingMaskIntoConstraints = false
         containerView.backgroundColor = UIColor(named: "bgGray12") ?? .systemGray6

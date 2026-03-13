@@ -437,7 +437,9 @@ extension MessageCell {
         embedContainer.spacing = 8
         embedContainer.translatesAutoresizingMaskIntoConstraints = false
         embedContainer.tag = 2000
-        
+        // Link preview overlap fix: clip embed stack (docs/Fix/LinkPreviewImage.md)
+        embedContainer.clipsToBounds = true
+
         // Add each embed
         for embed in embeds {
             let linkPreview = LinkPreviewView()
@@ -473,6 +475,10 @@ extension MessageCell {
                 embedContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
                 bottomConstraint
             ])
+            // Link preview overlap fix: layout now + draw embed behind header/text (docs/Fix/LinkPreviewImage.md)
+            contentView.setNeedsLayout()
+            contentView.layoutIfNeeded()
+            embedContainer.layer.zPosition = -1
         }
     }
     

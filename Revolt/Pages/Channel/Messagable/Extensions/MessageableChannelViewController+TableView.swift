@@ -39,8 +39,11 @@ extension MessageableChannelViewController: UITableViewDelegate {
                     }
                 }
             }
+            // Link preview overlap fix: finish layout before first draw (docs/Fix/LinkPreviewImage.md)
+            currentCell.contentView.setNeedsLayout()
+            currentCell.contentView.layoutIfNeeded()
         }
-        
+
         loadMoreMessagesIfNeeded(for: indexPath)
     }
     

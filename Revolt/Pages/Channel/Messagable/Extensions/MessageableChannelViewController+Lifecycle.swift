@@ -294,6 +294,8 @@ extension MessageableChannelViewController {
         scrollToBottomWorkItem = nil
         draftSaveWorkItem?.cancel()
         draftSaveWorkItem = nil
+        missingMessageLoadWorkItem?.cancel()
+        missingMessageLoadWorkItem = nil
         scrollProtectionTimer?.invalidate()
         scrollProtectionTimer = nil
         loadingTask?.cancel()

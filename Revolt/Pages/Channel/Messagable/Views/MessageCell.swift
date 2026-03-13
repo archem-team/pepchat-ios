@@ -116,6 +116,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         
         // Set default layout margins
         contentView.layoutMargins = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        // Link preview overlap fix: prevent embed from drawing outside cell (docs/Fix/LinkPreviewImage.md)
+        contentView.clipsToBounds = true
     }
     
     required init?(coder: NSCoder) {
