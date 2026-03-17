@@ -214,13 +214,19 @@ struct ApplicationSwitcher: View {
                 
             }
             .task {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    
+                // Start initialization during splash instead of waiting idle for 2 seconds.
+                // Minimum 0.5s so the logo isn't a flash; dismiss as soon as init begins.
+                viewState.setBaseUrlToHttp()
+                async let initTask: () = viewState.backgroundWsTask()
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s minimum splash
+                withAnimation {
+                    self.isFirstTimeLaunch = false
+                }
+                await initTask
+                if viewState.state != .signedOut {
                     withAnimation {
-                        self.isFirstTimeLaunch.toggle()
-                        
+                        viewState.state = .connecting
                     }
-                    
                 }
             }
             
@@ -229,16 +235,6 @@ struct ApplicationSwitcher: View {
                 // Main app interface if the user is signed in or not onboarding
                 InnerApp()
                     .transition(.opacity)  // Smooth transition between states
-                    .task {
-                        viewState.setBaseUrlToHttp()
-                        // Background WebSocket task to maintain connection
-                        await viewState.backgroundWsTask()
-                        if viewState.state != .signedOut {
-                            withAnimation {
-                                viewState.state = .connecting  // Set connecting state with animation
-                            }
-                        }
-                    }
                     .alertPopup(show: viewState.alert.0 != nil){
                         AlertMessagePopup(message: viewState.alert.0 ?? "", icon: viewState.alert.1, iconColor: viewState.alert.2 ?? .iconDefaultGray01)
                     }
