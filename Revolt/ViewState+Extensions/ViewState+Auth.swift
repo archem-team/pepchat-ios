@@ -165,7 +165,7 @@ extension ViewState {
         members.removeAll()
         emojis.removeAll()
         dms.removeAll()
-        currentlyTyping.removeAll()
+        clearAllTyping()
         channelMessages.removeAll()
         deletedMessageIds.removeAll()
         preloadedChannels.removeAll()

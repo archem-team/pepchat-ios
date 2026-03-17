@@ -350,13 +350,10 @@ extension ViewState {
                 await self.signOut(afterRemoveSession: true)
             }
         case .channel_start_typing(let e):
-            var typing = currentlyTyping[e.id] ?? []
-            typing.append(e.user)
-            
-            currentlyTyping[e.id] = typing
-            
+            updateTyping(channelId: e.id, userId: e.user, isTyping: true)
+
         case .channel_stop_typing(let e):
-            currentlyTyping[e.id]?.removeAll(where: { $0 == e.user })
+            updateTyping(channelId: e.id, userId: e.user, isTyping: false)
             
         case .message_delete(let e):
             deletedMessageIds[e.channel, default: Set()].insert(e.id)

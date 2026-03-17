@@ -216,7 +216,53 @@ public class ViewState: ObservableObject {
     /// Per-channel draft text (composer only). Session-bound; loaded in processReadyData, cleared in signOut/destroyCache.
     var channelDrafts: [String: String] = [:]
     @Published var loadingMessages: Set<String> = Set()
+
+    // PERFORMANCE: Typing indicators use a non-published backing store with debounced
+    // publishing to avoid re-rendering the entire view tree on every keystroke event.
+    // WebSocket events write to _typingBacking; the published property updates at most
+    // once per 200ms via coalesced flush.
+    private var _typingBacking: [String: OrderedSet<String>] = [:]
     @Published var currentlyTyping: [String: OrderedSet<String>] = [:]
+    private var _typingFlushTask: Task<Void, Never>?
+
+    /// Update typing state without immediately triggering @Published.
+    /// Changes are coalesced and flushed after 200ms of quiet.
+    func updateTyping(channelId: String, userId: String, isTyping: Bool) {
+        if isTyping {
+            _typingBacking[channelId, default: OrderedSet()].append(userId)
+        } else {
+            _typingBacking[channelId]?.removeAll(where: { $0 == userId })
+            if _typingBacking[channelId]?.isEmpty == true {
+                _typingBacking.removeValue(forKey: channelId)
+            }
+        }
+        _scheduleTypingFlush()
+    }
+
+    /// Immediately remove all typing state for a channel (used on cleanup/sign-out).
+    func clearTyping(forChannel channelId: String) {
+        _typingFlushTask?.cancel()
+        _typingFlushTask = nil
+        _typingBacking.removeValue(forKey: channelId)
+        currentlyTyping.removeValue(forKey: channelId)
+    }
+
+    /// Immediately remove all typing state (used on sign-out).
+    func clearAllTyping() {
+        _typingFlushTask?.cancel()
+        _typingFlushTask = nil
+        _typingBacking.removeAll()
+        currentlyTyping.removeAll()
+    }
+
+    private func _scheduleTypingFlush() {
+        _typingFlushTask?.cancel()
+        _typingFlushTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms debounce
+            guard let self, !Task.isCancelled else { return }
+            self.currentlyTyping = self._typingBacking
+        }
+    }
     @Published var isOnboarding: Bool = false
     @Published var unreads: [String: Unread] = [:] {
         didSet {

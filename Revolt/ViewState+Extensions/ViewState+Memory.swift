@@ -418,7 +418,7 @@ extension ViewState {
         }
 
         // 3. IMMEDIATE: Clear all related data
-        currentlyTyping.removeValue(forKey: channelId)
+        clearTyping(forChannel: channelId)
         preloadedChannels.remove(channelId)
         atTopOfChannel.remove(channelId)
 

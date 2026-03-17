@@ -433,7 +433,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         viewModel.viewState.channelMessages.removeValue(forKey: channelId)
         viewModel.viewState.preloadedChannels.remove(channelId)
         viewModel.viewState.atTopOfChannel.remove(channelId)
-        viewModel.viewState.currentlyTyping.removeValue(forKey: channelId)
+        viewModel.viewState.clearTyping(forChannel: channelId)
 
         // 3. IMMEDIATE: Remove all message objects for this channel
         let messagesToRemove = viewModel.viewState.messages.keys.filter { messageId in
