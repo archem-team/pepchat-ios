@@ -552,6 +552,52 @@ class RepliesManager: NSObject {
                     }
                 }
             }
+        case .pin:
+            Task {
+                let channelID = await viewModel.channel.id
+                let viewState = await viewModel.viewState
+                self.cachedViewState = viewState
+                
+                let result = await viewState.http.pinMessage(channel: channelID, message: message.id)
+                
+                await MainActor.run {
+                    switch result {
+                    case .success:
+                        if var updatedMessage = viewState.messages[message.id] {
+                            updatedMessage.pinned = true
+                            viewState.messages[message.id] = updatedMessage
+                        }
+                        viewState.showAlert(message: "Message pinned", icon: .peptidePin)
+                        viewController.refreshMessages()
+                    case .failure(let error):
+                        print("❌ Failed to pin message: \(error)")
+                        viewController.showErrorAlert(message: "Failed to pin message")
+                    }
+                }
+            }
+        case .unpin:
+            Task {
+                let channedID = await viewModel.channel.id
+                let viewState = await viewModel.viewState
+                self.cachedViewState = viewState
+                
+                let result = await viewState.http.unpinMessage(channel: channedID, message: message.id)
+                
+                await MainActor.run {
+                    switch result {
+                    case .success:
+                        if var updatedMessage = viewState.messages[message.id] {
+                            updatedMessage.pinned = false
+                            viewState.messages[message.id] = updatedMessage
+                        }
+                        viewState.showAlert(message: "Message unpinned", icon: .peptidePin)
+                        viewController.refreshMessages()
+                    case .failure(let error):
+                        print("❌ Failed to unpin message: \(error)")
+                        viewController.showErrorAlert(message: "Failed to unpin message")
+                    }
+                }
+            }
         }
     }
     

@@ -18,6 +18,8 @@ class MessageOptionViewController: UIViewController {
     private let canDeleteMessage: Bool
     private let canReply: Bool
     private let onOptionSelected: (MessageCell.MessageAction) -> Void
+    private let canPinMessage: Bool
+    private let isMessagePinned: Bool
     
     private let scrollView = UIScrollView()
     private let contentStackView = UIStackView()
@@ -28,12 +30,14 @@ class MessageOptionViewController: UIViewController {
     // Array to store button actions
     private var actions: [() -> Void] = []
     
-    init(message: Message, isMessageAuthor: Bool, canDeleteMessage: Bool, canReply: Bool, onOptionSelected: @escaping (MessageCell.MessageAction) -> Void) {
+    init(message: Message, isMessageAuthor: Bool, canDeleteMessage: Bool, canReply: Bool, onOptionSelected: @escaping (MessageCell.MessageAction) -> Void, canPinMessage: Bool, isMessagePinned: Bool) {
         self.message = message
         self.isMessageAuthor = isMessageAuthor
         self.canDeleteMessage = canDeleteMessage
         self.canReply = canReply
         self.onOptionSelected = onOptionSelected
+        self.canPinMessage = canPinMessage
+        self.isMessagePinned = isMessagePinned
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -331,6 +335,24 @@ class MessageOptionViewController: UIViewController {
         )
         commonOptionsStack.addArrangedSubview(markUnreadOption)
         addDividerToGroup(group: commonOptionsStack)
+        
+        // Pin message option
+        if canPinMessage {
+            let pinMessageOption = createOptionButton(
+                title: isMessagePinned ? "Unpin Message" : "Pin Message",
+                iconName: isMessagePinned ? "pin.slash" : "pin",
+                action: { [weak self] in
+                    if self?.isMessagePinned == true {
+                        self?.onOptionSelected(.unpin)
+                        self?.dismiss(animated: true)
+                    } else {
+                        self?.onOptionSelected(.pin)
+                        self?.dismiss(animated: true)
+                    }
+                })
+            commonOptionsStack.addArrangedSubview(pinMessageOption)
+            addDividerToGroup(group: commonOptionsStack)
+        }
         
         // Copy text option
         if let content = message.content, !content.isEmpty {

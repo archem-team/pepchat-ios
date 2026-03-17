@@ -98,6 +98,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     internal var channelNameLabel: UILabel!
     internal var channelIconView: UIImageView!
     internal var searchButton: UIButton!
+    internal var pinnedMessageButton: UIButton! // Pinned message button
 
     // Track keyboard state
     var keyboardHeight: CGFloat = 0
@@ -798,6 +799,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
         // Navigate to the channel search page
         viewModel.viewState.path.append(NavigationDestination.channel_search(viewModel.channel.id))
+    }
+    
+    @objc internal func pinnedButtonTapped() {
+        viewModel.viewState.path.append(NavigationDestination.channel_pinned_messages(viewModel.channel.id))
     }
 
     @objc internal func channelHeaderTapped() {
@@ -2364,6 +2369,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                 // Here you would call your API to add the reaction
                 // For example: api.addReaction(messageId: message.id, emoji: emoji)
             }
+        case .pin:
+            print("Pin message triggered")
+        case .unpin:
+            print("Unpin message triggered")
         }
     }
 

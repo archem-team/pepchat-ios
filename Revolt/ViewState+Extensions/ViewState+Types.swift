@@ -123,6 +123,7 @@ enum NavigationDestination: Hashable, Codable {
     case add_friend
     case create_group([String])
     case channel_search(String)
+    case channel_pinned_messages(String) // String -> channel ID
     case invite(String)
     case maybeChannelView
     case create_group_name

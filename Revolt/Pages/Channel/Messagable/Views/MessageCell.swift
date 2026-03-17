@@ -106,6 +106,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         case copyLink
         case copyId
         case react(String)
+        case pin
+        case unpin
     }
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -279,6 +281,39 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     internal func isCurrentUserAuthor() -> Bool {
         guard let message = currentMessage, let viewState = viewState else { return false }
         return message.author == viewState.currentUser?.id
+    }
+    
+    internal func canPinMessage() -> Bool {
+        guard let message = currentMessage, let viewState = viewState, let currentUser = viewState.currentUser else {
+            return isCurrentUserAuthor()
+        }
+        
+        // For DM channels, all the users can pin message
+        if case .dm_channel(_) = viewState.channels[message.channel] {
+            return true
+        }
+        if case .group_dm_channel(_) = viewState.channels[message.channel] {
+            return true
+        }
+        
+        // For server channels, check if user has manage messages permission
+        guard let channel = viewState.channels[message.channel],
+              let server = channel.server.flatMap({ viewState.servers[$0] }) else {
+            return false
+        }
+        
+        let member = viewState.members[server.id]?[currentUser.id]
+        
+        let permissions = resolveChannelPermissions(
+            from: currentUser,
+            targettingUser: currentUser,
+            targettingMember: member,
+            channel: channel,
+            server: server
+        )
+        
+        return permissions.contains(.manageMessages)
+        
     }
     
     internal func canDeleteMessage() -> Bool {

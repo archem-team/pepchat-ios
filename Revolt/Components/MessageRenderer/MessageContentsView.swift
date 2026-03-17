@@ -264,7 +264,10 @@ struct MessageContentsView: View {
                             VStack(alignment: .center, spacing: .zero) {
                                 if !mediaAttachments.isEmpty {
                                     
-                                    if mediaAttachments.count == 2 {
+                                    if mediaAttachments.count == 1 {
+                                        MessageAttachment(attachment: mediaAttachments[0], height: 295)
+                                            .padding(.top, .padding4)
+                                    } else if mediaAttachments.count == 2 {
                                         
                                         HStack(spacing: .spacing4){
                                             

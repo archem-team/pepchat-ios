@@ -269,6 +269,7 @@
 		77AC56552F1F976F00070CCE /* MessageableChannelViewController+NotificationBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AC56542F1F976F00070CCE /* MessageableChannelViewController+NotificationBanner.swift */; };
 		77AC56572F1F97D800070CCE /* MessageableChannelViewController+MessageCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AC56562F1F97D700070CCE /* MessageableChannelViewController+MessageCell.swift */; };
 		77AC56592F1F9AB100070CCE /* MessageSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AC56582F1F9AB100070CCE /* MessageSkeletonView.swift */; };
+		77B2201D2F69982000A3DF68 /* PinnedMessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77B2201C2F69982000A3DF68 /* PinnedMessagesView.swift */; };
 		77CFE81E2F1F60EF0050A516 /* MessageableChannelViewController+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77CFE81D2F1F60EF0050A516 /* MessageableChannelViewController+Extensions.swift */; };
 		77E66B7F2F30AFAA00522EB9 /* MessageableChannelViewController+Setup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E66B7E2F30AFA900522EB9 /* MessageableChannelViewController+Setup.swift */; };
 		77E66B812F30AFBA00522EB9 /* MessageableChannelViewController+Lifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E66B802F30AFBA00522EB9 /* MessageableChannelViewController+Lifecycle.swift */; };
@@ -641,6 +642,7 @@
 		77AC56542F1F976F00070CCE /* MessageableChannelViewController+NotificationBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+NotificationBanner.swift"; sourceTree = "<group>"; };
 		77AC56562F1F97D700070CCE /* MessageableChannelViewController+MessageCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+MessageCell.swift"; sourceTree = "<group>"; };
 		77AC56582F1F9AB100070CCE /* MessageSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageSkeletonView.swift; sourceTree = "<group>"; };
+		77B2201C2F69982000A3DF68 /* PinnedMessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedMessagesView.swift; sourceTree = "<group>"; };
 		77CFE81D2F1F60EF0050A516 /* MessageableChannelViewController+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+Extensions.swift"; sourceTree = "<group>"; };
 		77E66B7E2F30AFA900522EB9 /* MessageableChannelViewController+Setup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+Setup.swift"; sourceTree = "<group>"; };
 		77E66B802F30AFBA00522EB9 /* MessageableChannelViewController+Lifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+Lifecycle.swift"; sourceTree = "<group>"; };
@@ -774,6 +776,7 @@
 				0505E7CF2D022EE900B12713 /* ChannelInfoMoreSheet.swift */,
 				0505E7D12D025D2C00B12713 /* AddMembersToChannelView.swift */,
 				054EF9522D02DAEE00397F29 /* ChannelUserOptionSheet.swift */,
+				77B2201C2F69982000A3DF68 /* PinnedMessagesView.swift */,
 			);
 			path = ChannelInfo;
 			sourceTree = "<group>";
@@ -2102,6 +2105,7 @@
 				1777DD892ADC3C31003D6C72 /* Markdown.swift in Sources */,
 				050F35002D5DE03B00609FEE /* ServerChannelOverviewSettings.swift in Sources */,
 				17BB78B82CA4C64E000CAD87 /* ChannelRolePermissionsSettings.swift in Sources */,
+				77B2201D2F69982000A3DF68 /* PinnedMessagesView.swift in Sources */,
 				F545878D2E1504BD00797AC1 /* AttachmentPreviewView.swift in Sources */,
 				05CCC9172CD543C700B5EFEE /* PeptideIcon.swift in Sources */,
 				0570B5282DC4D0BA0029105C /* MessageableChannelViewController.swift in Sources */,
@@ -2535,7 +2539,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2;
 				NEW_SETTING = "";
 				NEW_SETTING1 = "";
 				ON_DEMAND_RESOURCES_INITIAL_INSTALL_TAGS = Resources;
@@ -2599,7 +2603,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2;
 				NEW_SETTING = "";
 				NEW_SETTING1 = "";
 				ON_DEMAND_RESOURCES_INITIAL_INSTALL_TAGS = Resources;
