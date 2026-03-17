@@ -19,3 +19,7 @@ MessageLink.md
 EditMessage.md
 DiscoverServerCache.md
 MessageCache.md
+PERFORMANCE_DIAGNOSIS.md
+
+# Project documentation (optional local/private)
+.docs/
