@@ -55,27 +55,27 @@ struct HTTPClient {
         
         // Configure URLSessionConfiguration to reduce network warnings
         let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 10.0  // Reduced from 30 to 10 seconds
-        configuration.timeoutIntervalForResource = 20.0  // Reduced from 60 to 20 seconds
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.urlCache = nil
-        configuration.httpMaximumConnectionsPerHost = 2  // Reduced from 4 to minimize connection issues
+        configuration.timeoutIntervalForRequest = 20.0
+        configuration.timeoutIntervalForResource = 30.0
+        configuration.requestCachePolicy = .useProtocolCachePolicy  // Honor server cache headers (ETag, Cache-Control)
+        configuration.urlCache = URLCache(
+            memoryCapacity: 10 * 1024 * 1024,   // 10 MB memory cache
+            diskCapacity: 50 * 1024 * 1024       // 50 MB disk cache
+        )
+        configuration.httpMaximumConnectionsPerHost = 6  // Allow parallel requests (browser default is 6-8)
         configuration.waitsForConnectivity = false  // Don't wait for connectivity - fail fast
         configuration.allowsConstrainedNetworkAccess = true
         configuration.allowsExpensiveNetworkAccess = true
-        
-        // NETWORK OPTIMIZATION: Reduce connection warnings
-        configuration.httpShouldUsePipelining = false  // Disable pipelining to prevent connection issues
+
+        // NETWORK OPTIMIZATION
+        configuration.httpShouldUsePipelining = true   // Allow request pipelining over reused connections
         configuration.httpShouldSetCookies = false     // Disable cookies for API calls
         configuration.httpCookieAcceptPolicy = .never  // No cookies needed
         configuration.networkServiceType = .responsiveData  // Use responsive data for faster API calls
-        configuration.shouldUseExtendedBackgroundIdleMode = false  // Prevent background connection issues
-        
-        // CONNECTION MANAGEMENT: Prevent unconnected endpoint warnings
-        configuration.multipathServiceType = .none     // Disable multipath to reduce connection complexity
-        configuration.httpAdditionalHeaders = [
-            "Connection": "close"  // Force connection closure after each request to prevent lingering connections
-        ]
+        configuration.shouldUseExtendedBackgroundIdleMode = false
+
+        // CONNECTION MANAGEMENT: Let URLSession reuse connections (HTTP/2 keep-alive)
+        configuration.multipathServiceType = .none
         
         // Create session with optimized configuration
         self.session = Alamofire.Session(configuration: configuration)
