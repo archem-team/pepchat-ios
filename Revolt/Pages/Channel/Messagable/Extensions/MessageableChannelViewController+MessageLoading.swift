@@ -14,10 +14,37 @@ import UIKit
 import ULID
 
 extension MessageableChannelViewController {
-    /// Merges two lists of message IDs, dedupes by id, and sorts by canonical order (createdAt). Use for cache+API and cache page+existing.
+    /// Merges two pre-sorted lists of message IDs, dedupes, preserving sort order.
+    /// ULIDs are lexicographically sortable by timestamp, so plain string comparison is correct
+    /// and avoids expensive ULID→Date parsing on every comparison.
+    /// O(n) two-pointer merge instead of O(n log n) re-sort.
     private func mergeAndSortMessageIds(existing: [String], new: [String]) -> [String] {
-        let union = Set(existing).union(new)
-        return union.sorted { createdAt(id: $0) < createdAt(id: $1) }
+        // Fast paths
+        guard !existing.isEmpty else { return new }
+        guard !new.isEmpty else { return existing }
+
+        let newSet = Set(new)
+        // Remove duplicates from existing that also appear in new
+        let dedupedExisting = existing.filter { !newSet.contains($0) }
+
+        var result: [String] = []
+        result.reserveCapacity(dedupedExisting.count + new.count)
+
+        var i = dedupedExisting.startIndex
+        var j = new.startIndex
+        while i < dedupedExisting.endIndex && j < new.endIndex {
+            if dedupedExisting[i] <= new[j] {
+                result.append(dedupedExisting[i])
+                i += 1
+            } else {
+                result.append(new[j])
+                j += 1
+            }
+        }
+        // Append remaining
+        if i < dedupedExisting.endIndex { result.append(contentsOf: dedupedExisting[i...]) }
+        if j < new.endIndex { result.append(contentsOf: new[j...]) }
+        return result
     }
 
     /// When loading from cache, prefer ViewState over cached if ViewState has a newer edit (e.g. from a message_update WebSocket event) so edits from other users are not overwritten by stale cache.
@@ -626,27 +653,34 @@ extension MessageableChannelViewController {
                     )
                     await fetchReplyMessagesContentAndRefreshUI(for: allCurrentMessages)
 
-                    // Merge with existing (e.g. from cache): union IDs, dedupe, sort by canonical order
-                    let existingIds = await MainActor.run { self.viewModel.viewState.channelMessages[channelId] ?? [] }
+                    // Merge with existing (e.g. from cache): union IDs, dedupe, sort by canonical order.
+                    // Single MainActor.run to read state, then sort/filter off main thread, then one more to write back.
+                    let (existingIds, deleted, userId, baseURL) = await MainActor.run {
+                        (self.viewModel.viewState.channelMessages[channelId] ?? [],
+                         self.viewModel.viewState.deletedMessageIds[channelId] ?? Set<String>(),
+                         self.viewModel.viewState.currentUser?.id,
+                         self.viewModel.viewState.baseURL)
+                    }
                     let apiIds = fetchResult.messages.map { $0.id }
-                    // Reconcile with server: messages we had locally (e.g. from cache) in the same time window as the API page but not returned by the API are treated as deleted (e.g. another user deleted while app was closed). Update ViewState and cache so they disappear from UI and future cache reads.
-                    let oldestApiTimestamp = apiIds.map { createdAt(id: $0) }.min() ?? .distantPast
+
+                    // Reconcile with server: messages we had locally (e.g. from cache) in the same time window as the API page but not returned by the API are treated as deleted (e.g. another user deleted while app was closed).
+                    let oldestApiId = apiIds.min() ?? "" // ULID lexicographic min == oldest timestamp
                     let apiIdSet = Set(apiIds)
-                    let deletedByServer = existingIds.filter { createdAt(id: $0) >= oldestApiTimestamp && !apiIdSet.contains($0) }
-                    if !deletedByServer.isEmpty, let userId = viewModel.viewState.currentUser?.id, let baseURL = viewModel.viewState.baseURL {
-                        await MainActor.run {
+                    let deletedByServer = existingIds.filter { $0 >= oldestApiId && !apiIdSet.contains($0) }
+
+                    // Sort and filter off main thread
+                    let sortedIds = self.mergeAndSortMessageIds(existing: existingIds, new: apiIds)
+                    let allDeleted = deleted.union(deletedByServer)
+                    let filteredIds = allDeleted.isEmpty ? sortedIds : sortedIds.filter { !allDeleted.contains($0) }
+
+                    // Single MainActor.run to write all results back
+                    await MainActor.run {
+                        if !deletedByServer.isEmpty, let userId, let baseURL {
                             for id in deletedByServer {
                                 self.viewModel.viewState.deletedMessageIds[channelId, default: Set()].insert(id)
                                 MessageCacheWriter.shared.enqueueDeleteMessage(id: id, channelId: channelId, userId: userId, baseURL: baseURL)
                             }
                         }
-                    }
-                    let sortedIds = await MainActor.run { self.mergeAndSortMessageIds(existing: existingIds, new: apiIds) }
-                    let deleted = await MainActor.run { self.viewModel.viewState.deletedMessageIds[channelId] ?? [] }
-                    let filteredIds = sortedIds.filter { !deleted.contains($0) }
-
-                    // CRITICAL: Update our local messages array directly
-                    await MainActor.run {
                         self.localMessages = filteredIds
                         self.viewModel.viewState.channelMessages[channelId] = filteredIds
                         self.viewModel.messages = filteredIds
