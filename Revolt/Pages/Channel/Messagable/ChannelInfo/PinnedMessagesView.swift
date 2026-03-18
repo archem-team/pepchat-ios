@@ -4,7 +4,7 @@
 //
 //  Created by Akshat Srivastava on 17/03/26.
 //
-/// Pinned messages list for a channel; resuses the same message cell UI as ChannelSearch.
+/// Pinned messages list for a channel; reuses the same message cell UI as ChannelSearch.
 
 import SwiftUI
 import Foundation
