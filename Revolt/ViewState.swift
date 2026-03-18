@@ -239,10 +239,9 @@ public class ViewState: ObservableObject {
         _scheduleTypingFlush()
     }
 
-    /// Immediately remove all typing state for a channel (used on cleanup/sign-out).
+    /// Immediately remove typing state for a single channel without disturbing
+    /// the global flush task (which may carry pending updates for other channels).
     func clearTyping(forChannel channelId: String) {
-        _typingFlushTask?.cancel()
-        _typingFlushTask = nil
         _typingBacking.removeValue(forKey: channelId)
         currentlyTyping.removeValue(forKey: channelId)
     }
