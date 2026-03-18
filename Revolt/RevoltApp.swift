@@ -705,6 +705,16 @@ struct MainApp: View {
             case .about_settings:
                 About()
                 
+            case .channel_pinned_messages(let id):
+                if let channelValue = viewState.channels[id] {
+                    let channelBinding = Binding(
+                        get: {viewState.channels[id] ?? channelValue},
+                        set: {newValue in viewState.channels[id] = newValue}
+                    )
+                    PinnedMessagesView(channel: channelBinding)
+                } else {
+                    PeptideWarningTemplateView()
+                }
             }
         }
         // Show user profile sheet

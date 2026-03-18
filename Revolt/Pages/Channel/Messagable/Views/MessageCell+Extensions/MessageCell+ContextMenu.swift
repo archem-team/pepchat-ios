@@ -31,7 +31,8 @@ extension MessageCell {
                    if let strongSelf = self {
                        strongSelf.onMessageAction?(action, capturedMessage)
                    }
-               }
+               }, canPinMessage: canPinMessage(),
+               isMessagePinned: message.pinned == true
            )
            
            // Present as a modal with custom style

@@ -76,6 +76,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     var scrollToBottomWorkItem: DispatchWorkItem?
     /// Debounced draft save (step 2b); cancelled on disappear.
     var draftSaveWorkItem: DispatchWorkItem?
+    /// FIX (Loading message placeholder): Debounce for "message not found" → load then reload. See docs/Fix/LoadingMessagePlaceholder.md
+    internal var missingMessageLoadWorkItem: DispatchWorkItem?
     var lastManualScrollTime: Date?
     var lastManualScrollUpTime: Date?
     var scrollProtectionTimer: Timer?
@@ -96,6 +98,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     internal var channelNameLabel: UILabel!
     internal var channelIconView: UIImageView!
     internal var searchButton: UIButton!
+    internal var pinnedMessageButton: UIButton! // Pinned message button
 
     // Track keyboard state
     var keyboardHeight: CGFloat = 0
@@ -797,6 +800,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         // Navigate to the channel search page
         viewModel.viewState.path.append(NavigationDestination.channel_search(viewModel.channel.id))
     }
+    
+    @objc internal func pinnedButtonTapped() {
+        viewModel.viewState.path.append(NavigationDestination.channel_pinned_messages(viewModel.channel.id))
+    }
 
     @objc internal func channelHeaderTapped() {
         // Only show server info if this channel belongs to a server
@@ -1439,6 +1446,24 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         // This will be implemented when handling unreads
     }
 
+    // FIX (Loading message placeholder): When the data source shows "Loading message..." because
+    // a message ID is in the list but viewState.messages doesn't have the body, trigger a load
+    // and reload so the placeholder is replaced. Debounced so many missing rows trigger one load.
+    // See docs/Fix/LoadingMessagePlaceholder.md
+    internal func onMissingMessageDetected(messageId: String) {
+        missingMessageLoadWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            Task { @MainActor in
+                await self.loadInitialMessages()
+                self.tableView.reloadData()
+                self.updateTableViewBouncing()
+            }
+        }
+        missingMessageLoadWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
+    }
+
     // FAST: Lightweight refresh method with minimal overhead
     func refreshMessages(forceUpdate: Bool = false) {
         print("🔄 targetMessageProtectionActive: \(targetMessageProtectionActive)")
@@ -1476,13 +1501,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             // print("🔄 Continuing refreshMessages despite recent scroll - have target message")
         }
 
-        // Get new messages directly - no async overhead
+        // Get channel message IDs; we need non-empty list to do anything
         guard let channelMessages = viewModel.viewState.channelMessages[viewModel.channel.id],
-            !channelMessages.isEmpty,
-            localMessages != channelMessages
+            !channelMessages.isEmpty
         else { return }
 
-        // CRITICAL: Check if actual message objects exist before refreshing
+        // FIX (Loading message placeholder): Check "IDs but no message bodies" BEFORE the
+        // localMessages != channelMessages guard. Otherwise when lists are already in sync
+        // (e.g. after memory cleanup) we return early and never trigger loadInitialMessages(),
+        // so placeholders never resolve. See docs/Fix/LoadingMessagePlaceholder.md
         let hasActualMessages =
             channelMessages.first(where: { viewModel.viewState.messages[$0] != nil }) != nil
         if !hasActualMessages {
@@ -1507,6 +1534,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             }
             return
         }
+
+        // Normal sync path: only update and reload when the list actually changed
+        guard localMessages != channelMessages else { return }
 
         let wasNearBottom = isUserNearBottom()
         localMessages = channelMessages
@@ -1725,7 +1755,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                     message = viewStateMessage
                     messageCache[messageId] = viewStateMessage  // Cache for future use
                 } else {
+                    // FIX (Loading message placeholder): Notify VC to load missing messages and reload so placeholder resolves. See docs/Fix/LoadingMessagePlaceholder.md
                     print("⚠️ MESSAGE_NOT_FOUND: messageId=\(messageId) at index=\(indexPath.row)")
+                    viewControllerRef?.onMissingMessageDetected(messageId: messageId)
                     return createFallbackCell(
                         tableView: tableView, indexPath: indexPath,
                         reason: "Message not found: \(messageId)")
@@ -2087,41 +2119,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                 ongoingReplyFetches.remove(replyId)
             }
 
-            // FORCE refresh UI to show newly loaded reply content
+            // FORCE refresh UI to show newly loaded reply content.
+            // Use reloadData() instead of reloadRows(at:with:) to avoid a race with loadRegularMessages
+            // (which merges messages and does a full reload). See docs/ReplyMessageLoadingCrash.md.
             if !replyIdsToFetch.isEmpty {
                 print(
                     "🔗 FORCE_REFRESH: Forcing UI refresh after loading \(replyIdsToFetch.count) reply messages"
                 )
-
-                // Force table view to reload data for messages with replies
-                if let tableView = self.tableView {
-                    // Find visible cells that might have replies
-                    let visibleIndexPaths = tableView.indexPathsForVisibleRows ?? []
-                    var indexPathsToReload: [IndexPath] = []
-
-                    for indexPath in visibleIndexPaths {
-                        if indexPath.row < localMessages.count {
-                            let messageId = localMessages[indexPath.row]
-                            if let message = viewModel.viewState.messages[messageId],
-                                let replies = message.replies, !replies.isEmpty
-                            {
-                                // Check if any of the replies we just fetched belong to this message
-                                let hasNewlyFetchedReplies = replies.contains { replyId in
-                                    replyIdsToFetch.contains(replyId)
-                                }
-                                if hasNewlyFetchedReplies {
-                                    indexPathsToReload.append(indexPath)
-                                }
-                            }
-                        }
-                    }
-
-                    if !indexPathsToReload.isEmpty {
-                        print(
-                            "🔗 FORCE_REFRESH: Reloading \(indexPathsToReload.count) cells with newly fetched replies"
-                        )
-                        tableView.reloadRows(at: indexPathsToReload, with: .none)
-                    }
+                if let tableView = self.tableView, tableView.dataSource != nil {
+                    tableView.reloadData()
                 }
             }
         }
@@ -2363,6 +2369,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                 // Here you would call your API to add the reaction
                 // For example: api.addReaction(messageId: message.id, emoji: emoji)
             }
+        case .pin:
+            print("Pin message triggered")
+        case .unpin:
+            print("Unpin message triggered")
         }
     }
 

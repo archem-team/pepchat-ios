@@ -451,79 +451,89 @@ extension MessageableChannelViewController {
         // When opening channel (initial load), always fetch from server to get messages that arrived while app was closed; only skip fetch when we have in-memory messages and are not forcing refresh
         let shouldUseMemoryOnly = !forceFetchFromServer && existingCount > 0
 
-        // Check if we already have messages in memory and we are not forcing a server fetch
+        // FIX (Loading message placeholder): Only use memory-only path when we actually have message
+        // bodies for these IDs. Otherwise we show "Loading message..." forever (IDs in list but no
+        // Message in viewState). If we don't have enough bodies, fall through to fetch from server.
+        // See docs/Fix/LoadingMessagePlaceholder.md
         if let existingMessages = viewModel.viewState.channelMessages[channelId],
             !existingMessages.isEmpty,
             shouldUseMemoryOnly
         {
             // print("📊 Found \(existingMessages.count) existing messages in memory - using cached data")
 
-            // CRITICAL FIX: Create an explicit copy to avoid reference issues
-            let messagesCopy = Array(existingMessages)
+            let hasEnoughMessageBodies = existingMessages.contains {
+                viewModel.viewState.messages[$0] != nil
+            }
 
-            // Update our local messages array directly
-            self.localMessages = messagesCopy
-            // print("🔄 Updated localMessages with \(messagesCopy.count) messages from viewState")
+            if hasEnoughMessageBodies {
+                // CRITICAL FIX: Create an explicit copy to avoid reference issues
+                let messagesCopy = Array(existingMessages)
+                
+                // Update our local messages array directly
+                self.localMessages = messagesCopy
+                
+                // print("🔄 Updated localMessages with \(messagesCopy.count) messages from viewState")
 
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.tableView.tableFooterView = nil
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.tableView.tableFooterView = nil
 
-                // Create data source with local messages
-                self.dataSource = LocalMessagesDataSource(
-                    viewModel: self.viewModel,
-                    viewController: self,
-                    localMessages: self.localMessages)
-                self.tableView.dataSource = self.dataSource
+                    // Create data source with local messages
+                    self.dataSource = LocalMessagesDataSource(
+                        viewModel: self.viewModel,
+                        viewController: self,
+                        localMessages: self.localMessages)
+                    self.tableView.dataSource = self.dataSource
 
-                // Reload table data
-                self.tableView.reloadData()
-                // print("📊 TABLE_VIEW reloaded with \(self.localMessages.count) messages")
+                    // Reload table data
+                    self.tableView.reloadData()
+                    // print("📊 TABLE_VIEW reloaded with \(self.localMessages.count) messages")
 
-                // Check if user has manually scrolled up recently
-                let hasManuallyScrolledUp =
-                    self.lastManualScrollUpTime != nil
-                    && Date().timeIntervalSince(self.lastManualScrollUpTime!) < 10.0
+                    // Check if user has manually scrolled up recently
+                    let hasManuallyScrolledUp =
+                        self.lastManualScrollUpTime != nil
+                        && Date().timeIntervalSince(self.lastManualScrollUpTime!) < 10.0
 
-                // FIXED: Always position at bottom when loading initial messages from memory
-                // Only skip if user has manually scrolled up
-                if !hasManuallyScrolledUp {
-                    // CRITICAL FIX: Don't auto-position if target message was recently highlighted
-                            if let highlightTime = self.lastTargetMessageHighlightTime,
-                                Date().timeIntervalSince(highlightTime) < 10.0
-                            {
-                                // Just show table without positioning
-                                self.tableView.alpha = 1.0
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    self.adjustTableInsetsForMessageCount()
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                                    self?.updateTableViewBouncing()
-                                }
-                            } else {
-                        // Position at bottom and show table
-                        self.positionTableAtBottomBeforeShowing()
+                    // FIXED: Always position at bottom when loading initial messages from memory
+                    // Only skip if user has manually scrolled up
+                    if !hasManuallyScrolledUp {
+                        // CRITICAL FIX: Don't auto-position if target message was recently highlighted
+                                if let highlightTime = self.lastTargetMessageHighlightTime,
+                                    Date().timeIntervalSince(highlightTime) < 10.0
+                                {
+                                    // Just show table without positioning
+                                    self.tableView.alpha = 1.0
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        self.adjustTableInsetsForMessageCount()
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                                        self?.updateTableViewBouncing()
+                                    }
+                                } else {
+                            // Position at bottom and show table
+                            self.positionTableAtBottomBeforeShowing()
 
-                        // Ensure table is visible
-                        self.tableView.alpha = 1.0
+                            // Ensure table is visible
+                            self.tableView.alpha = 1.0
 
-                        // Adjust table insets after positioning
+                            // Adjust table insets after positioning
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                self.adjustTableInsetsForMessageCount()
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                                self?.updateTableViewBouncing()
+                            }
+                        }
+                    } else {
+                        // print("👆 User has manually scrolled up, showing table without auto-positioning")
+                        // Just show table and adjust insets
+                        self.showTableViewWithFade()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             self.adjustTableInsetsForMessageCount()
                         }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
                             self?.updateTableViewBouncing()
                         }
-                    }
-                } else {
-                    // print("👆 User has manually scrolled up, showing table without auto-positioning")
-                    // Just show table and adjust insets
-                    self.showTableViewWithFade()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        self.adjustTableInsetsForMessageCount()
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                        self?.updateTableViewBouncing()
                     }
                 }
             }

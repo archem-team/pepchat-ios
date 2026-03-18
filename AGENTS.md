@@ -92,6 +92,7 @@
 - `FEATURES.md` - Product features summary (onboarding, messaging, servers, settings, etc.).
 - `docs/Sentry.md` - Sentry crash report analysis, root causes, and fix recommendations (scroll/navigation guards, memory management).
 - `docs/ForceUnwrap.md` - Force unwrap audit (`!`, `as!`, `try!`) by risk level and file location; use when hardening crash-prone paths.
+- `docs/Feature/PinMessage.md` - Pin/unpin feature design and implementation log, including pinned list behavior, header pin button, and known edge cases (e.g. NotPinned, attachment-only pins).
 - `docs/DraftMessage.md` - Message drafts implementation plan and implementation log: composer text saved per channel, session-bound storage, save/restore/clear touchpoints, and what was changed in the codebase (if present in repo; may be gitignored).
 - `docs/DeleteMessagesIssue.md` - Delete/cache sync and channel UI refresh: server reconciliation for deletes while app was closed, instant UI update on local delete, and new messages from another device (if present in repo; may be gitignored).
 - `docs/TestCases.md` - Rules and template for AI agents to derive and write test cases: user POV, step-by-step format, expected outcome/result, edge-case coverage, and feature-area mapping; use when preparing manual or automated test cases for a feature or flow.

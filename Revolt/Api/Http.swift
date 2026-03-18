@@ -288,6 +288,47 @@ struct HTTPClient {
         await req(method: .delete, route: "/channels/\(channel)/messages/\(message)")
     }
     
+    // Pin a specified message in a given channel.
+    // - Parameters:
+    //   - channel: The ID of the channel where the message is located.
+    //   - message: The ID of the message to be deleted.
+    // - Returns: A result containing an `EmptyResponse` if successful, or a `RevoltError` if an error occurs.
+    func pinMessage(channel: String, message: String) async -> Result<EmptyResponse, RevoltError> {
+        await req(method: .post, route: "/channels/\(channel)/messages/\(message)/pin")
+    }
+    
+    // Unpin a specified message in a given channel.
+    // - Parameters:
+    //   - channel: The ID of the channel where the message is located.
+    //   - message: The ID of the message to be deleted.
+    // - Returns: A result containing an `EmptyResponse` if successful, or a `RevoltError` if an error occurs.
+    func unpinMessage(channel: String, message: String) async -> Result<EmptyResponse, RevoltError> {
+        await req(method: .delete, route: "/channels/\(channel)/messages/\(message)/pin")
+    }
+    
+    // Fetches pinned messages in a channel via the search API.
+    // - Parameters:
+    //   - channel: The ID of the channel.
+    //   - sort: Sort order (default .latest).
+    //   - limit: Max number of messages (default 100, API max 100).
+    // - Returns: SearchResponse with messages and users, or a RevoltError.
+    func fetchPinnedMessages(
+        channel: String,
+        sort: ChannelSearchPayload.MessageSort = .latest,
+        limit: Int = 100
+    ) async -> Result<SearchResponse, RevoltError> {
+        let payload = ChannelSearchPayload(
+            query: nil,
+            pinned: true,
+            limit: limit,
+            before: nil,
+            after: nil,
+            sort: sort,
+            include_users: true
+        )
+        return await req(method: .post, route: "/channels/\(channel)/search", parameters: payload)
+    }
+    
     // Fetches message history from a channel, with options for pagination and filtering.
     // - Parameters:
     //   - channel: The ID of the channel to fetch messages from.

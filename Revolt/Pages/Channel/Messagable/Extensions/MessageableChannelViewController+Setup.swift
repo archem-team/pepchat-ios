@@ -51,6 +51,8 @@ extension MessageableChannelViewController {
         channelNameLabel.font = UIFont.boldSystemFont(ofSize: 16)
         channelNameLabel.translatesAutoresizingMaskIntoConstraints = false
         channelNameLabel.textAlignment = .left
+        channelNameLabel.numberOfLines = 1
+        channelNameLabel.lineBreakMode = .byTruncatingTail
         channelNameLabel.isUserInteractionEnabled = true
         headerView.addSubview(channelNameLabel)
 
@@ -58,6 +60,14 @@ extension MessageableChannelViewController {
         let nameTapGesture = UITapGestureRecognizer(
             target: self, action: #selector(channelHeaderTapped))
         channelNameLabel.addGestureRecognizer(nameTapGesture)
+        
+        //Pinned Button
+        pinnedMessageButton = UIButton(type: .system)
+        pinnedMessageButton.setImage(UIImage(systemName: "pin"), for: .normal)
+        pinnedMessageButton.tintColor = .textDefaultGray01
+        pinnedMessageButton.translatesAutoresizingMaskIntoConstraints = false
+        pinnedMessageButton.addTarget(self, action: #selector(pinnedButtonTapped), for: .touchUpInside)
+        headerView.addSubview(pinnedMessageButton)
 
         // Search button (right)
         searchButton = UIButton(type: .system)
@@ -196,19 +206,25 @@ extension MessageableChannelViewController {
             channelIconView.widthAnchor.constraint(equalToConstant: 36),  // Increased from 30
             channelIconView.heightAnchor.constraint(equalToConstant: 36),  // Increased from 30
 
-            // Channel name - Positioned next to channel icon
-            channelNameLabel.leadingAnchor.constraint(
-                equalTo: channelIconView.trailingAnchor, constant: 10),
-            channelNameLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
-            channelNameLabel.trailingAnchor.constraint(
-                lessThanOrEqualTo: searchButton.leadingAnchor, constant: -10),
-
             // Search button - Position at the bottom right
             searchButton.trailingAnchor.constraint(
                 equalTo: headerView.trailingAnchor, constant: -16),
             searchButton.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
             searchButton.widthAnchor.constraint(equalToConstant: 28),
             searchButton.heightAnchor.constraint(equalToConstant: 28),
+            
+            // Pinned button - to the left of the search button
+            pinnedMessageButton.trailingAnchor.constraint(equalTo: searchButton.leadingAnchor, constant: -12),
+            pinnedMessageButton.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            pinnedMessageButton.widthAnchor.constraint(equalToConstant: 28),
+            pinnedMessageButton.heightAnchor.constraint(equalToConstant: 28),
+            
+            // Channel name - Between icon and pin button; truncate with "..." when too long
+            channelNameLabel.leadingAnchor.constraint(
+                equalTo: channelIconView.trailingAnchor, constant: 10),
+            channelNameLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            channelNameLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: pinnedMessageButton.leadingAnchor, constant: -10),
 
             // Separator at the bottom
             separator.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),
@@ -236,7 +252,7 @@ extension MessageableChannelViewController {
         tableView.backgroundColor = .bgDefaultPurple13
 
         tableView.keyboardDismissMode = .interactive
-        tableView.estimatedRowHeight = 80  // Reduced for better performance
+        tableView.estimatedRowHeight = 120  // Reduced for better performance
         tableView.rowHeight = UITableView.automaticDimension
 
         // PERFORMANCE: Enable cell prefetching and optimize scrolling

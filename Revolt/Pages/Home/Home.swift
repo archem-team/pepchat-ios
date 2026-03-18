@@ -64,7 +64,7 @@ struct MaybeChannelView: View {
                 )
                 .ignoresSafeArea(.all)
                 .edgesIgnoringSafeArea(.all)
-                .statusBar(hidden: true)
+                .statusBar(hidden: false)
                 .onAppear {
                     // Only clear target message ID if we're sure it belongs to a different channel
                     if let targetId = viewState.currentTargetMessageId {

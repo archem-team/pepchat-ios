@@ -320,7 +320,8 @@ struct ChannelSearchPayload: Encodable {
         case relevance = "Relevance" // Sort by relevance
     }
     
-    var query: String            // Search query
+    var query: String?          // Search query
+    var pinned: Bool?           // Optional pinned message
     var limit: Int?             // Optional limit on the number of results
     var before: String?         // Optional ID to fetch results before a certain message
     var after: String?          // Optional ID to fetch results after a certain message
