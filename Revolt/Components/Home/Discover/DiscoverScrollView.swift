@@ -463,7 +463,6 @@ class ServerChatDataFetcher {
                     }
                     
                     print("📊 [ServerChatDataFetcher] Parsing CSV with \(csv.rows.count) rows")
-                    print("📊 This is the CSV data: \(csv)")
                     
                     let serverChats = csv.rows.compactMap { row -> ServerChat? in
                         guard let id = row["id"] ?? row[""],

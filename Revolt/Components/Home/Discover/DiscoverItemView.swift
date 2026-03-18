@@ -17,7 +17,6 @@ struct DiscoverItemView: View {
     private var displayColor: Color {
         if let colorHex = discoverItem.color, !colorHex.isEmpty, colorHex.hasPrefix("#") {
             // Parse custom color from CSV
-            print("🎨 [DiscoverItemView] Using custom color \(colorHex) for \(discoverItem.title)")
             return Color(hex: colorHex) ?? (discoverItem.isNew ? .textYellow07 : .textDefaultGray01)
         } else if discoverItem.isNew {
             // Use yellow for new items

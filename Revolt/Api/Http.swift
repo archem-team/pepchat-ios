@@ -151,10 +151,10 @@ struct HTTPClient {
         
         // Logging the response based on success or failure
         do {
-            let resp = try response.result.get()
-            logger.debug("OK:    Received response \(code) for route \(method.rawValue) \(baseURL)\(route) with result \(resp)")
+            _ = try response.result.get()
+            logger.debug("OK:    \(code) \(method.rawValue) \(route)")
         } catch {
-            logger.debug("Error: Received response \(code) for route \(method.rawValue) \(baseURL)\(route) with result \(response.error)")
+            logger.debug("Error: \(code) \(method.rawValue) \(route) — \(response.error?.localizedDescription ?? "unknown")")
         }
         
         // Return an error if the status code is not within the successful range (2xx)

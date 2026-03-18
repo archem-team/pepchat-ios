@@ -106,6 +106,7 @@ extension ViewState {
         // Update app badge count
         DispatchQueue.main.async {
             let currentBadge = application.applicationIconBadgeNumber
+            guard currentBadge != finalBadgeCount else { return }
             application.applicationIconBadgeNumber = finalBadgeCount
             print("🔔 Badge: \(currentBadge) -> \(finalBadgeCount) (unreads: \(totalUnreadCount))")
         }
