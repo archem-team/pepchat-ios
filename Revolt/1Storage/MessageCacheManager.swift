@@ -295,6 +295,7 @@ class MessageCacheManager {
         """
         var statement: OpaquePointer?
         var messages: [Message] = []
+        let decoder = JSONDecoder()
         guard sqlite3_prepare_v2(db, selectSQL, -1, &statement, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(statement) }
         bindText(statement, 1, channelId)
@@ -309,7 +310,7 @@ class MessageCacheManager {
             if let blob = sqlite3_column_blob(statement, 0) {
                 let size = sqlite3_column_bytes(statement, 0)
                 let data = Data(bytes: blob, count: Int(size))
-                if let message = try? JSONDecoder().decode(Message.self, from: data), !deletedIds.contains(message.id) {
+                if let message = try? decoder.decode(Message.self, from: data), !deletedIds.contains(message.id) {
                     messages.append(message)
                 }
             }
@@ -524,20 +525,32 @@ class MessageCacheManager {
     }
     
     private func _loadCachedUsers(for userIds: [String], currentUserId: String, baseURL: String) -> [String: User] {
-        guard let db = db else { return [:] }
+        guard let db = db, !userIds.isEmpty else { return [:] }
         var users: [String: User] = [:]
-        for uid in userIds {
-            let sql = "SELECT user_data FROM users WHERE id = ? AND user_id = ? AND base_url = ?"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { continue }
-            defer { sqlite3_finalize(stmt) }
-            bindText(stmt, 1, uid)
-            bindText(stmt, 2, currentUserId)
-            bindText(stmt, 3, baseURL)
-            if sqlite3_step(stmt) == SQLITE_ROW, let blob = sqlite3_column_blob(stmt, 0) {
-                let size = sqlite3_column_bytes(stmt, 0)
+        let decoder = JSONDecoder()
+
+        // Batch query: SELECT ... WHERE id IN (?, ?, ...) — 1 round-trip instead of N
+        // Note: callers pass unique author IDs from a single page of messages (~50),
+        // so count stays well under SQLite's 999 bind-parameter limit.
+        // If this is ever called with unbounded input, chunk into batches of ~500.
+        let placeholders = String(repeating: "?,", count: userIds.count).dropLast()
+        let sql = "SELECT id, user_data FROM users WHERE id IN (\(placeholders)) AND user_id = ? AND base_url = ?"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [:] }
+        defer { sqlite3_finalize(stmt) }
+
+        for (i, uid) in userIds.enumerated() {
+            bindText(stmt, Int32(i + 1), uid)
+        }
+        bindText(stmt, Int32(userIds.count + 1), currentUserId)
+        bindText(stmt, Int32(userIds.count + 2), baseURL)
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let uid = sqlite3_column_text(stmt, 0).map { String(cString: $0) } ?? ""
+            if let blob = sqlite3_column_blob(stmt, 1) {
+                let size = sqlite3_column_bytes(stmt, 1)
                 let data = Data(bytes: blob, count: Int(size))
-                if let user = try? JSONDecoder().decode(User.self, from: data) {
+                if let user = try? decoder.decode(User.self, from: data) {
                     users[uid] = user
                 }
             }
