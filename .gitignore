@@ -23,3 +23,7 @@ PERFORMANCE_DIAGNOSIS.md
 
 # Project documentation (optional local/private)
 .docs/
+
+# Serena MCP server
+.serena/
+.mcp.json
