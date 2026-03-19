@@ -23,27 +23,32 @@ extension MessageableChannelViewController {
         guard !existing.isEmpty else { return new }
         guard !new.isEmpty else { return existing }
 
-        let newSet = Set(new)
+        // Sort inputs to guarantee the two-pointer merge is correct.
+        // Still faster than main's approach: plain string comparison vs ULID→Date parsing.
+        let sortedExisting = existing.sorted()
+        let sortedNew = new.sorted()
+
+        let newSet = Set(sortedNew)
         // Remove duplicates from existing that also appear in new
-        let dedupedExisting = existing.filter { !newSet.contains($0) }
+        let dedupedExisting = sortedExisting.filter { !newSet.contains($0) }
 
         var result: [String] = []
-        result.reserveCapacity(dedupedExisting.count + new.count)
+        result.reserveCapacity(dedupedExisting.count + sortedNew.count)
 
         var i = dedupedExisting.startIndex
-        var j = new.startIndex
-        while i < dedupedExisting.endIndex && j < new.endIndex {
-            if dedupedExisting[i] <= new[j] {
+        var j = sortedNew.startIndex
+        while i < dedupedExisting.endIndex && j < sortedNew.endIndex {
+            if dedupedExisting[i] <= sortedNew[j] {
                 result.append(dedupedExisting[i])
                 i += 1
             } else {
-                result.append(new[j])
+                result.append(sortedNew[j])
                 j += 1
             }
         }
         // Append remaining
         if i < dedupedExisting.endIndex { result.append(contentsOf: dedupedExisting[i...]) }
-        if j < new.endIndex { result.append(contentsOf: new[j...]) }
+        if j < sortedNew.endIndex { result.append(contentsOf: sortedNew[j...]) }
         return result
     }
 
@@ -663,10 +668,18 @@ extension MessageableChannelViewController {
                     }
                     let apiIds = fetchResult.messages.map { $0.id }
 
-                    // Reconcile with server: messages we had locally (e.g. from cache) in the same time window as the API page but not returned by the API are treated as deleted (e.g. another user deleted while app was closed).
-                    let oldestApiId = apiIds.min() ?? "" // ULID lexicographic min == oldest timestamp
+                    // Reconcile with server: messages we had locally (e.g. from cache) in the same
+                    // time window as the API page but not returned by the API are treated as deleted.
+                    // Only reconcile when the API returned a full page — a short page means we've
+                    // reached the top of history so "missing" IDs are just older, not deleted.
                     let apiIdSet = Set(apiIds)
-                    let deletedByServer = existingIds.filter { $0 >= oldestApiId && !apiIdSet.contains($0) }
+                    let deletedByServer: [String]
+                    if apiIds.count >= 100 {  // fetchHistory limit (see MessageableChannelViewModel)
+                        let oldestApiId = apiIds.min() ?? ""
+                        deletedByServer = existingIds.filter { $0 >= oldestApiId && !apiIdSet.contains($0) }
+                    } else {
+                        deletedByServer = []
+                    }
 
                     // Sort and filter off main thread
                     let sortedIds = self.mergeAndSortMessageIds(existing: existingIds, new: apiIds)
