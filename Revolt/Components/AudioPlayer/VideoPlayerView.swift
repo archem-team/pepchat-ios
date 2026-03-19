@@ -193,11 +193,11 @@ class VideoPlayerView: UIView {
     
     // MARK: - Public Methods
     func configure(with videoURL: String, filename: String? = nil, fileSize: Int64? = nil, headers: [String: String] = [:]) {
-        print("🎬 VideoPlayerView.configure called with:")
-        print("  URL: \(videoURL)")
-        print("  Filename: \(filename ?? "nil")")
-        print("  FileSize: \(fileSize ?? 0)")
-        print("  Headers: \(headers.keys.joined(separator: ", "))")
+        // print("🎬 VideoPlayerView.configure called with:")
+        // print("  URL: \(videoURL)")
+        // print("  Filename: \(filename ?? "nil")")
+        // print("  FileSize: \(fileSize ?? 0)")
+        // print("  Headers: \(headers.keys.joined(separator: ", "))")
         
         self.videoURL = videoURL
         self.filename = filename
@@ -245,14 +245,14 @@ class VideoPlayerView: UIView {
     }
     
     @objc private func playButtonTapped() {
-        print("🎬 Play button tapped")
+        // print("🎬 Play button tapped")
         
         guard let videoURL = videoURL else {
-            print("❌ No video URL available")
+            // print("❌ No video URL available")
             return
         }
         
-        print("🎬 Video URL: \(videoURL)")
+        // print("🎬 Video URL: \(videoURL)")
         
         // Add haptic feedback
         let generator = UIImpactFeedbackGenerator(style: .light)
@@ -271,16 +271,16 @@ class VideoPlayerView: UIView {
         
         // Call the callback to handle video playback
         if let callback = onPlayTapped {
-            print("🎬 Calling onPlayTapped callback...")
+            // print("🎬 Calling onPlayTapped callback...")
             callback(videoURL)
         } else {
-            print("❌ No onPlayTapped callback set!")
+            // print("❌ No onPlayTapped callback set!")
         }
     }
     
     // MARK: - Helper Methods
     private func generateThumbnail(from urlString: String) {
-        print("🎬 generateThumbnail called with: \(urlString)")
+        // print("🎬 generateThumbnail called with: \(urlString)")
         
         guard let url = URL(string: urlString) else {
             print("❌ Failed to create URL from: \(urlString)")
@@ -291,7 +291,7 @@ class VideoPlayerView: UIView {
         
         // Check cache first
         if let cachedThumbnail = VideoPlayerView.thumbnailCache[urlString] {
-            print("✅ Using cached thumbnail")
+            // print("✅ Using cached thumbnail")
             thumbnailImageView.image = cachedThumbnail
             thumbnailImageView.contentMode = .scaleAspectFill
             
@@ -306,7 +306,7 @@ class VideoPlayerView: UIView {
             return
         }
         
-        print("🎬 Starting thumbnail generation...")
+        // print("🎬 Starting thumbnail generation...")
         
         // Show placeholder first
         showPlaceholderThumbnail()
@@ -332,7 +332,7 @@ class VideoPlayerView: UIView {
                 await generateThumbnailFromLocalFile(url: tempURL, cacheKey: urlString)
                 
             } catch {
-                print("❌ Thumbnail generation failed: \(error)")
+                // print("❌ Thumbnail generation failed: \(error)")
                 // Keep placeholder
             }
         }
@@ -398,7 +398,7 @@ class VideoPlayerView: UIView {
                 thumbnailGenerated = true
                 
                 await MainActor.run {
-                    print("✅ Thumbnail generated successfully")
+                    // print("✅ Thumbnail generated successfully")
                     self.thumbnailImageView.image = thumbnail
                     self.thumbnailImageView.contentMode = .scaleAspectFill
                 }

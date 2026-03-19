@@ -86,12 +86,12 @@ extension RepliesContainerView: ReplyItemViewDelegate {
     
     func replyItemViewDidPressReply(_ view: ReplyItemView, messageId: String, channelId: String) {
         // Pass the reply click to the delegate (which should be RepliesManager)
-        print("🔗 RepliesContainerView: Reply clicked, messageId: \(messageId), channelId: \(channelId)")
+        // print("🔗 RepliesContainerView: Reply clicked, messageId: \(messageId), channelId: \(channelId)")
         if let repliesManagerDelegate = delegate as? RepliesManager {
-            print("🔗 RepliesContainerView: Delegating to RepliesManager")
+            // print("🔗 RepliesContainerView: Delegating to RepliesManager")
             repliesManagerDelegate.replyItemViewDidPressReply(messageId: messageId, channelId: channelId)
         } else {
-            print("❌ RepliesContainerView: Delegate is not RepliesManager, delegate type: \(type(of: delegate))")
+            // print("❌ RepliesContainerView: Delegate is not RepliesManager, delegate type: \(type(of: delegate))")
         }
     }
 }
@@ -249,10 +249,10 @@ class ReplyItemView: UIView {
     
     @objc private func replyTapped() {
         // Navigate to the original message
-        print("🔗 REPLY_TAP: Reply tap detected!")
-        print("🔗 REPLY_TAP: messageId=\(messageReply.message.id)")
-        print("🔗 REPLY_TAP: channelId=\(messageReply.message.channel)")
-        print("🔗 REPLY_TAP: delegate=\(delegate != nil ? "exists" : "nil")")
+        // print("🔗 REPLY_TAP: Reply tap detected!")
+        // print("🔗 REPLY_TAP: messageId=\(messageReply.message.id)")
+        // print("🔗 REPLY_TAP: channelId=\(messageReply.message.channel)")
+        // print("🔗 REPLY_TAP: delegate=\(delegate != nil ? "exists" : "nil")")
         
         delegate?.replyItemViewDidPressReply(self, messageId: messageReply.message.id, channelId: messageReply.message.channel)
     }

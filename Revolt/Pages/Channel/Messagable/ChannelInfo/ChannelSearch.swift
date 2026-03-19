@@ -45,7 +45,7 @@ struct ChannelSearch: View {
                         
                         // Don't clear target message immediately, let the view controller handle it
                         // Instead, send a notification that we're closing search to return to the same channel
-                        print("🎯 ChannelSearch: Close button pressed - Returning to channel without clearing target")
+                        // print("🎯 ChannelSearch: Close button pressed - Returning to channel without clearing target")
                         
                         // Send notification that we're closing search for this channel
                         NotificationCenter.default.post(
@@ -193,10 +193,10 @@ struct ChannelSearch: View {
             if !isNavigatingToMessage {
                 // Check if we're returning to the same channel (close button pressed)
                 // In this case, we don't want to clear the target message ID
-                print("🎯 ChannelSearch: onDisappear - Not navigating to message, preserving target for return")
+                // print("🎯 ChannelSearch: onDisappear - Not navigating to message, preserving target for return")
                 // Don't clear currentTargetMessageId here, let the view controller handle it
             } else {
-                print("🎯 ChannelSearch: onDisappear - Preserving currentTargetMessageId for navigation")
+                // print("🎯 ChannelSearch: onDisappear - Preserving currentTargetMessageId for navigation")
             }
         }
         .ignoresSafeArea(.container, edges: .bottom)
@@ -231,7 +231,7 @@ struct ChannelSearch: View {
             let messageURL = URL(string: messageLink)!
             
             await MainActor.run {
-                print("🔍 Search: Navigating to message URL: \(messageURL.absoluteString)")
+                // print("🔍 Search: Navigating to message URL: \(messageURL.absoluteString)")
                 // Use the existing URL handling system by simulating a URL tap
                 handleMessageURL(messageURL)
             }
@@ -241,7 +241,7 @@ struct ChannelSearch: View {
     /// Handles message URL navigation using the existing internal URL system
     /// - Parameter url: The message URL to handle
     private func handleMessageURL(_ url: URL) {
-        print("🔗 ChannelSearch: Handling message URL: \(url.absoluteString)")
+        // print("🔗 ChannelSearch: Handling message URL: \(url.absoluteString)")
         
         if url.absoluteString.hasPrefix("https://peptide.chat/server/") {
             let components = url.pathComponents
@@ -255,7 +255,7 @@ struct ChannelSearch: View {
                 if viewState.servers[serverId] != nil && viewState.channels[channelId] != nil {
                     // Check if user is a member of the server
                     guard let currentUser = viewState.currentUser else {
-                        print("❌ ChannelSearch: Current user not found")
+                        // print("❌ ChannelSearch: Current user not found")
                         return
                     }
                     
@@ -263,7 +263,7 @@ struct ChannelSearch: View {
                     
                     if userMember != nil {
                         // User is a member - navigate to the channel
-                        print("✅ ChannelSearch: User is member, navigating to channel")
+                        // print("✅ ChannelSearch: User is member, navigating to channel")
                         
                         // Set flag to indicate we're navigating to preserve target message ID
                         isNavigatingToMessage = true
@@ -273,7 +273,7 @@ struct ChannelSearch: View {
                         
                         // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
                         // This ensures that when user presses back, they go to server list instead of previous channel
-                        print("🔄 ChannelSearch: Clearing navigation path to prevent back to previous channel")
+                        // print("🔄 ChannelSearch: Clearing navigation path to prevent back to previous channel")
                         viewState.path = []
                         
                         // Navigate immediately without delay
@@ -283,17 +283,17 @@ struct ChannelSearch: View {
                         
                         // Set the target message ID for nearby API call
                         self.viewState.currentTargetMessageId = messageId
-                        print("🎯 ChannelSearch: Setting target message ID: \(messageId)")
+                        // print("🎯 ChannelSearch: Setting target message ID: \(messageId)")
                         
                         self.viewState.path.append(NavigationDestination.maybeChannelView)
                     } else {
                         // User is not a member - show error
-                        print("❌ ChannelSearch: User is not member of server")
+                        // print("❌ ChannelSearch: User is not member of server")
                         viewState.showAlert(message: "You don't have access to this server", icon: .peptideInfo)
                     }
                 } else {
                     // Server or channel not found
-                    print("❌ ChannelSearch: Server or channel not found")
+                    // print("❌ ChannelSearch: Server or channel not found")
                     viewState.showAlert(message: "Channel not found", icon: .peptideInfo)
                 }
             }
@@ -309,26 +309,26 @@ struct ChannelSearch: View {
                     switch targetChannel {
                     case .dm_channel(let dmChannel):
                         guard let currentUser = viewState.currentUser else {
-                            print("❌ ChannelSearch: Current user not found")
+                            // print("❌ ChannelSearch: Current user not found")
                             return
                         }
                         
                         if dmChannel.recipients.contains(currentUser.id) {
                             navigateToChannel(channelId: channelId, messageId: messageId)
                         } else {
-                            print("❌ ChannelSearch: User doesn't have access to DM")
+                            // print("❌ ChannelSearch: User doesn't have access to DM")
                             viewState.showAlert(message: "You don't have access to this channel", icon: .peptideInfo)
                         }
                     case .group_dm_channel(let groupDmChannel):
                         guard let currentUser = viewState.currentUser else {
-                            print("❌ ChannelSearch: Current user not found")
+                            // print("❌ ChannelSearch: Current user not found")
                             return
                         }
                         
                         if groupDmChannel.recipients.contains(currentUser.id) {
                             navigateToChannel(channelId: channelId, messageId: messageId)
                         } else {
-                            print("❌ ChannelSearch: User doesn't have access to group DM")
+                            // print("❌ ChannelSearch: User doesn't have access to group DM")
                             viewState.showAlert(message: "You don't have access to this channel", icon: .peptideInfo)
                         }
                     default:
@@ -336,7 +336,7 @@ struct ChannelSearch: View {
                         navigateToChannel(channelId: channelId, messageId: messageId)
                     }
                 } else {
-                    print("❌ ChannelSearch: Channel not found")
+                    // print("❌ ChannelSearch: Channel not found")
                     viewState.showAlert(message: "Channel not found", icon: .peptideInfo)
                 }
             }
@@ -348,7 +348,7 @@ struct ChannelSearch: View {
     ///   - channelId: The channel ID to navigate to
     ///   - messageId: The message ID to highlight
     private func navigateToChannel(channelId: String, messageId: String) {
-        print("✅ ChannelSearch: Navigating to channel \(channelId) with message \(messageId)")
+        // print("✅ ChannelSearch: Navigating to channel \(channelId) with message \(messageId)")
         
         // Set flag to indicate we're navigating to preserve target message ID
         isNavigatingToMessage = true
@@ -358,7 +358,7 @@ struct ChannelSearch: View {
         
         // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
         // This ensures that when user presses back, they go to server list instead of previous channel
-        print("🔄 ChannelSearch: Clearing navigation path to prevent back to previous channel")
+        // print("🔄 ChannelSearch: Clearing navigation path to prevent back to previous channel")
         viewState.path = []
         
         // Navigate immediately without delay
@@ -367,7 +367,7 @@ struct ChannelSearch: View {
         
         // Set the target message ID for nearby API call
         self.viewState.currentTargetMessageId = messageId
-        print("🎯 ChannelSearch: Setting target message ID: \(messageId)")
+        // print("🎯 ChannelSearch: Setting target message ID: \(messageId)")
         
         self.viewState.path.append(NavigationDestination.maybeChannelView)
     }
@@ -411,7 +411,7 @@ struct ChannelSearch: View {
                     isLoading = false
                 } catch {
                     // Handle errors appropriately (optional)
-                    print("Error fetching search results: \(error)") // Log any errors that occur.
+                    // print("Error fetching search results: \(error)") // Log any errors that occur.
                     isLoading = false
 
                 }

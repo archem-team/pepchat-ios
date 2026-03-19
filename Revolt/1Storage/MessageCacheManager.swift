@@ -203,7 +203,7 @@ class MessageCacheManager {
     func cacheMessagesAndUsers(_ messages: [Message], users: [User], channelId: String, userId: String, baseURL: String, lastMessageId: String?) {
         dbQueue.async { [weak self] in
             if !messages.isEmpty {
-                print("📂 [MessageCache] WRITE: caching \(messages.count) messages for channel \(channelId)")
+                // print("📂 [MessageCache] WRITE: caching \(messages.count) messages for channel \(channelId)")
             }
             self?._cacheMessages(messages, for: channelId, userId: userId, baseURL: baseURL)
             self?._cacheUsers(users, userId: userId, baseURL: baseURL)
@@ -258,7 +258,7 @@ class MessageCacheManager {
             dbQueue.async { [weak self] in
                 let list = self?._loadCachedMessages(for: channelId, userId: userId, baseURL: baseURL, limit: limit, offset: offset) ?? []
                 if !list.isEmpty {
-                    print("📂 [MessageCache] READ: loaded \(list.count) messages from cache for channel \(channelId) (offset \(offset))")
+                    // print("📂 [MessageCache] READ: loaded \(list.count) messages from cache for channel \(channelId) (offset \(offset))")
                 }
                 cont.resume(returning: list)
             }
@@ -470,7 +470,7 @@ class MessageCacheManager {
         sqlite3_exec(db, "DELETE FROM users", nil, nil, nil)
         sqlite3_exec(db, "DELETE FROM channel_info", nil, nil, nil)
         sqlite3_exec(db, "DELETE FROM tombstones", nil, nil, nil)
-        print("📂 [MessageCache] CLEARED: all caches wiped (e.g. sign-out)")
+        // print("📂 [MessageCache] CLEARED: all caches wiped (e.g. sign-out)")
         logger.info("Cleared all message caches")
     }
     

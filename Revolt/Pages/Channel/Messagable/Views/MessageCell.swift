@@ -574,7 +574,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             let channelMatches = channelRegex.matches(in: text, range: range)
             
             // Debug: Print found matches
-            print("🔍 MessageCell Channel mention processing: Found \(channelMatches.count) matches in: \(text)")
+            // print("🔍 MessageCell Channel mention processing: Found \(channelMatches.count) matches in: \(text)")
             
             // Process matches in reverse to avoid index issues when replacing
             for match in channelMatches.reversed() {
@@ -582,9 +582,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     let channelId = String(text[channelIdRange])
                     
                     // Try to find channel in viewState
-                    print("🔍 MessageCell Processing channel ID: \(channelId)")
+                    // print("🔍 MessageCell Processing channel ID: \(channelId)")
                     if let channel = viewState.channels[channelId] ?? viewState.allEventChannels[channelId] {
-                        print("✅ MessageCell Found channel: \(channel.getName(viewState)) for ID: \(channelId)")
+                        // print("✅ MessageCell Found channel: \(channel.getName(viewState)) for ID: \(channelId)")
                         // Get the mention range in the original text
                         let mentionRange = match.range
                         
@@ -640,7 +640,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                             // print("DEBUG: Error adding attributes to channel mention: \(error)")
                         }
                     } else {
-                        print("❌ MessageCell Channel not found for ID: \(channelId)")
+                        // print("❌ MessageCell Channel not found for ID: \(channelId)")
                         // Channel not found - replace with #unknown-channel
                         let mentionRange = match.range
                         guard mentionRange.location >= 0,
@@ -1152,7 +1152,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         Task { @MainActor in
                             let currentViewState = self.viewState
                             if currentViewState?.messages[firstReplyId] == nil {
-                                print("⏰ REPLY_TIMEOUT: Stopping loading indicator for reply \(firstReplyId) - likely deleted")
+                                // print("⏰ REPLY_TIMEOUT: Stopping loading indicator for reply \(firstReplyId) - likely deleted")
                                 self.replyLoadingIndicator.stopAnimating()
                                 
                                 // Show "message deleted" placeholder
@@ -1236,7 +1236,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 
                 // Set up automatic timeout to dismiss the alert after 8 seconds (reduced for better UX)
                 self.loadingAlertTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: false) { [weak self] _ in
-                    print("⏰ LOADING_ALERT_TIMEOUT: Auto-dismissing 'Finding message...' alert after 8 seconds")
+                    // print("⏰ LOADING_ALERT_TIMEOUT: Auto-dismissing 'Finding message...' alert after 8 seconds")
                     self?.hideReplyLoadingIndicator()
                     
                     // Show the standard "message not found" alert
@@ -1343,7 +1343,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     DispatchQueue.main.async {
                         // CRITICAL FIX: Set target message BEFORE navigation
                         viewState.currentTargetMessageId = replyMessage.id
-                        print("🎯 MessageCell: Setting target message ID BEFORE cross-channel navigation: \(replyMessage.id)")
+                        // print("🎯 MessageCell: Setting target message ID BEFORE cross-channel navigation: \(replyMessage.id)")
                         
                         if let serverId = channel.server {
                             // Server channel
@@ -1356,7 +1356,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         
                         viewState.path.append(NavigationDestination.maybeChannelView)
                         
-                        print("🎯 MessageCell: Cross-channel Navigation completed - new view controller will handle target message")
+                        // print("🎯 MessageCell: Cross-channel Navigation completed - new view controller will handle target message")
                     }
                 }
             }
@@ -1521,10 +1521,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     }
     
     @objc internal func reactionButtonTapped(_ gesture: UITapGestureRecognizer) {
-        print("🔥 REACTION BUTTON TAPPED!")
+        // print("🔥 REACTION BUTTON TAPPED!")
         guard let containerView = gesture.view,
               let emoji = containerView.accessibilityLabel else { 
-            print("🔥 ERROR: Missing containerView or emoji")
+            // print("🔥 ERROR: Missing containerView or emoji")
             return 
         }
         
@@ -1532,11 +1532,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         guard let messageId = containerView.restorationIdentifier,
               let viewState = self.viewState,
               let message = viewState.messages[messageId] else {
-            print("🔥 ERROR: Cannot find message for reaction - messageId: \(containerView.restorationIdentifier ?? "nil")")
+            // print("🔥 ERROR: Cannot find message for reaction - messageId: \(containerView.restorationIdentifier ?? "nil")")
             return
         }
         
-        print("🔥 Reaction tap: emoji=\(emoji), message=\(message.id)")
+        // print("🔥 Reaction tap: emoji=\(emoji), message=\(message.id)")
         
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -1552,7 +1552,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         }
         
         // Call the message action handler with the reaction
-        print("🔥 CALLBACK CHECK: onMessageAction is \(onMessageAction == nil ? "NIL" : "SET")")
+        // print("🔥 CALLBACK CHECK: onMessageAction is \(onMessageAction == nil ? "NIL" : "SET")")
         onMessageAction?(.react(emoji), message)
     }
     

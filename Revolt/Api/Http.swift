@@ -125,7 +125,7 @@ struct HTTPClient {
             timeoutTask.cancel() // Cancel timeout if request completes
         } catch {
             timeoutTask.cancel()
-            print("❌ REQUEST_TIMEOUT: \(method.rawValue) \(route) timed out after 15 seconds")
+            // print("❌ REQUEST_TIMEOUT: \(method.rawValue) \(route) timed out after 15 seconds")
             return .failure(.HTTPError("Request timed out", 408))
         }
         
@@ -349,7 +349,7 @@ struct HTTPClient {
         
         for attempt in 0..<maxRetries {
             let startTime = Date()
-            print("⏱️ FETCH_HISTORY_ATTEMPT [\(attempt + 1)/\(maxRetries)]: Starting at \(startTime.timeIntervalSince1970)")
+            // print("⏱️ FETCH_HISTORY_ATTEMPT [\(attempt + 1)/\(maxRetries)]: Starting at \(startTime.timeIntervalSince1970)")
             
             let result = await performFetchHistory(
                 channel: channel,
@@ -365,26 +365,26 @@ struct HTTPClient {
             
             let endTime = Date()
             let duration = endTime.timeIntervalSince(startTime)
-            print("⏱️ FETCH_HISTORY_ATTEMPT [\(attempt + 1)/\(maxRetries)]: Completed in \(String(format: "%.2f", duration))s")
+            // print("⏱️ FETCH_HISTORY_ATTEMPT [\(attempt + 1)/\(maxRetries)]: Completed in \(String(format: "%.2f", duration))s")
             
             switch result {
             case .success(let fetchHistory):
-                print("✅ FETCH_HISTORY_SUCCESS: Attempt \(attempt + 1) succeeded with \(fetchHistory.messages.count) messages")
+                // print("✅ FETCH_HISTORY_SUCCESS: Attempt \(attempt + 1) succeeded with \(fetchHistory.messages.count) messages")
                 return .success(fetchHistory)
                 
             case .failure(let error):
                 lastError = error
-                print("❌ FETCH_HISTORY_FAILED: Attempt \(attempt + 1) failed: \(error)")
+                // print("❌ FETCH_HISTORY_FAILED: Attempt \(attempt + 1) failed: \(error)")
                 
                 // If this is the last attempt, return the error
                 if attempt == maxRetries - 1 {
-                    print("❌ FETCH_HISTORY_EXHAUSTED: All \(maxRetries) attempts failed")
+                    // print("❌ FETCH_HISTORY_EXHAUSTED: All \(maxRetries) attempts failed")
                     break
                 }
                 
                 // Exponential backoff: 1s, 2s, 4s
                 let delay = pow(2.0, Double(attempt))
-                print("⏳ FETCH_HISTORY_RETRY: Waiting \(String(format: "%.1f", delay))s before retry...")
+                // print("⏳ FETCH_HISTORY_RETRY: Waiting \(String(format: "%.1f", delay))s before retry...")
                 
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }
@@ -961,28 +961,28 @@ struct HTTPClient {
         var lastError: RevoltError?
         
         for attempt in 0..<maxRetries {
-            print("📱 UPLOAD_NOTIFICATION_TOKEN_ATTEMPT [\(attempt + 1)/\(maxRetries)]: Attempting to upload token...")
+            // print("📱 UPLOAD_NOTIFICATION_TOKEN_ATTEMPT [\(attempt + 1)/\(maxRetries)]: Attempting to upload token...")
             
             let result = await req(method: .post, route: "/push/subscribe", parameters: ["endpoint": "apn", "p256dh": "", "auth": token])
             
             switch result {
             case .success(let response):
-                print("✅ UPLOAD_NOTIFICATION_TOKEN_SUCCESS: Token uploaded successfully on attempt \(attempt + 1)")
+                // print("✅ UPLOAD_NOTIFICATION_TOKEN_SUCCESS: Token uploaded successfully on attempt \(attempt + 1)")
                 return .success(response)
                 
             case .failure(let error):
                 lastError = error
-                print("❌ UPLOAD_NOTIFICATION_TOKEN_FAILED: Attempt \(attempt + 1) failed: \(error)")
+                // print("❌ UPLOAD_NOTIFICATION_TOKEN_FAILED: Attempt \(attempt + 1) failed: \(error)")
                 
                 // If this is the last attempt, return the error
                 if attempt == maxRetries - 1 {
-                    print("❌ UPLOAD_NOTIFICATION_TOKEN_EXHAUSTED: All \(maxRetries) attempts failed")
+                    // print("❌ UPLOAD_NOTIFICATION_TOKEN_EXHAUSTED: All \(maxRetries) attempts failed")
                     break
                 }
                 
                 // Exponential backoff: 2s, 4s, 8s
                 let delay = pow(2.0, Double(attempt + 1))
-                print("⏳ UPLOAD_NOTIFICATION_TOKEN_RETRY: Waiting \(String(format: "%.1f", delay))s before retry...")
+                // print("⏳ UPLOAD_NOTIFICATION_TOKEN_RETRY: Waiting \(String(format: "%.1f", delay))s before retry...")
                 
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }

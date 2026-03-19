@@ -175,9 +175,11 @@ struct HomeRewritten: View {
                                 viewState.currentChannel = .friends
                                 viewState.path.append(NavigationDestination.maybeChannelView)
                             case .friends:
-                                print("friends")
+                                // print("friends")
+                                break
                             case .you:
-                                print("you")
+                                // print("you")
+                                break
                         }
                         
                         
@@ -210,7 +212,7 @@ struct HomeRewritten: View {
                 
                 // CRITICAL FIX: Clear channel messages before navigating to ensure full message history is loaded
                 // This prevents the issue where only new WebSocket messages are shown
-                print("🔄 Home: Clearing channel messages for notification channel \(channelId) to ensure full history loads")
+                // print("🔄 Home: Clearing channel messages for notification channel \(channelId) to ensure full history loads")
                 viewState.channelMessages[channelId] = []
                 viewState.preloadedChannels.remove(channelId)
                 

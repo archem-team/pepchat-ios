@@ -46,7 +46,7 @@ extension MessageableChannelViewController {
             if tableView.tableHeaderView != nil {
                 tableView.tableHeaderView = nil
             }
-            print("📏 Disabled scrolling - no messages")
+            // print("📏 Disabled scrolling - no messages")
             return
         }
 
@@ -110,9 +110,9 @@ extension MessageableChannelViewController {
                 tableView.contentOffset = .zero
             }
 
-            print(
-                "📏 Disabled scrolling completely - actual content: \(actualContentHeight), visible: \(visibleHeight), rows: \(rowCount)"
-            )
+            // print(
+                // "📏 Disabled scrolling completely - actual content: \(actualContentHeight), visible: \(visibleHeight), rows: \(rowCount)"
+            // )
         }
     }
 
@@ -120,9 +120,9 @@ extension MessageableChannelViewController {
     internal func positionTableAtBottomBeforeShowing() {
         // COMPREHENSIVE TARGET MESSAGE PROTECTION
         if targetMessageProtectionActive {
-            print(
-                "🎯 [POSITION] Target message protection active, just showing table without positioning"
-            )
+            // print(
+                // "🎯 [POSITION] Target message protection active, just showing table without positioning"
+            // )
             showTableViewWithFade()
             return
         }

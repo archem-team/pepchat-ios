@@ -18,38 +18,38 @@ extension MessageableChannelViewController {
     internal func scrollToTargetMessage() {
         // CRITICAL FIX: Reset processed flag when we have a target message to scroll to
         if let targetId = self.targetMessageId {
-            print(
-                "🎯 scrollToTargetMessage called for target: \(targetId), resetting processed flag")
+            // print(
+                // "🎯 scrollToTargetMessage called for target: \(targetId), resetting processed flag")
             targetMessageProcessed = false
         }
 
         // CRITICAL FIX: Check if already processed to prevent multiple highlighting
         if targetMessageProcessed {
-            print("🎯 Target message already processed, skipping to prevent multiple highlights")
+            // print("🎯 Target message already processed, skipping to prevent multiple highlights")
             return
         }
 
         // CRITICAL FIX: Reset processed flag for new target message
         if let targetId = self.targetMessageId {
-            print("🎯 scrollToTargetMessage called for target: \(targetId)")
+            // print("🎯 scrollToTargetMessage called for target: \(targetId)")
         }
 
         guard let targetId = self.targetMessageId else {
             // If no target message, scroll to bottom
-            print("🚫 No target message ID, scrolling to bottom")
+            // print("🚫 No target message ID, scrolling to bottom")
             scrollToBottom(animated: false)
             return
         }
 
-        print("🎯 Attempting to scroll to target message: \(targetId)")
-        print("📊 Current message count in localMessages: \(localMessages.count)")
+        // print("🎯 Attempting to scroll to target message: \(targetId)")
+        // print("📊 Current message count in localMessages: \(localMessages.count)")
 
         // Debug - print some message IDs to help diagnose
         if !localMessages.isEmpty {
             let firstMsg = localMessages[0]
             let lastMsg = localMessages[localMessages.count - 1]
-            print("📑 First message ID: \(firstMsg)")
-            print("📑 Last message ID: \(lastMsg)")
+            // print("📑 First message ID: \(firstMsg)")
+            // print("📑 Last message ID: \(lastMsg)")
         }
 
         // Debug: Check current state
@@ -59,14 +59,14 @@ extension MessageableChannelViewController {
         let channelMessages = self.viewModel.viewState.channelMessages[self.viewModel.channel.id]
         let isInChannelMessages = channelMessages?.contains(targetId) ?? false
 
-        print("🔍 Target message \(targetId) status:")
-        print("   - In viewState.messages: \(isInViewState)")
-        print("   - In localMessages: \(isInLocalMessages)")
-        print("   - In viewModel.messages: \(isInViewModelMessages)")
-        print("   - In channelMessages: \(isInChannelMessages)")
-        print("   - LocalMessages count: \(localMessages.count)")
-        print("   - ViewModelMessages count: \(viewModel.messages.count)")
-        print("   - ChannelMessages count: \(channelMessages?.count ?? 0)")
+        // print("🔍 Target message \(targetId) status:")
+        // print("   - In viewState.messages: \(isInViewState)")
+        // print("   - In localMessages: \(isInLocalMessages)")
+        // print("   - In viewModel.messages: \(isInViewModelMessages)")
+        // print("   - In channelMessages: \(isInChannelMessages)")
+        // print("   - LocalMessages count: \(localMessages.count)")
+        // print("   - ViewModelMessages count: \(viewModel.messages.count)")
+        // print("   - ChannelMessages count: \(channelMessages?.count ?? 0)")
 
         // Check if target message exists in localMessages but not in viewState.messages
         if isInLocalMessages && !isInViewState {
@@ -98,7 +98,7 @@ extension MessageableChannelViewController {
         }
 
         // CRITICAL FIX: Force sync before finding index to prevent wrong scroll position
-        print("🔄 SYNC_CHECK: Ensuring all message arrays are synced before scrolling")
+        // print("🔄 SYNC_CHECK: Ensuring all message arrays are synced before scrolling")
         self.syncLocalMessagesWithViewState()
 
         // CRITICAL FIX: Use the most reliable source for finding index
@@ -107,21 +107,21 @@ extension MessageableChannelViewController {
             self.viewModel.channel.id], !channelMessages.isEmpty
         {
             referenceMessages = channelMessages
-            print(
-                "🔍 Using viewState.channelMessages as reference (\(channelMessages.count) messages)"
-            )
+            // print(
+                // "🔍 Using viewState.channelMessages as reference (\(channelMessages.count) messages)"
+            // )
         } else if !self.localMessages.isEmpty {
             referenceMessages = self.localMessages
-            print("🔍 Using localMessages as reference (\(self.localMessages.count) messages)")
+            // print("🔍 Using localMessages as reference (\(self.localMessages.count) messages)")
         } else {
-            print("❌ No reference messages available for scrolling")
+            // print("❌ No reference messages available for scrolling")
             self.scrollToBottom(animated: false)
             return
         }
 
         // CRITICAL FIX: Ensure localMessages matches reference for table view
         if self.localMessages != referenceMessages {
-            print("⚠️ SYNC_FIX: localMessages was out of sync, updating from reference")
+            // print("⚠️ SYNC_FIX: localMessages was out of sync, updating from reference")
             self.localMessages = referenceMessages
 
             // Update data source to match
@@ -132,22 +132,22 @@ extension MessageableChannelViewController {
 
         // Find the target message in reference messages
         if let index = referenceMessages.firstIndex(of: targetId) {
-            print(
-                "✅ Found target message at index \(index) in reference messages (total: \(referenceMessages.count))"
-            )
-            print("🎯 Target message ID: \(targetId)")
+            // print(
+                // "✅ Found target message at index \(index) in reference messages (total: \(referenceMessages.count))"
+            // )
+            // print("🎯 Target message ID: \(targetId)")
 
             // VALIDATION: Verify the message at this index is actually our target
             if index < referenceMessages.count && referenceMessages[index] == targetId {
-                print("✅ VALIDATION: Confirmed message at index \(index) is target \(targetId)")
+                // print("✅ VALIDATION: Confirmed message at index \(index) is target \(targetId)")
             } else {
-                print("❌ VALIDATION: Message at index \(index) is NOT target \(targetId)")
+                // print("❌ VALIDATION: Message at index \(index) is NOT target \(targetId)")
                 // Try to find it again or fallback
                 if let correctIndex = referenceMessages.firstIndex(of: targetId) {
-                    print("🔄 CORRECTION: Found target at correct index \(correctIndex)")
+                    // print("🔄 CORRECTION: Found target at correct index \(correctIndex)")
                     // Update index variable (but can't reassign let, so we'll use correctIndex below)
                 } else {
-                    print("❌ CORRECTION: Could not find target message, falling back to bottom")
+                    // print("❌ CORRECTION: Could not find target message, falling back to bottom")
                     self.scrollToBottom(animated: false)
                     return
                 }
@@ -161,9 +161,9 @@ extension MessageableChannelViewController {
                 guard let self = self else { return }
 
                 // CRITICAL FIX: Force complete data source recreation with correct messages
-                print(
-                    "🔄 DATASOURCE_FIX: Recreating data source with \(referenceMessages.count) messages"
-                )
+                // print(
+                    // "🔄 DATASOURCE_FIX: Recreating data source with \(referenceMessages.count) messages"
+                // )
                 self.dataSource = LocalMessagesDataSource(
                     viewModel: self.viewModel,
                     viewController: self,
@@ -181,14 +181,14 @@ extension MessageableChannelViewController {
 
                 // CRITICAL FIX: Check row count immediately and retry if mismatch
                 let initialRowCount = self.tableView.numberOfRows(inSection: 0)
-                print(
-                    "📊 Initial table row count: \(initialRowCount), expected: \(referenceMessages.count)"
-                )
+                // print(
+                    // "📊 Initial table row count: \(initialRowCount), expected: \(referenceMessages.count)"
+                // )
 
                 if initialRowCount != referenceMessages.count {
-                    print(
-                        "⚠️ MISMATCH: Table rows (\(initialRowCount)) don't match messages (\(referenceMessages.count)), forcing fix"
-                    )
+                    // print(
+                        // "⚠️ MISMATCH: Table rows (\(initialRowCount)) don't match messages (\(referenceMessages.count)), forcing fix"
+                    // )
 
                     // Force another complete reload
                     self.tableView.reloadData()
@@ -196,10 +196,10 @@ extension MessageableChannelViewController {
 
                     // Check again
                     let secondRowCount = self.tableView.numberOfRows(inSection: 0)
-                    print("📊 Second attempt row count: \(secondRowCount)")
+                    // print("📊 Second attempt row count: \(secondRowCount)")
 
                     if secondRowCount != referenceMessages.count {
-                        print("⚠️ STILL_MISMATCH: Forcing data source update")
+                        // print("⚠️ STILL_MISMATCH: Forcing data source update")
                         if let localDataSource = self.dataSource as? LocalMessagesDataSource {
                             localDataSource.forceUpdateMessages(referenceMessages)
                         }
@@ -216,16 +216,16 @@ extension MessageableChannelViewController {
 
                     // Get current row count - IMPORTANT for avoiding index out of bounds
                     let rowCount = self.tableView.numberOfRows(inSection: 0)
-                    print(
-                        "📊 Final table row count: \(rowCount), trying to scroll to index \(validatedIndex)"
-                    )
+                    // print(
+                        // "📊 Final table row count: \(rowCount), trying to scroll to index \(validatedIndex)"
+                    // )
 
                     // CRITICAL FIX: If still mismatched, retry with delay
                     if rowCount != referenceMessages.count {
-                        print(
-                            "❌ CRITICAL_MISMATCH: Table rows (\(rowCount)) still don't match messages (\(referenceMessages.count))"
-                        )
-                        print("🔄 RETRY: Will retry scroll after fixing data source")
+                        // print(
+                            // "❌ CRITICAL_MISMATCH: Table rows (\(rowCount)) still don't match messages (\(referenceMessages.count))"
+                        // )
+                        // print("🔄 RETRY: Will retry scroll after fixing data source")
 
                         // Force sync again
                         self.localMessages = referenceMessages
@@ -243,7 +243,7 @@ extension MessageableChannelViewController {
 
                     // Make sure the index is valid
                     if rowCount > 0 && validatedIndex < rowCount {
-                        print("🔍 Scrolling to validated row \(validatedIndex)")
+                        // print("🔍 Scrolling to validated row \(validatedIndex)")
                         // Create an index path and scroll to it
                         let indexPath = IndexPath(row: validatedIndex, section: 0)
 
@@ -255,9 +255,9 @@ extension MessageableChannelViewController {
                             }
 
                             // Scroll to the message WITHOUT animation for instant positioning - this is TARGET MESSAGE scroll, should not be blocked
-                            print(
-                                "🎯 SCROLL_TO_TARGET: Scrolling to target message at index \(validatedIndex)"
-                            )
+                            // print(
+                                // "🎯 SCROLL_TO_TARGET: Scrolling to target message at index \(validatedIndex)"
+                            // )
 //                            self.tableView.scrollToRow(at: indexPath, at: .middle, animated: false)
                             self.safeScrollToRow(at: indexPath, at: .middle, animated: false, reason: "target message")
                             // print("📍 scrollToRow completed")
@@ -285,9 +285,9 @@ extension MessageableChannelViewController {
                             self.scrollToBottom(animated: false)
                         }
                     } else {
-                        print(
-                            "⚠️ Index \(validatedIndex) is out of bounds or table is empty (rowCount: \(rowCount))"
-                        )
+                        // print(
+                            // "⚠️ Index \(validatedIndex) is out of bounds or table is empty (rowCount: \(rowCount))"
+                        // )
                         if !self.localMessages.isEmpty {
                             // If we have messages but table is not ready, try again in a moment
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -301,28 +301,28 @@ extension MessageableChannelViewController {
                 }
             }
         } else {
-            print("⚠️ Target message ID not found in reference messages array")
-            print("🔍 Debugging: reference messages contains \(referenceMessages.count) messages")
+            // print("⚠️ Target message ID not found in reference messages array")
+            // print("🔍 Debugging: reference messages contains \(referenceMessages.count) messages")
 
             // Debug: Check if target message is in any of the loaded messages
-            print("🔍 Target message ID: \(targetId)")
-            print("🔍 Reference messages: \(referenceMessages)")
+            // print("🔍 Target message ID: \(targetId)")
+            // print("🔍 Reference messages: \(referenceMessages)")
 
             // Check if the target message exists in viewState.messages but not in reference messages
             if viewModel.viewState.messages[targetId] != nil {
-                print(
-                    "✅ Target message found in viewState.messages but missing from reference messages"
-                )
+                // print(
+                    // "✅ Target message found in viewState.messages but missing from reference messages"
+                // )
             } else {
-                print("❌ Target message not found in viewState.messages either")
+                // print("❌ Target message not found in viewState.messages either")
             }
             // Debug: Print first and last 3 message IDs to help diagnose ordering issues
             if referenceMessages.count > 0 {
                 let firstMessages = Array(referenceMessages.prefix(3))
                 let lastMessages = Array(referenceMessages.suffix(3))
-                print("🔍 First 3 messages: \(firstMessages)")
-                print("🔍 Last 3 messages: \(lastMessages)")
-                print("🔍 Target message ID: \(targetId)")
+                // print("🔍 First 3 messages: \(firstMessages)")
+                // print("🔍 Last 3 messages: \(lastMessages)")
+                // print("🔍 Target message ID: \(targetId)")
             }
 
             // If not in localMessages but in viewState.messages, add it to localMessages
@@ -382,9 +382,9 @@ extension MessageableChannelViewController {
                             if !self.targetMessageProcessed {
                                 self.scrollToTargetMessage()
                             } else {
-                                print(
-                                    "🎯 Skipping duplicate scrollToTargetMessage call - already processed"
-                                )
+                                // print(
+                                    // "🎯 Skipping duplicate scrollToTargetMessage call - already processed"
+                                // )
                             }
                         }
                     }
@@ -481,23 +481,23 @@ extension MessageableChannelViewController {
     
     // Public method to refresh messages with a specific target message ID
     func refreshWithTargetMessage(_ messageId: String) async {
-        print("🚀 ========== refreshWithTargetMessage CALLED ==========")
-        print("🎯 refreshWithTargetMessage called with messageId: \(messageId)")
-        print("🎯 Current channel: \(viewModel.channel.id)")
-        print("🎯 Current targetMessageId: \(targetMessageId ?? "nil")")
-        print(
-            "🎯 ViewState currentTargetMessageId: \(viewModel.viewState.currentTargetMessageId ?? "nil")"
-        )
-        print("🔍 This is where API calls should happen for fetching the target message!")
+        // print("🚀 ========== refreshWithTargetMessage CALLED ==========")
+        // print("🎯 refreshWithTargetMessage called with messageId: \(messageId)")
+        // print("🎯 Current channel: \(viewModel.channel.id)")
+        // print("🎯 Current targetMessageId: \(targetMessageId ?? "nil")")
+        // print(
+            // "🎯 ViewState currentTargetMessageId: \(viewModel.viewState.currentTargetMessageId ?? "nil")"
+        // )
+        // print("🔍 This is where API calls should happen for fetching the target message!")
 
         // CRITICAL FIX: Set loading state to prevent premature cleanup
         messageLoadingState = .loading
-        print("🎯 Set messageLoadingState to .loading for target message")
+        // print("🎯 Set messageLoadingState to .loading for target message")
 
         // CRITICAL FIX: Add timeout protection to prevent infinite loading
         let timeoutTask = Task {
             try await Task.sleep(nanoseconds: 5_000_000_000)  // 5 seconds (reduced for better UX)
-            print("⏰ TIMEOUT: refreshWithTargetMessage took too long, forcing cleanup")
+            // print("⏰ TIMEOUT: refreshWithTargetMessage took too long, forcing cleanup")
             await MainActor.run {
                 self.messageLoadingState = .notLoading
                 self.hideEmptyStateView()
@@ -508,7 +508,7 @@ extension MessageableChannelViewController {
                 self.viewModel.viewState.currentTargetMessageId = nil
 
                 // Show user-friendly error message
-                print("⏰ TIMEOUT: Could not load the message. It may have been deleted.")
+                // print("⏰ TIMEOUT: Could not load the message. It may have been deleted.")
             }
         }
 
@@ -526,33 +526,33 @@ extension MessageableChannelViewController {
                     self.viewModel.viewState.currentTargetMessageId = nil
                 }
 
-                print("🎯 Reset all loading states - refreshWithTargetMessage complete")
+                // print("🎯 Reset all loading states - refreshWithTargetMessage complete")
             }
         }
 
         // CRITICAL FIX: Check if this message ID is already being processed
         if targetMessageProcessed && targetMessageId == messageId {
-            print(
-                "🎯 Target message \(messageId) already processed, skipping to prevent duplicate highlights"
-            )
+            // print(
+                // "🎯 Target message \(messageId) already processed, skipping to prevent duplicate highlights"
+            // )
             return
         }
 
         // Validate that the message belongs to current channel (if already loaded)
         if let existingMessage = viewModel.viewState.messages[messageId] {
             if existingMessage.channel != viewModel.channel.id {
-                print(
-                    "❌ Target message \(messageId) belongs to channel \(existingMessage.channel), but current channel is \(viewModel.channel.id)"
-                )
+                // print(
+                    // "❌ Target message \(messageId) belongs to channel \(existingMessage.channel), but current channel is \(viewModel.channel.id)"
+                // )
                 await MainActor.run {
                     self.viewModel.viewState.currentTargetMessageId = nil
                     self.targetMessageId = nil
                 }
                 return
             }
-            print("✅ Message \(messageId) exists and belongs to current channel")
+            // print("✅ Message \(messageId) exists and belongs to current channel")
         } else {
-            print("⚠️ Message \(messageId) not found in loaded messages - will try to fetch")
+            // print("⚠️ Message \(messageId) not found in loaded messages - will try to fetch")
         }
 
         // Set the target message ID
@@ -571,10 +571,10 @@ extension MessageableChannelViewController {
         let channelMessages = viewModel.viewState.channelMessages[viewModel.channel.id]
         let isInChannelMessages = channelMessages?.contains(messageId) ?? false
 
-        print("🔍 refreshWithTargetMessage - checking for message \(messageId):")
-        print("   - In viewModel.messages: \(isInViewModelMessages)")
-        print("   - In viewState.messages: \(isInViewStateMessages)")
-        print("   - In channelMessages: \(isInChannelMessages)")
+        // print("🔍 refreshWithTargetMessage - checking for message \(messageId):")
+        // print("   - In viewModel.messages: \(isInViewModelMessages)")
+        // print("   - In viewState.messages: \(isInViewStateMessages)")
+        // print("   - In channelMessages: \(isInChannelMessages)")
 
         // CRITICAL FIX: Check if message is in localMessages (actually visible) not just in viewState
         let isInLocalMessages = localMessages.contains(messageId)
@@ -583,8 +583,8 @@ extension MessageableChannelViewController {
         if (isInViewModelMessages || isInChannelMessages) && isInLocalMessages {
             // Message is already loaded AND visible, just scroll to it
             DispatchQueue.main.async {
-                print(
-                    "✅ Target message \(messageId) already exists and is visible, scrolling to it")
+                // print(
+                    // "✅ Target message \(messageId) already exists and is visible, scrolling to it")
 
                 // Ensure all arrays are in sync
                 self.syncLocalMessagesWithViewState()
@@ -603,19 +603,19 @@ extension MessageableChannelViewController {
 
         // CRITICAL FIX: If message exists in viewState but NOT in localMessages, we need nearby API
         if isInViewStateMessages && !isInLocalMessages {
-            print("⚠️ Target message exists in viewState but not in localMessages - need nearby API")
+            // print("⚠️ Target message exists in viewState but not in localMessages - need nearby API")
         }
 
         // Message not loaded, load it using nearby API
-        print(
-            "🔄 REPLY_TARGET: Target message not found in loaded messages, loading nearby messages")
-        print("🌐 REPLY_TARGET: About to call loadMessagesNearby API for messageId: \(messageId)")
+        // print(
+            // "🔄 REPLY_TARGET: Target message not found in loaded messages, loading nearby messages")
+        // print("🌐 REPLY_TARGET: About to call loadMessagesNearby API for messageId: \(messageId)")
         let result = await loadMessagesNearby(messageId: messageId)
 
         if result {
             // Message successfully loaded, scroll to it
             DispatchQueue.main.async {
-                print("✅ REPLY_TARGET: Successfully loaded messages nearby target, scrolling to it")
+                // print("✅ REPLY_TARGET: Successfully loaded messages nearby target, scrolling to it")
                 // After loading messages, hide the loading indicator
                 self.loadingHeaderView.isHidden = true
 
@@ -662,9 +662,9 @@ extension MessageableChannelViewController {
             if let message = fetchResult {
                 // Validate that the fetched message belongs to current channel
                 if message.channel != viewModel.channel.id {
-                    print(
-                        "❌ DIRECT_TARGET: Fetched message \(messageId) belongs to channel \(message.channel), but current channel is \(viewModel.channel.id)"
-                    )
+                    // print(
+                        // "❌ DIRECT_TARGET: Fetched message \(messageId) belongs to channel \(message.channel), but current channel is \(viewModel.channel.id)"
+                    // )
                     await MainActor.run {
                         self.viewModel.viewState.currentTargetMessageId = nil
                         self.targetMessageId = nil
@@ -675,8 +675,8 @@ extension MessageableChannelViewController {
                     return
                 }
 
-                print(
-                    "✅ DIRECT_TARGET: Successfully fetched target message directly: \(message.id)")
+                // print(
+                    // "✅ DIRECT_TARGET: Successfully fetched target message directly: \(message.id)")
 
                 await MainActor.run {
                     // Add the fetched message to the view model
@@ -684,7 +684,7 @@ extension MessageableChannelViewController {
 
                     // CRITICAL FIX: Always load surrounding context when we get a single message
                     // This ensures the user sees more than just one message
-                    print("🔄 DIRECT_TARGET: Loading surrounding context for better user experience")
+                    // print("🔄 DIRECT_TARGET: Loading surrounding context for better user experience")
 
                     // Check for existing messages and insert in correct position
                     // If we can't determine proper order, just add it
@@ -708,13 +708,13 @@ extension MessageableChannelViewController {
 
                         // Insert at the determined position
                         viewModel.messages.insert(messageId, at: insertIndex)
-                        print(
-                            "📍 DIRECT_TARGET: Inserted message at index \(insertIndex) of \(viewModel.messages.count)"
-                        )
+                        // print(
+                            // "📍 DIRECT_TARGET: Inserted message at index \(insertIndex) of \(viewModel.messages.count)"
+                        // )
                     } else {
                         // If no messages yet, just add it
                         viewModel.messages = [messageId]
-                        print("📍 DIRECT_TARGET: Added as first message")
+                        // print("📍 DIRECT_TARGET: Added as first message")
                     }
 
                     // Update channel messages in viewState
@@ -724,8 +724,8 @@ extension MessageableChannelViewController {
                     self.localMessages = viewModel.messages
 
                     // Refresh UI and scroll to message
-                    print(
-                        "🔄 DIRECT_TARGET: Refreshing UI with \(self.localMessages.count) messages")
+                    // print(
+                        // "🔄 DIRECT_TARGET: Refreshing UI with \(self.localMessages.count) messages")
                     self.refreshMessages()
 
                     // After loading messages, hide the loading indicator
@@ -738,26 +738,26 @@ extension MessageableChannelViewController {
 
                     // After a short delay, scroll to the target message and load surrounding context
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        print("🎯 DIRECT_TARGET: Scrolling to target message")
+                        // print("🎯 DIRECT_TARGET: Scrolling to target message")
                         self.scrollToTargetMessage()
 
                         // IMPORTANT: Load more context around this message for better UX
-                        print("🔄 DIRECT_TARGET: Loading surrounding context")
+                        // print("🔄 DIRECT_TARGET: Loading surrounding context")
                         Task {
                             let contextResult = await self.loadMessagesNearby(messageId: messageId)
                             if contextResult {
-                                print("✅ DIRECT_TARGET: Successfully loaded surrounding context")
+                                // print("✅ DIRECT_TARGET: Successfully loaded surrounding context")
                             } else {
-                                print("⚠️ DIRECT_TARGET: Could not load surrounding context")
+                                // print("⚠️ DIRECT_TARGET: Could not load surrounding context")
                             }
                         }
                     }
                 }
             } else {
                 // Failed to fetch target message directly - message likely deleted
-                print(
-                    "❌ DIRECT_TARGET: Failed to fetch target message directly - likely deleted or inaccessible"
-                )
+                // print(
+                    // "❌ DIRECT_TARGET: Failed to fetch target message directly - likely deleted or inaccessible"
+                // )
 
                 await MainActor.run {
                     // Clean up loading states immediately
@@ -767,7 +767,7 @@ extension MessageableChannelViewController {
                     self.viewModel.viewState.currentTargetMessageId = nil
 
                     // Show user-friendly error message
-                    print("❌ DIRECT_TARGET: Showing error message to user - message likely deleted")
+                    // print("❌ DIRECT_TARGET: Showing error message to user - message likely deleted")
                 }
 
                 // Exit early since message couldn't be loaded
@@ -785,7 +785,7 @@ extension MessageableChannelViewController {
             // print("⚠️ Target message was not found even after loading nearby messages")
             DispatchQueue.main.async {
                 // Display a message with more detail
-                print("❌ FINAL_CHECK: Message not found or may have been deleted")
+                // print("❌ FINAL_CHECK: Message not found or may have been deleted")
 
                 // Clear target message ID since we failed to find it
                 self.targetMessageId = nil
@@ -919,7 +919,7 @@ extension MessageableChannelViewController {
     /// Scroll to a specific message that's already loaded
     internal func scrollToMessage(messageId: String) {
         guard let index = localMessages.firstIndex(of: messageId) else {
-            print("❌ SCROLL_TO_MESSAGE: Message \(messageId) not found in local messages")
+            // print("❌ SCROLL_TO_MESSAGE: Message \(messageId) not found in local messages")
             return
         }
 
@@ -927,11 +927,11 @@ extension MessageableChannelViewController {
 
         // Make sure the index is valid
         guard index < tableView.numberOfRows(inSection: 0) else {
-            print("❌ SCROLL_TO_MESSAGE: Index \(index) out of bounds")
+            // print("❌ SCROLL_TO_MESSAGE: Index \(index) out of bounds")
             return
         }
 
-        print("🎯 SCROLL_TO_MESSAGE: Scrolling to message at index \(index)")
+        // print("🎯 SCROLL_TO_MESSAGE: Scrolling to message at index \(index)")
 
         // Scroll to the message
         safeScrollToRow(
@@ -947,7 +947,7 @@ extension MessageableChannelViewController {
     
     // Method to safely activate target message protection to prevent jumping
     internal func activateTargetMessageProtection(reason: String) {
-        print("🛡️ ACTIVATE_PROTECTION: Activating target message protection - reason: \(reason)")
+        // print("🛡️ ACTIVATE_PROTECTION: Activating target message protection - reason: \(reason)")
         isInTargetMessagePosition = true
         lastTargetMessageHighlightTime = Date()
         targetMessageProcessed = false
@@ -966,10 +966,10 @@ extension MessageableChannelViewController {
     
     // Method to safely clear target message protection when user explicitly interacts
     internal func clearTargetMessageProtection(reason: String) {
-        print("🎯 CLEAR_PROTECTION: Clearing target message protection - reason: \(reason)")
-        print(
-            "🎯 CLEAR_PROTECTION: Previous state - targetMessageId: \(targetMessageId ?? "nil"), isInPosition: \(isInTargetMessagePosition), processed: \(targetMessageProcessed)"
-        )
+        // print("🎯 CLEAR_PROTECTION: Clearing target message protection - reason: \(reason)")
+        // print(
+            // "🎯 CLEAR_PROTECTION: Previous state - targetMessageId: \(targetMessageId ?? "nil"), isInPosition: \(isInTargetMessagePosition), processed: \(targetMessageProcessed)"
+        // )
         targetMessageId = nil
         isInTargetMessagePosition = false
         lastTargetMessageHighlightTime = nil
@@ -977,19 +977,19 @@ extension MessageableChannelViewController {
         clearTargetMessageTimer?.invalidate()
         clearTargetMessageTimer = nil
         viewModel.viewState.currentTargetMessageId = nil
-        print("🎯 CLEAR_PROTECTION: Protection successfully cleared")
+        // print("🎯 CLEAR_PROTECTION: Protection successfully cleared")
     }
     
     // Debug function to check protection status
     internal func debugTargetMessageProtection() {
-        print("🔍 TARGET_MESSAGE_DEBUG:")
-        print("   - targetMessageId: \(targetMessageId ?? "nil")")
-        print("   - isInTargetMessagePosition: \(isInTargetMessagePosition)")
-        print("   - targetMessageProcessed: \(targetMessageProcessed)")
-        print("   - protectionActive: \(targetMessageProtectionActive)")
-        print("   - timer active: \(clearTargetMessageTimer != nil)")
+        // print("🔍 TARGET_MESSAGE_DEBUG:")
+        // print("   - targetMessageId: \(targetMessageId ?? "nil")")
+        // print("   - isInTargetMessagePosition: \(isInTargetMessagePosition)")
+        // print("   - targetMessageProcessed: \(targetMessageProcessed)")
+        // print("   - protectionActive: \(targetMessageProtectionActive)")
+        // print("   - timer active: \(clearTargetMessageTimer != nil)")
         if let timer = clearTargetMessageTimer {
-            print("   - timer remaining: \(timer.fireDate.timeIntervalSinceNow)s")
+            // print("   - timer remaining: \(timer.fireDate.timeIntervalSinceNow)s")
         }
     }
     
@@ -1010,9 +1010,9 @@ extension MessageableChannelViewController {
         guard indexPath.row >= 0, indexPath.row < tableView.numberOfRows(inSection: indexPath.section) else {
             return
         }
-        print(
-            "🔍 SCROLL_ATTEMPT: \(reason) - target row: \(indexPath.row), position: \(position), animated: \(animated)"
-        )
+        // print(
+            // "🔍 SCROLL_ATTEMPT: \(reason) - target row: \(indexPath.row), position: \(position), animated: \(animated)"
+        // )
         debugTargetMessageProtection()
 
         // Allow target message navigation and user-initiated scrolls
@@ -1022,24 +1022,24 @@ extension MessageableChannelViewController {
         }
 
         if targetMessageProtectionActive && !isAllowedReason {
-            print("🛡️ BLOCKED_SCROLL: scrollToRow blocked by protection - reason: \(reason)")
-            print(
-                "🛡️ BLOCKED_SCROLL: attempted scroll to row \(indexPath.row), position: \(position), animated: \(animated)"
-            )
+            // print("🛡️ BLOCKED_SCROLL: scrollToRow blocked by protection - reason: \(reason)")
+            // print(
+                // "🛡️ BLOCKED_SCROLL: attempted scroll to row \(indexPath.row), position: \(position), animated: \(animated)"
+            // )
             return
         }
 
         if isAllowedReason {
-            print("✅ ALLOWED_SCROLL: scrollToRow allowed (whitelisted reason) - \(reason)")
+            // print("✅ ALLOWED_SCROLL: scrollToRow allowed (whitelisted reason) - \(reason)")
         } else {
-            print("✅ ALLOWED_SCROLL: scrollToRow allowed (no protection) - \(reason)")
+            // print("✅ ALLOWED_SCROLL: scrollToRow allowed (no protection) - \(reason)")
         }
         tableView.scrollToRow(at: indexPath, at: position, animated: animated)
     }
     
     // Enhanced scrollToBottom with protection debugging
     func logScrollToBottomAttempt(animated: Bool, reason: String) {
-        print("🔍 SCROLL_TO_BOTTOM_ATTEMPT: \(reason) - animated: \(animated)")
+        // print("🔍 SCROLL_TO_BOTTOM_ATTEMPT: \(reason) - animated: \(animated)")
         debugTargetMessageProtection()
     }
     

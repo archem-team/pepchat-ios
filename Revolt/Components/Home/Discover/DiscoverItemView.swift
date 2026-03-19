@@ -56,10 +56,10 @@ struct DiscoverItemView: View {
     var body: some View {
         
         Button{
-            print("🔗 [DiscoverItemView] Clicked on server: \(discoverItem.title)")
-            print("   📎 Invite code: \(discoverItem.code)")
-            print("   🔒 Disabled: \(discoverItem.disabled)")
-            print("   👥 Is Member: \(isMember)")
+            // print("🔗 [DiscoverItemView] Clicked on server: \(discoverItem.title)")
+            // print("   📎 Invite code: \(discoverItem.code)")
+            // print("   🔒 Disabled: \(discoverItem.disabled)")
+            // print("   👥 Is Member: \(isMember)")
             onClick()
         } label: {
             

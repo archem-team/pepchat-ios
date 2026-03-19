@@ -20,7 +20,7 @@ extension MessageableChannelViewController {
 
         // CRITICAL FIX: Don't apply global fix if target message protection is active
         if targetMessageProtectionActive {
-            print("🔧 [FIX] BLOCKED: Global fix blocked - target message protection active")
+            // print("🔧 [FIX] BLOCKED: Global fix blocked - target message protection active")
             return
         }
 
@@ -90,7 +90,7 @@ extension MessageableChannelViewController {
 
             // COMPREHENSIVE TARGET MESSAGE PROTECTION
             if self.targetMessageProtectionActive {
-                print("🎯 [FIX] Target message protection active, maintaining current position")
+                // print("🎯 [FIX] Target message protection active, maintaining current position")
                 self.tableView.contentOffset = CGPoint(x: 0, y: currentOffset)
                 return
             }

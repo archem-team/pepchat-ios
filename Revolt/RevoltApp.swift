@@ -50,7 +50,7 @@ struct RevoltApp: App {
                 .background(.bgDefaultPurple13)
                 .typesettingLanguage((state.currentLocale ?? systemLocale).language)  // Set typesetting language based on current locale
                 .onOpenURL { url in
-                    print("📱 UNIVERSAL_LINK: Received URL: \(url)")  // Log the opened URL for debugging
+                    // print("📱 UNIVERSAL_LINK: Received URL: \(url)")  // Log the opened URL for debugging
                     let components = NSURLComponents(string: url.absoluteString)
                     // Handle different URL schemes and paths
                     switch url.scheme {
@@ -62,7 +62,7 @@ struct RevoltApp: App {
                         case "channel":
                             // Handle channel links: /channel/CHANNEL_ID or /channel/CHANNEL_ID/MESSAGE_ID
                             if let channelId = url.pathComponents[safe: 2] {
-                                print("📱 UNIVERSAL_LINK: Navigating to channel: \(channelId)")
+                                // print("📱 UNIVERSAL_LINK: Navigating to channel: \(channelId)")
                                 
                                 if let channel = state.channels[channelId] {
                                     // Clear existing messages for this channel
@@ -78,7 +78,7 @@ struct RevoltApp: App {
                                     
                                     // Handle message ID if present
                                     if let messageId = url.pathComponents[safe: 3] {
-                                        print("📱 UNIVERSAL_LINK: Message ID found: \(messageId)")
+                                        // print("📱 UNIVERSAL_LINK: Message ID found: \(messageId)")
                                         state.currentTargetMessageId = messageId
                                     } else {
                                         state.currentTargetMessageId = nil
@@ -88,18 +88,18 @@ struct RevoltApp: App {
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                         // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
                                         // This ensures that when user presses back, they go to server list instead of previous channel
-                                        print("🔄 RevoltApp: Clearing navigation path to prevent back to previous channel")
+                                        // print("🔄 RevoltApp: Clearing navigation path to prevent back to previous channel")
                                         state.path = []
                                         state.path.append(NavigationDestination.maybeChannelView)
                                     }
                                 } else {
-                                    print("📱 UNIVERSAL_LINK: Channel not found: \(channelId)")
+                                    // print("📱 UNIVERSAL_LINK: Channel not found: \(channelId)")
                                 }
                             }
                         case "server":
                             // Handle server links: /server/SERVER_ID/channel/CHANNEL_ID or /server/SERVER_ID/channel/CHANNEL_ID/MESSAGE_ID
                             if let serverId = url.pathComponents[safe: 2] {
-                                print("📱 UNIVERSAL_LINK: Navigating to server: \(serverId)")
+                                // print("📱 UNIVERSAL_LINK: Navigating to server: \(serverId)")
                                 
                                 if state.servers[serverId] != nil {
                                     state.currentSelection = .server(serverId)
@@ -114,7 +114,7 @@ struct RevoltApp: App {
                                         
                                         // Handle message ID if present (would be at index 5)
                                         if let messageId = url.pathComponents[safe: 5] {
-                                            print("📱 UNIVERSAL_LINK: Message ID found: \(messageId)")
+                                            // print("📱 UNIVERSAL_LINK: Message ID found: \(messageId)")
                                             state.currentTargetMessageId = messageId
                                         } else {
                                             state.currentTargetMessageId = nil
@@ -124,25 +124,26 @@ struct RevoltApp: App {
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                             // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
                                             // This ensures that when user presses back, they go to server list instead of previous channel
-                                            print("🔄 RevoltApp: Clearing navigation path to prevent back to previous channel")
+                                            // print("🔄 RevoltApp: Clearing navigation path to prevent back to previous channel")
                                             state.path = []
                                             state.path.append(NavigationDestination.maybeChannelView)
                                         }
                                     }
                                 } else {
-                                    print("📱 UNIVERSAL_LINK: Server not found: \(serverId)")
+                                    // print("📱 UNIVERSAL_LINK: Server not found: \(serverId)")
                                 }
                             }
                         case "invite":
                             // Handle invite links: /invite/INVITE_CODE
                             if let inviteCode = url.pathComponents[safe: 2] {
-                                print("📱 UNIVERSAL_LINK: Opening invite: \(inviteCode)")
+                                // print("📱 UNIVERSAL_LINK: Opening invite: \(inviteCode)")
                                 
                                 // Navigate to invite view directly without clearing path
                                 state.path.append(NavigationDestination.invite(inviteCode))
                             }
                         default:
-                            print("📱 UNIVERSAL_LINK: Unhandled path: \(url.pathComponents[safe: 1] ?? "nil")")
+                            // print("📱 UNIVERSAL_LINK: Unhandled path: \(url.pathComponents[safe: 1] ?? "nil")")
+                            break
                         }
                     case "revoltchat":
                         var queryItems: [String: String] = [:]
@@ -360,31 +361,33 @@ struct InnerApp: View {
             }
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
-            print("🔄 SCENE_PHASE: Changed from \(oldPhase) to \(newPhase)")
+            // print("🔄 SCENE_PHASE: Changed from \(oldPhase) to \(newPhase)")
             
             switch newPhase {
             case .background:
-                print("🔄 SCENE_PHASE: App entered background - preserving state")
+                // print("🔄 SCENE_PHASE: App entered background - preserving state")
                 // Don't clear anything when going to background
                 
+                break
             case .inactive:
-                print("🔄 SCENE_PHASE: App became inactive")
+                // print("🔄 SCENE_PHASE: App became inactive")
                 // App is transitioning between states, don't clear anything
                 
+                break
             case .active:
-                print("🔄 SCENE_PHASE: App became active")
+                // print("🔄 SCENE_PHASE: App became active")
                 // CRITICAL FIX: Don't restart everything when coming back from background
                 if viewState.state == .connected {
-                    print("🔄 SCENE_PHASE: App was already connected, preserving state")
+                    // print("🔄 SCENE_PHASE: App was already connected, preserving state")
                     // Just verify WebSocket connection, don't recreate everything
                     Task {
                         if viewState.ws == nil || viewState.wsCurrentState != .connected {
-                            print("🔄 SCENE_PHASE: WebSocket disconnected, reconnecting...")
+                            // print("🔄 SCENE_PHASE: WebSocket disconnected, reconnecting...")
                             await viewState.backgroundWsTask()
                         }
                     }
                 } else {
-                    print("🔄 SCENE_PHASE: App was not connected, initializing...")
+                    // print("🔄 SCENE_PHASE: App was not connected, initializing...")
                     Task {
                         await viewState.backgroundWsTask()
                     }

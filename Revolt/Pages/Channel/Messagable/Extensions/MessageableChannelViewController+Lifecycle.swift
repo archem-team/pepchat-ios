@@ -23,16 +23,16 @@ extension MessageableChannelViewController {
         if targetMessageId == nil,
             let targetFromViewState = viewModel.viewState.currentTargetMessageId
         {
-            print(
-                "🎯 VIEW_DID_APPEAR: Restoring target message from ViewState: \(targetFromViewState)"
-            )
+            // print(
+                // "🎯 VIEW_DID_APPEAR: Restoring target message from ViewState: \(targetFromViewState)"
+            // )
             targetMessageId = targetFromViewState
             targetMessageProcessed = false
         }
 
         // Check if we're returning from search - if so, reload messages and skip scroll-related operations
         if isReturningFromSearch {
-            print("🔍 VIEW_DID_APPEAR: Returning from search, reloading messages")
+            // print("🔍 VIEW_DID_APPEAR: Returning from search, reloading messages")
 
             // Re-register observer
             NotificationCenter.default.removeObserver(
@@ -63,7 +63,7 @@ extension MessageableChannelViewController {
                 }
             } else {
                 // No messages in ViewState, need to reload from API
-                print("🔍 VIEW_DID_APPEAR: No messages in ViewState, reloading from API")
+                // print("🔍 VIEW_DID_APPEAR: No messages in ViewState, reloading from API")
 
                 // Show loading indicator
                 tableView.alpha = 0.0
@@ -80,7 +80,7 @@ extension MessageableChannelViewController {
 
             // Reset the flag after processing
             isReturningFromSearch = false
-            print("🔍 VIEW_DID_APPEAR: Cleared isReturningFromSearch flag")
+            // print("🔍 VIEW_DID_APPEAR: Cleared isReturningFromSearch flag")
 
             return
         }
@@ -93,7 +93,7 @@ extension MessageableChannelViewController {
             // Update table view bouncing behavior when view appears
             updateTableViewBouncing()
         } else {
-            print("🎯 VIEW_DID_APPEAR: Skipping global fix - target message navigation in progress")
+            // print("🎯 VIEW_DID_APPEAR: Skipping global fix - target message navigation in progress")
         }
 
         // // print("🔄 VIEW_DID_APPEAR: View appeared, checking notification observers")
@@ -120,7 +120,7 @@ extension MessageableChannelViewController {
 
         // If we don't have a specific target message and table is hidden, show it properly positioned
         if targetMessageId == nil && !viewModel.messages.isEmpty && tableView.alpha == 0.0 {
-            print("📱 VIEW_DID_APPEAR: Positioning table at bottom and showing")
+            // print("📱 VIEW_DID_APPEAR: Positioning table at bottom and showing")
             positionTableAtBottomBeforeShowing()
 
             // Adjust table insets after positioning
@@ -131,25 +131,25 @@ extension MessageableChannelViewController {
 
         // Note: Automatic preloading is controlled by ViewState.enableAutomaticPreloading
         // When disabled, messages are loaded only when user explicitly enters the channel
-        print(
-            "📵 PRELOAD_CONTROLLED: Automatic preloading controlled by ViewState setting for channel \(channelId)"
-        )
+        // print(
+            // "📵 PRELOAD_CONTROLLED: Automatic preloading controlled by ViewState setting for channel \(channelId)"
+        // )
 
         // CRITICAL FIX: Check if user is in target message position to prevent reload
         if isInTargetMessagePosition {
-            print("🎯 VIEW_DID_APPEAR: User is in target message position, preserving current view")
+            // print("🎯 VIEW_DID_APPEAR: User is in target message position, preserving current view")
             return
         }
 
         // CRITICAL FIX: Always prioritize target message handling over existing messages
         if targetMessageId != nil {
-            print(
-                "🎯 VIEW_DID_APPEAR: Target message found, using nearby API (prioritized over existing messages)"
-            )
+            // print(
+                // "🎯 VIEW_DID_APPEAR: Target message found, using nearby API (prioritized over existing messages)"
+            // )
 
             // CRITICAL FIX: Don't trigger loading if already in progress
             if messageLoadingState == .loading {
-                print("🎯 VIEW_DID_APPEAR: Loading already in progress, skipping duplicate trigger")
+                // print("🎯 VIEW_DID_APPEAR: Loading already in progress, skipping duplicate trigger")
                 return
             }
 
@@ -157,7 +157,7 @@ extension MessageableChannelViewController {
             messageLoadingState = .loading
             DispatchQueue.main.async {
                 self.hideEmptyStateView()
-                print("🚫 VIEW_DID_APPEAR: Hidden empty state before target message loading")
+                // print("🚫 VIEW_DID_APPEAR: Hidden empty state before target message loading")
             }
 
             // Show loading spinner and trigger target message loading
@@ -169,7 +169,7 @@ extension MessageableChannelViewController {
 
             // Trigger target message loading which will use nearby API
             Task {
-                print("🎯 VIEW_DID_APPEAR: Triggering target message loading")
+                // print("🎯 VIEW_DID_APPEAR: Triggering target message loading")
                 await loadInitialMessages()
 
                 // Adjust table insets after loading messages
@@ -179,9 +179,9 @@ extension MessageableChannelViewController {
                     // CRITICAL FIX: Check for missing reply content after initial load with delay
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         Task {
-                            print(
-                                "🔗 VIEW_APPEARED: Checking for missing replies after delay (first case)"
-                            )
+                            // print(
+                                // "🔗 VIEW_APPEARED: Checking for missing replies after delay (first case)"
+                            // )
                             await self.checkAndFetchMissingReplies()
                         }
                     }
@@ -196,7 +196,7 @@ extension MessageableChannelViewController {
                 }) != nil
 
             if hasActualMessages {
-                print("✅ VIEW_DID_APPEAR: Messages already loaded, showing immediately")
+                // print("✅ VIEW_DID_APPEAR: Messages already loaded, showing immediately")
                 // Messages exist, show them immediately without loading
                 tableView.alpha = 1.0
                 tableView.tableFooterView = nil
@@ -213,7 +213,7 @@ extension MessageableChannelViewController {
             } else {
                 // No messages in memory: use loadInitialMessages() so we get cache check + cache write.
                 // Previously we called loadInitialMessagesImmediate() which bypassed cache entirely.
-                print("🚀 VIEW_DID_APPEAR: No messages found, loading via loadInitialMessages (cache-first + API)")
+                // print("🚀 VIEW_DID_APPEAR: No messages found, loading via loadInitialMessages (cache-first + API)")
 
                 // Show skeleton loading view; loadInitialMessages() will hide it when cache or API result is ready
                 showSkeletonView()
@@ -227,9 +227,9 @@ extension MessageableChannelViewController {
 
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                             Task {
-                                print(
-                                    "🔗 VIEW_APPEARED: Checking for missing replies after delay (no-target path)"
-                                )
+                                // print(
+                                    // "🔗 VIEW_APPEARED: Checking for missing replies after delay (no-target path)"
+                                // )
                                 await self.checkAndFetchMissingReplies()
                             }
                         }
@@ -284,9 +284,9 @@ extension MessageableChannelViewController {
             contentSizeObserverRegistered = false
         }
 
-        print(
-            "🚀 IMMEDIATE_CLEANUP: Starting INSTANT memory cleanup for channel \(viewModel.channel.id)"
-        )
+        // print(
+            // "🚀 IMMEDIATE_CLEANUP: Starting INSTANT memory cleanup for channel \(viewModel.channel.id)"
+        // )
         let cleanupStartTime = CFAbsoluteTimeGetCurrent()
 
         // IMMEDIATE: Cancel all pending operations first
@@ -309,22 +309,22 @@ extension MessageableChannelViewController {
             if let targetMessage = viewModel.viewState.messages[targetId] {
                 if targetMessage.channel == viewModel.channel.id {
                     // Target message is for THIS (old) channel - we can clear it safely
-                    print(
-                        "🎯 IMMEDIATE_CLEANUP: Target message is for current channel \(viewModel.channel.id), clearing it"
-                    )
+                    // print(
+                        // "🎯 IMMEDIATE_CLEANUP: Target message is for current channel \(viewModel.channel.id), clearing it"
+                    // )
                     viewModel.viewState.currentTargetMessageId = nil
                     targetMessageId = nil
                     targetMessageProcessed = false
                 } else {
                     // Target message is for DIFFERENT (new) channel - preserve it!
-                    print(
-                        "🎯 IMMEDIATE_CLEANUP: Target message is for different channel \(targetMessage.channel), preserving it"
-                    )
+                    // print(
+                        // "🎯 IMMEDIATE_CLEANUP: Target message is for different channel \(targetMessage.channel), preserving it"
+                    // )
                 }
             } else {
                 // Target message not loaded yet - this means we're navigating to find it, so preserve it
-                print(
-                    "🎯 IMMEDIATE_CLEANUP: Target message not loaded yet, preserving for navigation")
+                // print(
+                    // "🎯 IMMEDIATE_CLEANUP: Target message not loaded yet, preserving for navigation")
             }
         }
 
@@ -333,7 +333,7 @@ extension MessageableChannelViewController {
 
         // CRITICAL FIX: Don't cleanup if we're returning from search
         if isReturningFromSearch {
-            print("🔍 IMMEDIATE_CLEANUP: Returning from search, skipping ALL cleanup")
+            // print("🔍 IMMEDIATE_CLEANUP: Returning from search, skipping ALL cleanup")
             return
         }
 
@@ -342,9 +342,9 @@ extension MessageableChannelViewController {
 
         let cleanupEndTime = CFAbsoluteTimeGetCurrent()
         let cleanupDuration = (cleanupEndTime - cleanupStartTime) * 1000
-        print(
-            "🚀 IMMEDIATE_CLEANUP: Total viewWillDisappear cleanup completed in \(String(format: "%.2f", cleanupDuration))ms"
-        )
+        // print(
+            // "🚀 IMMEDIATE_CLEANUP: Total viewWillDisappear cleanup completed in \(String(format: "%.2f", cleanupDuration))ms"
+        // )
     }
     
     // Override observeValue to detect content size changes

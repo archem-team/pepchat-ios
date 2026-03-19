@@ -63,7 +63,7 @@ extension MessageableChannelViewController: UITableViewDelegate {
             
             // CRITICAL FIX: Don't refresh if target message protection is active
             if self.targetMessageProtectionActive {
-                print("🔄 BLOCKED: refreshMessagesWithoutScrolling blocked - target message protection active")
+                // print("🔄 BLOCKED: refreshMessagesWithoutScrolling blocked - target message protection active")
                 return
             }
             
@@ -78,7 +78,7 @@ extension MessageableChannelViewController: UITableViewDelegate {
     func updateEmptyStateVisibility() {
         // CRITICAL FIX: Don't show empty state during target message loading
         if targetMessageProtectionActive || messageLoadingState == .loading {
-            print("🚫 EMPTY_STATE: Blocked showing empty state - target message loading in progress")
+            // print("🚫 EMPTY_STATE: Blocked showing empty state - target message loading in progress")
             hideEmptyStateView()
             return
         }

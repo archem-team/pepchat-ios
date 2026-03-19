@@ -228,7 +228,7 @@ extension ViewState {
                     
                     // Update app badge count after loading unreads from server
                     updateAppBadgeCount()
-                    print("🔔 Updated badge count after loading \(remoteUnreads.count) unreads from server (mentions not counted)")
+                    // print("🔔 Updated badge count after loading \(remoteUnreads.count) unreads from server (mentions not counted)")
                 }
             }
         }

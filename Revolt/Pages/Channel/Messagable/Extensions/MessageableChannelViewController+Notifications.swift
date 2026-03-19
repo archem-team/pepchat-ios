@@ -18,13 +18,13 @@ extension MessageableChannelViewController {
     @objc internal func handleNewMessages(_ notification: Notification) {
         // CRITICAL FIX: Don't handle new messages during nearby loading
         if messageLoadingState == .loading {
-            print("📬 BLOCKED: handleNewMessages blocked - nearby loading in progress")
+            // print("📬 BLOCKED: handleNewMessages blocked - nearby loading in progress")
             return
         }
 
         // CRITICAL FIX: Don't handle if target message protection is active
         if targetMessageProtectionActive {
-            print("📬 BLOCKED: handleNewMessages blocked - target message protection active")
+            // print("📬 BLOCKED: handleNewMessages blocked - target message protection active")
             return
         }
 
@@ -178,7 +178,7 @@ extension MessageableChannelViewController {
 
         // Check if this notification is for our channel
         if channelId == viewModel.channel.id && isReturning {
-            print("🔍 SEARCH_CLOSING: User is returning from search to channel \(channelId)")
+            // print("🔍 SEARCH_CLOSING: User is returning from search to channel \(channelId)")
             isReturningFromSearch = true
 
             // Don't clear the flag here - let viewDidAppear handle it

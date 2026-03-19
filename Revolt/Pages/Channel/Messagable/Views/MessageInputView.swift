@@ -236,12 +236,12 @@ class MessageInputView: UIView {
         mentionInputView?.configure(channel: channel, server: server)
         mentionInputView?.delegate = self
         
-        print("DEBUG: Mention functionality setup complete for channel: \(channel.id)")
+        // print("DEBUG: Mention functionality setup complete for channel: \(channel.id)")
     }
     
     // Check for mention in text
     func checkForMention(in text: String) {
-        print("DEBUG: checkForMention called with text: '\(text)'")
+        // print("DEBUG: checkForMention called with text: '\(text)'")
         
         // Find the last @ symbol and extract the search term
         if let lastAtIndex = text.lastIndex(of: "@") {
@@ -251,21 +251,21 @@ class MessageInputView: UIView {
             // Only show mentions if the search text doesn't contain spaces
             // This ensures we only show mentions when actively typing a username
             if !searchText.contains(" ") && !searchText.contains("\n") {
-                print("DEBUG: Found @ with search text: '\(searchText)'")
+                // print("DEBUG: Found @ with search text: '\(searchText)'")
                 mentionInputView?.updateSearch(text: searchText)
             } else {
-                print("DEBUG: Search text contains spaces or newlines, hiding mention view")
+                // print("DEBUG: Search text contains spaces or newlines, hiding mention view")
                 hideMentionView()
             }
         } else {
-            print("DEBUG: No @ found in text, hiding mention view")
+            // print("DEBUG: No @ found in text, hiding mention view")
             hideMentionView()
         }
     }
     
     // Hide mention view
     func hideMentionView() {
-        print("DEBUG: hideMentionView called")
+        // print("DEBUG: hideMentionView called")
         mentionInputView?.hidePopup()
     }
     
@@ -273,7 +273,7 @@ class MessageInputView: UIView {
     
     // CRITICAL FIX: Cleanup method to clear strong references and prevent memory leaks
     func cleanup() {
-        print("DEBUG: MessageInputView cleanup called")
+        // print("DEBUG: MessageInputView cleanup called")
         
         NotificationCenter.default.removeObserver(self, name: UITextView.textDidChangeNotification, object: nil)
         
@@ -377,26 +377,26 @@ class MessageInputView: UIView {
     
     // Call this when upload completes (success or failure)
     func onAttachmentsUploadComplete() {
-        print("🎯 onAttachmentsUploadComplete CALLED")
+        // print("🎯 onAttachmentsUploadComplete CALLED")
         
         // IMPORTANT: Clear upload state BEFORE clearing attachments
         // Otherwise the views will be removed and we can't update their state
-        print("🎯 Calling attachmentPreviewView.hideAllLoadingOverlays()")
+        // print("🎯 Calling attachmentPreviewView.hideAllLoadingOverlays()")
         attachmentPreviewView.hideAllLoadingOverlays()
-        print("🎯 hideAllLoadingOverlays() completed")
+        // print("🎯 hideAllLoadingOverlays() completed")
         
         // Clear attachments immediately (no delay) to hide preview box
-        print("🎯 Clearing pending attachments immediately")
+        // print("🎯 Clearing pending attachments immediately")
         pendingAttachmentsManager.clearAllAttachments()
         updateAttachmentPreview()
-        print("🎯 Attachments cleared and preview updated")
+        // print("🎯 Attachments cleared and preview updated")
         
         // Re-enable interactions
         plusButton.isEnabled = true
-        print("🎯 Plus button re-enabled")
+        // print("🎯 Plus button re-enabled")
         
         updateSendButtonState()
-        print("🎯 onAttachmentsUploadComplete COMPLETED")
+        // print("🎯 onAttachmentsUploadComplete COMPLETED")
     }
     
     // Set the editing state
@@ -994,7 +994,7 @@ extension UITextView {
 // MARK: - MessageInputView Mention Extension
 extension MessageInputView: MentionInputViewDelegate {
     func mentionInputView(_ mentionView: MentionInputView, didSelectUser user: User, member: Member?) {
-        print("DEBUG: User selected from mention: \(user.username)")
+        // print("DEBUG: User selected from mention: \(user.username)")
         
         // Get current text
         let currentText = textView.text ?? ""
@@ -1036,7 +1036,7 @@ extension MessageInputView: MentionInputViewDelegate {
     }
     
     func mentionInputViewDidDismiss(_ mentionView: MentionInputView) {
-        print("DEBUG: Mention view dismissed")
+        // print("DEBUG: Mention view dismissed")
     }
     
     // MARK: - Mention Data Management
@@ -1059,7 +1059,7 @@ extension MessageInputView: MentionInputViewDelegate {
             .OBJC_ASSOCIATION_RETAIN_NONATOMIC
         )
         
-        print("DEBUG: Stored mention data for user: \(mentionData.username)")
+        // print("DEBUG: Stored mention data for user: \(mentionData.username)")
     }
     
     // Get mention data list
@@ -1082,7 +1082,7 @@ extension MessageInputView: MentionInputViewDelegate {
             )
         }
         
-        print("DEBUG: Converted text from '\(originalText)' to '\(convertedText)'")
+        // print("DEBUG: Converted text from '\(originalText)' to '\(convertedText)'")
         return convertedText
     }
     
@@ -1094,6 +1094,6 @@ extension MessageInputView: MentionInputViewDelegate {
             nil,
             .OBJC_ASSOCIATION_RETAIN_NONATOMIC
         )
-        print("DEBUG: Cleared mention data")
+        // print("DEBUG: Cleared mention data")
     }
 }

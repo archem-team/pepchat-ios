@@ -163,7 +163,7 @@ struct DiscoverScrollView: View {
     }
     
     private func navigateToServer(item: DiscoverItem) {
-        print("✅ [DiscoverScrollView] User is already a member of \(item.title), navigating to server")
+        // print("✅ [DiscoverScrollView] User is already a member of \(item.title), navigating to server")
         
         // First try to find server by cached invite code -> server ID mapping
         if let serverId = inviteCache[item.code] {
@@ -175,7 +175,7 @@ struct DiscoverScrollView: View {
                     viewState.path.removeAll()
                 }
                 
-                print("📋 [DiscoverScrollView] Selected server \(server.name) via invite cache")
+                // print("📋 [DiscoverScrollView] Selected server \(server.name) via invite cache")
                 return
             }
         }
@@ -191,16 +191,16 @@ struct DiscoverScrollView: View {
                 viewState.path.removeAll()
             }
             
-            print("📋 [DiscoverScrollView] Selected server \(matchingServer.name) via name matching")
+            // print("📋 [DiscoverScrollView] Selected server \(matchingServer.name) via name matching")
         } else {
             // Couldn't find server, show invite screen
-            print("⚠️ [DiscoverScrollView] Couldn't find matching server, showing invite screen")
+            // print("⚠️ [DiscoverScrollView] Couldn't find matching server, showing invite screen")
             viewState.path.append(NavigationDestination.invite(item.code))
         }
     }
     
     private func navigateToInvite(item: DiscoverItem) {
-        print("🔗 [DiscoverScrollView] User is not a member of \(item.title), showing invite screen")
+        // print("🔗 [DiscoverScrollView] User is not a member of \(item.title), showing invite screen")
         viewState.path.append(NavigationDestination.invite(item.code))
     }
     
@@ -208,7 +208,7 @@ struct DiscoverScrollView: View {
         // Check if we're on peptide.chat domain before loading
         let baseURL = viewState.baseURL ?? viewState.defaultBaseURL
         if !baseURL.contains("peptide.chat") {
-            print("🌐 [DiscoverScrollView] Not on peptide.chat domain, skipping CSV loading")
+            // print("🌐 [DiscoverScrollView] Not on peptide.chat domain, skipping CSV loading")
             self.isLoading = false
             self.discoverItems = [] // Empty list for non-peptide domains
             return
@@ -227,13 +227,13 @@ struct DiscoverScrollView: View {
                                         color: $0.color) }
                     .sorted(by: { $0.sortOrder < $1.sortOrder })
                 DispatchQueue.main.async {
-                    print("📥 Using cached discover: \(items.count) items, updated \(cached.timestamp)")
+                    // print("📥 Using cached discover: \(items.count) items, updated \(cached.timestamp)")
                     self.discoverItems = items
                 }
             }
         }
         self.isLoading = true
-        print("🌐 [DiscoverScrollView] Loading server list from CSV...")
+        // print("🌐 [DiscoverScrollView] Loading server list from CSV...")
         
         ServerChatDataFetcher.shared.fetchData { result in
                 DispatchQueue.main.async {
@@ -244,7 +244,7 @@ struct DiscoverScrollView: View {
                     switch result {
                     case .success(let fetchedServerChats):
                     
-                    print("✅ [DiscoverScrollView] Successfully fetched \(fetchedServerChats.count) servers from CSV")
+                    // print("✅ [DiscoverScrollView] Successfully fetched \(fetchedServerChats.count) servers from CSV")
                         
                         self.discoverItems = fetchedServerChats
                             //.filter { !$0.disabled }
@@ -269,7 +269,7 @@ struct DiscoverScrollView: View {
 
                         
                     case .failure(let error):
-                    print("❌ [DiscoverScrollView] Failed to fetch servers: \(error.localizedDescription)")
+                    // print("❌ [DiscoverScrollView] Failed to fetch servers: \(error.localizedDescription)")
                         debugPrint("error: \(error.localizedDescription)")
                     }
                 }
@@ -292,7 +292,7 @@ struct DiscoverScrollView: View {
             self.discoverItems = self.discoverItems
         }
         
-        print("✅ [DiscoverScrollView] Completed membership check for all servers")
+        // print("✅ [DiscoverScrollView] Completed membership check for all servers")
     }
     
     /// Checks and caches membership for a specific discover item
@@ -351,7 +351,7 @@ struct DiscoverScrollView: View {
                 }
             }
         } catch {
-            print("❌ [DiscoverScrollView] Failed to fetch invite \(item.code): \(error)")
+            // print("❌ [DiscoverScrollView] Failed to fetch invite \(item.code): \(error)")
 
             // Fallback to name-based matching
             let nameMembership = viewState.servers.values.contains { server in
@@ -448,21 +448,21 @@ class ServerChatDataFetcher {
     }
     
     func fetchData(completion: @escaping (Result<[ServerChat], Error>) -> Void) {
-        print("🌐 [ServerChatDataFetcher] Fetching CSV from URL: \(csvUrl)")
+        // print("🌐 [ServerChatDataFetcher] Fetching CSV from URL: \(csvUrl)")
         AF.request(csvUrl).responseString { response in
             switch response.result {
             case .success(let csvString):
-                print("✅ [ServerChatDataFetcher] CSV downloaded successfully")
+                // print("✅ [ServerChatDataFetcher] CSV downloaded successfully")
                 do {
                     let csv = try CSV<Named>(string: csvString)
                     
                     let checkForIDHeader = csv.header.contains("id")
                     
                     if !checkForIDHeader {
-                        print("⚠️ [ServerChatDataFetcher] 'id' header missing, using empty string key")
+                        // print("⚠️ [ServerChatDataFetcher] 'id' header missing, using empty string key")
                     }
                     
-                    print("📊 [ServerChatDataFetcher] Parsing CSV with \(csv.rows.count) rows")
+                    // print("📊 [ServerChatDataFetcher] Parsing CSV with \(csv.rows.count) rows")
                     
                     let serverChats = csv.rows.compactMap { row -> ServerChat? in
                         guard let id = row["id"] ?? row[""],
@@ -493,12 +493,12 @@ class ServerChatDataFetcher {
                     self.saveCache(cache)
                     completion(.success(serverChats))
                 } catch {
-                    print("❌ [ServerChatDataFetcher] Failed to parse CSV: \(error.localizedDescription)")
+                    // print("❌ [ServerChatDataFetcher] Failed to parse CSV: \(error.localizedDescription)")
                     completion(.failure(error))
                 }
                 
             case .failure(let error):
-                print("❌ [ServerChatDataFetcher] Failed to download CSV: \(error.localizedDescription)")
+                // print("❌ [ServerChatDataFetcher] Failed to download CSV: \(error.localizedDescription)")
                 completion(.failure(error))
             }
         }

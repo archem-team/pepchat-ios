@@ -935,6 +935,7 @@ struct UploadButton: View {
                     showingSelectPhoto = true
                 case .camera: break
                     //.peptideCamera
+                    break
                 case .file:
                     showingSelectFile = true
                 }

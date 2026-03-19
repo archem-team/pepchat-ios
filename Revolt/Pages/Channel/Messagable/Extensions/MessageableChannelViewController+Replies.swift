@@ -19,27 +19,27 @@ extension MessageableChannelViewController {
     /// Fetch a specific message from the server if it's not in cache
     /// This is used when replying to old messages that aren't currently loaded
     func fetchMessageForReply(messageId: String, channelId: String) async -> Types.Message? {
-        print("🔍 FETCH_REPLY: Attempting to fetch message \(messageId) for reply")
+        // print("🔍 FETCH_REPLY: Attempting to fetch message \(messageId) for reply")
 
         // First check if message is already in cache
         if let cachedMessage = viewModel.viewState.messages[messageId] {
-            print("✅ FETCH_REPLY: Message found in cache")
+            // print("✅ FETCH_REPLY: Message found in cache")
             return cachedMessage
         }
 
         do {
             // Fetch the message from the server
-            print(
-                "🌐 FETCH_REPLY: Fetching message from server - Channel: \(channelId), Message: \(messageId)"
-            )
-            print("🌐 FETCH_REPLY: About to call viewModel.viewState.http.fetchMessage!")
+            // print(
+                // "🌐 FETCH_REPLY: Fetching message from server - Channel: \(channelId), Message: \(messageId)"
+            // )
+            // print("🌐 FETCH_REPLY: About to call viewModel.viewState.http.fetchMessage!")
             let message = try await viewModel.viewState.http.fetchMessage(
                 channel: channelId,
                 message: messageId
             ).get()
 
-            print("✅ FETCH_REPLY: Successfully fetched message from server")
-            print("✅ FETCH_REPLY: Message content: \(message.content ?? "no content")")
+            // print("✅ FETCH_REPLY: Successfully fetched message from server")
+            // print("✅ FETCH_REPLY: Message content: \(message.content ?? "no content")")
 
             // Store the message in cache
             await MainActor.run {
@@ -63,7 +63,7 @@ extension MessageableChannelViewController {
                 case .HTTPError(_, let statusCode) = revoltError,
                 statusCode == 404
             {
-                print("🗑️ FETCH_REPLY: Message \(messageId) was deleted (404)")
+                // print("🗑️ FETCH_REPLY: Message \(messageId) was deleted (404)")
             }
 
             return nil
@@ -75,12 +75,12 @@ extension MessageableChannelViewController {
         guard viewModel.viewState.users[userId] == nil else { return }
 
         do {
-            print("👥 FETCH_USER: Fetching user \(userId) for reply message")
+            // print("👥 FETCH_USER: Fetching user \(userId) for reply message")
             let user = try await viewModel.viewState.http.fetchUser(user: userId).get()
 
             await MainActor.run {
                 viewModel.viewState.users[user.id] = user
-                print("✅ FETCH_USER: Successfully cached user \(user.username)")
+                // print("✅ FETCH_USER: Successfully cached user \(user.username)")
             }
         } catch {
             print("❌ FETCH_USER: Failed to fetch user \(userId): \(error)")
@@ -94,7 +94,7 @@ extension MessageableChannelViewController {
                     relationship: .None
                 )
                 viewModel.viewState.users[userId] = placeholder
-                print("🔄 FETCH_USER: Created placeholder for user \(userId)")
+                // print("🔄 FETCH_USER: Created placeholder for user \(userId)")
             }
         }
     }
@@ -105,9 +105,9 @@ extension MessageableChannelViewController {
         let now = Date()
         if let lastCheck = lastReplyCheckTime, now.timeIntervalSince(lastCheck) < replyCheckCooldown
         {
-            print(
-                "🔗 CHECK_THROTTLED: Skipping reply check (last check was \(now.timeIntervalSince(lastCheck))s ago)"
-            )
+            // print(
+                // "🔗 CHECK_THROTTLED: Skipping reply check (last check was \(now.timeIntervalSince(lastCheck))s ago)"
+            // )
             return
         }
         lastReplyCheckTime = now
@@ -117,7 +117,7 @@ extension MessageableChannelViewController {
             viewModel.viewState.messages[messageId]
         }
 
-        print("🔗 CHECK_MISSING: Checking \(currentMessages.count) messages for missing replies")
+        // print("🔗 CHECK_MISSING: Checking \(currentMessages.count) messages for missing replies")
 
         // Find messages with replies that aren't loaded yet
         var messagesNeedingReplies: [Types.Message] = []
@@ -139,29 +139,29 @@ extension MessageableChannelViewController {
             if !unloadedReplies.isEmpty {
                 messagesNeedingReplies.append(message)
                 missingReplyIds += unloadedReplies.count
-                print(
-                    "🔗 CHECK_MISSING: Message \(message.id) has \(unloadedReplies.count) missing replies: \(unloadedReplies)"
-                )
+                // print(
+                    // "🔗 CHECK_MISSING: Message \(message.id) has \(unloadedReplies.count) missing replies: \(unloadedReplies)"
+                // )
             }
         }
 
-        print(
-            "🔗 CHECK_MISSING: Summary - Total messages with replies: \(totalMessagesWithReplies), Total reply IDs: \(totalReplyIds), Missing reply IDs: \(missingReplyIds)"
-        )
+        // print(
+            // "🔗 CHECK_MISSING: Summary - Total messages with replies: \(totalMessagesWithReplies), Total reply IDs: \(totalReplyIds), Missing reply IDs: \(missingReplyIds)"
+        // )
 
         if !messagesNeedingReplies.isEmpty {
-            print(
-                "🔗 CHECK_MISSING: Found \(messagesNeedingReplies.count) messages with missing reply content, fetching now..."
-            )
+            // print(
+                // "🔗 CHECK_MISSING: Found \(messagesNeedingReplies.count) messages with missing reply content, fetching now..."
+            // )
             await fetchReplyMessagesContent(for: messagesNeedingReplies)
 
             // Refresh UI after fetching missing replies
             await MainActor.run {
-                print("🔗 CHECK_MISSING: Refreshing UI after loading missing replies")
+                // print("🔗 CHECK_MISSING: Refreshing UI after loading missing replies")
                 self.refreshMessages()
             }
         } else {
-            print("🔗 CHECK_MISSING: All reply content is already loaded!")
+            // print("🔗 CHECK_MISSING: All reply content is already loaded!")
         }
     }
     
@@ -169,39 +169,39 @@ extension MessageableChannelViewController {
 
     /// Handle clicking on a reply to jump to the original message
     func handleReplyClick(messageId: String, channelId: String) {
-        print(
-            "🔗 REPLY_CLICK: User clicked on reply to message \(messageId) in channel \(channelId)")
-        print(
-            "🔍 REPLY_CLICK: This is the main handleReplyClick method in MessageableChannelViewController!"
-        )
+        // print(
+            // "🔗 REPLY_CLICK: User clicked on reply to message \(messageId) in channel \(channelId)")
+        // print(
+            // "🔍 REPLY_CLICK: This is the main handleReplyClick method in MessageableChannelViewController!"
+        // )
 
         // CRITICAL FIX: Clear target message protection first to allow new reply click
-        print("🎯 REPLY_CLICK: Clearing target message protection to allow new reply click")
+        // print("🎯 REPLY_CLICK: Clearing target message protection to allow new reply click")
         clearTargetMessageProtection(reason: "user clicked on reply")
 
         // Check if it's the same channel
         if channelId == viewModel.channel.id {
             // Same channel - scroll to the message
-            print("📍 REPLY_CLICK: Same channel, attempting to scroll to message")
+            // print("📍 REPLY_CLICK: Same channel, attempting to scroll to message")
 
             // Check if message is already loaded
             if localMessages.contains(messageId) {
                 // Message is loaded, scroll directly
-                print("✅ REPLY_CLICK: Message is already loaded, scrolling directly")
+                // print("✅ REPLY_CLICK: Message is already loaded, scrolling directly")
                 scrollToMessage(messageId: messageId)
             } else {
                 // Message not loaded, use target message functionality
-                print("🎯 REPLY_CLICK: Message not loaded, using target message functionality")
-                print(
-                    "🌐 REPLY_CLICK: About to call refreshWithTargetMessage - this should trigger API calls!"
-                )
-                print("🔍 REPLY_CLICK: Current localMessages count: \(localMessages.count)")
-                print(
-                    "🔍 REPLY_CLICK: Current viewState messages count: \(viewModel.viewState.messages.count)"
-                )
-                print(
-                    "🔍 REPLY_CLICK: Current channel messages count: \(viewModel.viewState.channelMessages[viewModel.channel.id]?.count ?? 0)"
-                )
+                // print("🎯 REPLY_CLICK: Message not loaded, using target message functionality")
+                // print(
+                    // "🌐 REPLY_CLICK: About to call refreshWithTargetMessage - this should trigger API calls!"
+                // )
+                // print("🔍 REPLY_CLICK: Current localMessages count: \(localMessages.count)")
+                // print(
+                    // "🔍 REPLY_CLICK: Current viewState messages count: \(viewModel.viewState.messages.count)"
+                // )
+                // print(
+                    // "🔍 REPLY_CLICK: Current channel messages count: \(viewModel.viewState.channelMessages[viewModel.channel.id]?.count ?? 0)"
+                // )
 
                 // Set target message and trigger load
                 targetMessageId = messageId
@@ -209,23 +209,23 @@ extension MessageableChannelViewController {
 
                 // Show loading indicator with more specific message
                 DispatchQueue.main.async {
-                    print("🔄 REPLY_CLICK: Loading original message...")
+                    // print("🔄 REPLY_CLICK: Loading original message...")
                 }
 
                 // Trigger target message refresh with enhanced error handling
                 Task {
                     do {
-                        print("🚀 REPLY_CLICK: Starting refreshWithTargetMessage for \(messageId)")
+                        // print("🚀 REPLY_CLICK: Starting refreshWithTargetMessage for \(messageId)")
                         await refreshWithTargetMessage(messageId)
 
                         // Check if the message was successfully loaded
                         await MainActor.run {
                             if self.localMessages.contains(messageId) {
-                                print(
-                                    "✅ REPLY_CLICK: Message successfully loaded and should be visible"
-                                )
+                                // print(
+                                    // "✅ REPLY_CLICK: Message successfully loaded and should be visible"
+                                // )
                             } else {
-                                print("❌ REPLY_CLICK: Message was not loaded successfully")
+                                // print("❌ REPLY_CLICK: Message was not loaded successfully")
                                 // Ensure loading state is reset
                                 self.messageLoadingState = .notLoading
                                 self.loadingHeaderView.isHidden = true
@@ -233,13 +233,13 @@ extension MessageableChannelViewController {
                                 self.viewModel.viewState.currentTargetMessageId = nil
 
                                 // Show error message to user
-                                print(
-                                    "❌ REPLY_CLICK: Could not load the original message. It may have been deleted."
-                                )
+                                // print(
+                                    // "❌ REPLY_CLICK: Could not load the original message. It may have been deleted."
+                                // )
                             }
                         }
                     } catch {
-                        print("❌ REPLY_CLICK: Error in refreshWithTargetMessage: \(error)")
+                        // print("❌ REPLY_CLICK: Error in refreshWithTargetMessage: \(error)")
                         // Ensure all loading states are reset on error
                         await MainActor.run {
                             self.messageLoadingState = .notLoading
@@ -256,7 +256,7 @@ extension MessageableChannelViewController {
             }
         } else {
             // Different channel - navigate to that channel with target message
-            print("🔄 REPLY_CLICK: Different channel, navigating to channel \(channelId)")
+            // print("🔄 REPLY_CLICK: Different channel, navigating to channel \(channelId)")
 
             // Set target message in ViewState for cross-channel navigation
             viewModel.viewState.currentTargetMessageId = messageId
@@ -265,7 +265,7 @@ extension MessageableChannelViewController {
             if let channel = viewModel.viewState.channels[channelId] {
                 // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
                 // This ensures that when user presses back, they go to server list instead of previous channel
-                print("🔄 REPLY_CLICK: Clearing navigation path to prevent back to previous channel")
+                // print("🔄 REPLY_CLICK: Clearing navigation path to prevent back to previous channel")
                 viewModel.viewState.path = []
 
                 // Clear any existing channel messages for the target channel
@@ -286,12 +286,12 @@ extension MessageableChannelViewController {
 
                 // Show loading message
                 DispatchQueue.main.async {
-                    print("🔄 NAVIGATE: Navigating to message...")
+                    // print("🔄 NAVIGATE: Navigating to message...")
                 }
             } else {
                 // Channel not found, show error
                 DispatchQueue.main.async {
-                    print("❌ NAVIGATE: Channel not found")
+                    // print("❌ NAVIGATE: Channel not found")
                 }
             }
         }

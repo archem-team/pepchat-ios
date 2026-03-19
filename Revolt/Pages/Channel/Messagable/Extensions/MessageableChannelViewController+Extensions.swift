@@ -81,14 +81,14 @@ extension MessageableChannelViewController {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
 
-        print(
-            "⚡ VIEW_DID_DISAPPEAR: User has completely left channel \(viewModel.channel.id) - performing FINAL instant cleanup"
-        )
+        // print(
+            // "⚡ VIEW_DID_DISAPPEAR: User has completely left channel \(viewModel.channel.id) - performing FINAL instant cleanup"
+        // )
         let finalCleanupStartTime = CFAbsoluteTimeGetCurrent()
 
         // Check if we're returning from search - if so, don't cleanup
         if isReturningFromSearch {
-            print("🔍 VIEW_DID_DISAPPEAR: Returning from search, skipping final cleanup")
+            // print("🔍 VIEW_DID_DISAPPEAR: Returning from search, skipping final cleanup")
             return
         }
 
@@ -103,7 +103,7 @@ extension MessageableChannelViewController {
             }
 
             if isStayingInSameChannel {
-                print("🎯 VIEW_DID_DISAPPEAR: Staying in same channel, skipping final cleanup")
+                // print("🎯 VIEW_DID_DISAPPEAR: Staying in same channel, skipping final cleanup")
                 return
             }
         }
@@ -129,13 +129,13 @@ extension MessageableChannelViewController {
         // Clear preloaded status so it can be preloaded again when needed
         let channelId = viewModel.channel.id
         viewModel.viewState.preloadedChannels.remove(channelId)
-        print("🧹 CLEANUP: Cleared preloaded status for channel \(channelId)")
+        // print("🧹 CLEANUP: Cleared preloaded status for channel \(channelId)")
 
         let finalCleanupEndTime = CFAbsoluteTimeGetCurrent()
         let finalCleanupDuration = (finalCleanupEndTime - finalCleanupStartTime) * 1000
-        print(
-            "⚡ VIEW_DID_DISAPPEAR: Total final cleanup completed in \(String(format: "%.2f", finalCleanupDuration))ms"
-        )
+        // print(
+            // "⚡ VIEW_DID_DISAPPEAR: Total final cleanup completed in \(String(format: "%.2f", finalCleanupDuration))ms"
+        // )
 
         // Log final memory usage
         logMemoryUsage(prefix: "FINAL CLEANUP COMPLETE")
@@ -143,7 +143,7 @@ extension MessageableChannelViewController {
 
     // Force immediate memory cleanup - called after view disappears
     func forceImmediateMemoryCleanup() {
-        print("⚡ FORCE_IMMEDIATE_CLEANUP: Starting INSTANT memory cleanup")
+        // print("⚡ FORCE_IMMEDIATE_CLEANUP: Starting INSTANT memory cleanup")
         let startTime = CFAbsoluteTimeGetCurrent()
 
         // IMMEDIATE: Force image cache cleanup
@@ -155,7 +155,7 @@ extension MessageableChannelViewController {
         guard initialUserCount <= 2000 else {
             let endTime = CFAbsoluteTimeGetCurrent()
             let duration = (endTime - startTime) * 1000
-            print("⚡ FORCE_IMMEDIATE_CLEANUP: Skipped user cleanup (users=\(initialUserCount) > 2000) in \(String(format: "%.2f", duration))ms")
+            // print("⚡ FORCE_IMMEDIATE_CLEANUP: Skipped user cleanup (users=\(initialUserCount) > 2000) in \(String(format: "%.2f", duration))ms")
             return
         }
 
@@ -164,9 +164,9 @@ extension MessageableChannelViewController {
         let isDM = self.viewModel.channel.isDM
         let isGroupDM = self.viewModel.channel.isGroupDmChannel
 
-        print(
-            "👥 INSTANT_USER_CLEANUP: Starting for channel \(channelId) - DM: \(isDM), GroupDM: \(isGroupDM)"
-        )
+        // print(
+            // "👥 INSTANT_USER_CLEANUP: Starting for channel \(channelId) - DM: \(isDM), GroupDM: \(isGroupDM)"
+        // )
 
         // Collect all user IDs that should be kept
         var usersToKeep = Set<String>()
@@ -201,9 +201,9 @@ extension MessageableChannelViewController {
             if channel.isDM || channel.isGroupDmChannel {
                 let recipientIds = channel.recipients
                 usersToKeep.formUnion(recipientIds)
-                print(
-                    "👥 INSTANT_USER_CLEANUP: Keeping \(recipientIds.count) users from other DM \(channel.id)"
-                )
+                // print(
+                    // "👥 INSTANT_USER_CLEANUP: Keeping \(recipientIds.count) users from other DM \(channel.id)"
+                // )
             }
         }
 
@@ -212,11 +212,11 @@ extension MessageableChannelViewController {
             usersToKeep.insert(server.owner)
         }
 
-        print("👥 INSTANT_USER_CLEANUP: Users to keep: \(usersToKeep.count)")
+        // print("👥 INSTANT_USER_CLEANUP: Users to keep: \(usersToKeep.count)")
 
         // IMMEDIATE: For DMs, be more aggressive about user cleanup
         if isDM || isGroupDM {
-            print("👥 INSTANT_USER_CLEANUP: Performing DM-specific user cleanup")
+            // print("👥 INSTANT_USER_CLEANUP: Performing DM-specific user cleanup")
 
             // Get users from the DM we just left
             let dmRecipients = self.viewModel.channel.recipients
@@ -225,14 +225,14 @@ extension MessageableChannelViewController {
             }
 
             if !usersToRemove.isEmpty {
-                print(
-                    "👥 INSTANT_USER_CLEANUP: Removing \(usersToRemove.count) DM users that are no longer needed"
-                )
+                // print(
+                    // "👥 INSTANT_USER_CLEANUP: Removing \(usersToRemove.count) DM users that are no longer needed"
+                // )
                 for userId in usersToRemove {
                     self.viewModel.viewState.users.removeValue(forKey: userId)
                 }
             } else {
-                print("👥 INSTANT_USER_CLEANUP: All DM users are still needed elsewhere")
+                // print("👥 INSTANT_USER_CLEANUP: All DM users are still needed elsewhere")
             }
         }
 
@@ -240,15 +240,15 @@ extension MessageableChannelViewController {
         let endTime = CFAbsoluteTimeGetCurrent()
         let duration = (endTime - startTime) * 1000
 
-        print(
-            "⚡ FORCE_IMMEDIATE_CLEANUP: Completed in \(String(format: "%.2f", duration))ms - Users: \(initialUserCount) -> \(finalUserCount)"
-        )
+        // print(
+            // "⚡ FORCE_IMMEDIATE_CLEANUP: Completed in \(String(format: "%.2f", duration))ms - Users: \(initialUserCount) -> \(finalUserCount)"
+        // )
     }
 
     /// Performs INSTANT final cleanup with no delays
     func performFinalInstantCleanup() {
         let channelId = viewModel.channel.id
-        print("⚡ FINAL_INSTANT_CLEANUP: Starting IMMEDIATE final cleanup for channel \(channelId)")
+        // print("⚡ FINAL_INSTANT_CLEANUP: Starting IMMEDIATE final cleanup for channel \(channelId)")
 
         let startTime = CFAbsoluteTimeGetCurrent()
 
@@ -280,9 +280,9 @@ extension MessageableChannelViewController {
         let remainingChannelMessages = viewModel.viewState.channelMessages[channelId]?.count ?? 0
 
         if remainingMessages > 0 || remainingChannelMessages > 0 {
-            print(
-                "⚠️ FINAL_INSTANT_CLEANUP: Found \(remainingMessages) remaining messages, force removing"
-            )
+            // print(
+                // "⚠️ FINAL_INSTANT_CLEANUP: Found \(remainingMessages) remaining messages, force removing"
+            // )
 
             // IMMEDIATE: Force remove any remaining data
             viewModel.viewState.channelMessages.removeValue(forKey: channelId)
@@ -298,9 +298,9 @@ extension MessageableChannelViewController {
                 viewModel.viewState.messages.removeValue(forKey: messageId)
             }
 
-            print(
-                "⚡ FINAL_INSTANT_CLEANUP: Force removed \(finalMessagesToRemove.count) remaining messages"
-            )
+            // print(
+                // "⚡ FINAL_INSTANT_CLEANUP: Force removed \(finalMessagesToRemove.count) remaining messages"
+            // )
         }
 
         // 6. IMMEDIATE: Force garbage collection
@@ -311,9 +311,9 @@ extension MessageableChannelViewController {
         let endTime = CFAbsoluteTimeGetCurrent()
         let duration = (endTime - startTime) * 1000  // Convert to milliseconds
 
-        print(
-            "⚡ FINAL_INSTANT_CLEANUP: Completed in \(String(format: "%.2f", duration))ms - ALL memory freed immediately!"
-        )
+        // print(
+            // "⚡ FINAL_INSTANT_CLEANUP: Completed in \(String(format: "%.2f", duration))ms - ALL memory freed immediately!"
+        // )
         logMemoryUsage(prefix: "AFTER INSTANT FINAL CLEANUP")
     }
 }

@@ -96,7 +96,7 @@ struct SwipeToReplyView<Content: View>: View {
 #Preview {
     VStack(spacing: 24) {
         SwipeToReplyView(enableSwipe: true, onReply: {
-            print("✅ Swipe action triggered")
+            // print("✅ Swipe action triggered")
         }, content: {
             HStack {
                 Text("Message")

@@ -64,13 +64,13 @@ extension MessageableChannelViewController {
 
         // CRITICAL FIX: Reset empty response time when loading initial messages
         lastEmptyResponseTime = nil
-        print("🔄 LOAD_INITIAL: Reset lastEmptyResponseTime for initial load")
+        // print("🔄 LOAD_INITIAL: Reset lastEmptyResponseTime for initial load")
 
         // CRITICAL FIX: Don't reload if user is in target message position
         if isInTargetMessagePosition && targetMessageId == nil {
-            print(
-                "🎯 LOAD_INITIAL: User is in target message position, skipping reload to preserve position"
-            )
+            // print(
+                // "🎯 LOAD_INITIAL: User is in target message position, skipping reload to preserve position"
+            // )
             return
         }
 
@@ -81,7 +81,7 @@ extension MessageableChannelViewController {
         let hasCache: Bool
         if let userId = viewModel.viewState.currentUser?.id, let baseURL = viewModel.viewState.baseURL {
             hasCache = await MessageCacheManager.shared.hasCachedMessages(for: channelId, userId: userId, baseURL: baseURL)
-            print("📂 [MessageCache] hasCachedMessages(\(channelId)) = \(hasCache)")
+            // print("📂 [MessageCache] hasCachedMessages(\(channelId)) = \(hasCache)")
         } else {
             hasCache = false
         }
@@ -96,7 +96,7 @@ extension MessageableChannelViewController {
                 offset: 0
             )
             if !cached.isEmpty {
-                print("📂 [MessageCache] UI: showing first page (\(cached.count) messages) from cache for channel \(channelId)")
+                // print("📂 [MessageCache] UI: showing first page (\(cached.count) messages) from cache for channel \(channelId)")
                 let authorIds = Set(cached.map { $0.author })
                 let cachedUsers = await MessageCacheManager.shared.loadCachedUsers(
                     for: Array(authorIds),
@@ -142,21 +142,21 @@ extension MessageableChannelViewController {
         // Check if already loading to prevent duplicate calls
         MessageableChannelViewController.loadingMutex.lock()
         if MessageableChannelViewController.loadingChannels.contains(channelId) {
-            print("⚠️ Channel \(channelId) is already being loaded, skipping duplicate request")
+            // print("⚠️ Channel \(channelId) is already being loaded, skipping duplicate request")
             MessageableChannelViewController.loadingMutex.unlock()
             return
         } else {
-            print("🚀 LOAD_INITIAL: Starting API call for channel \(channelId)")
+            // print("🚀 LOAD_INITIAL: Starting API call for channel \(channelId)")
             MessageableChannelViewController.loadingChannels.insert(channelId)
             messageLoadingState = .loading
-            print("🎯 Set messageLoadingState to .loading for initial load")
+            // print("🎯 Set messageLoadingState to .loading for initial load")
             MessageableChannelViewController.loadingMutex.unlock()
         }
 
         // CRITICAL FIX: Hide empty state immediately when loading starts (especially for cross-channel)
         DispatchQueue.main.async {
             self.hideEmptyStateView()
-            print("🚫 LOAD_INITIAL: Hidden empty state at start of loading")
+            // print("🚫 LOAD_INITIAL: Hidden empty state at start of loading")
         }
 
         // Ensure cleanup when done
@@ -167,7 +167,7 @@ extension MessageableChannelViewController {
 
             // CRITICAL FIX: Reset loading state when done
             messageLoadingState = .notLoading
-            print("🎯 Reset messageLoadingState to .notLoading - loadInitialMessages complete")
+            // print("🎯 Reset messageLoadingState to .notLoading - loadInitialMessages complete")
 
             DispatchQueue.main.async {
                 self.tableView.alpha = 1.0
@@ -227,38 +227,38 @@ extension MessageableChannelViewController {
 
         if let targetId = self.targetMessageId {
             // We have a specific target message to load
-            print("📜 Loading channel with target message ID: \(targetId)")
+            // print("📜 Loading channel with target message ID: \(targetId)")
 
             // CRITICAL FIX: Use nearby API directly for target messages
             // This ensures we get the target message and surrounding context immediately
-            print("🎯 Target message specified, using nearby API directly")
+            // print("🎯 Target message specified, using nearby API directly")
 
             // CRITICAL FIX: Set strong protection flag BEFORE API call to prevent any other loading
             messageLoadingState = .loading
             isInTargetMessagePosition = true
             lastTargetMessageHighlightTime = Date()
-            print("🎯 NEARBY_PROTECTION: Set all protection flags BEFORE nearby API call")
+            // print("🎯 NEARBY_PROTECTION: Set all protection flags BEFORE nearby API call")
 
             do {
                 // Use the API to fetch messages near the specified message
-                print(
-                    "🌐 API CALL: fetchHistory (nearby) - Channel: \(viewModel.channel.id), Target: \(targetId), Limit: 100"
-                )
+                // print(
+                    // "🌐 API CALL: fetchHistory (nearby) - Channel: \(viewModel.channel.id), Target: \(targetId), Limit: 100"
+                // )
                 let result = try await viewModel.viewState.http.fetchHistory(
                     channel: viewModel.channel.id,
                     limit: 100,  // Get context around the target message
                     nearby: targetId
                 ).get()
-                print(
-                    "✅ API RESPONSE: fetchHistory (nearby) - Received \(result.messages.count) messages, \(result.users.count) users"
-                )
+                // print(
+                    // "✅ API RESPONSE: fetchHistory (nearby) - Received \(result.messages.count) messages, \(result.users.count) users"
+                // )
 
                 // print("✅ Nearby API Response received with \(result.messages.count) messages")
 
                 // Fetch reply message content for messages that have replies BEFORE MainActor.run
-                print(
-                    "🔗 CALLING fetchReplyMessagesContent (nearby API - first call) with \(result.messages.count) messages"
-                )
+                // print(
+                    // "🔗 CALLING fetchReplyMessagesContent (nearby API - first call) with \(result.messages.count) messages"
+                // )
                 await self.fetchReplyMessagesContent(for: result.messages)
 
                 // Process and merge the nearby messages with existing channel history
@@ -355,42 +355,42 @@ extension MessageableChannelViewController {
 
                             // CRITICAL FIX: Keep loading state until target message is scrolled to
                             // This prevents any other loading from interfering
-                            print(
-                                "🎯 NEARBY_SUCCESS: Keeping messageLoadingState = .loading until scroll completes"
-                            )
+                            // print(
+                                // "🎯 NEARBY_SUCCESS: Keeping messageLoadingState = .loading until scroll completes"
+                            // )
 
                             // Instead, trigger scrollToTargetMessage properly
                             if let targetId = self.targetMessageId {
-                                print(
-                                    "🎯 loadInitialMessages: Found target message \(targetId), triggering scroll"
-                                )
+                                // print(
+                                    // "🎯 loadInitialMessages: Found target message \(targetId), triggering scroll"
+                                // )
 
                                 // Check if target message is actually loaded
                                 let targetInLocalMessages = self.localMessages.contains(targetId)
                                 let targetInViewState =
                                     self.viewModel.viewState.messages[targetId] != nil
 
-                                print(
-                                    "🎯 loadInitialMessages: Target message \(targetId) loaded check:"
-                                )
-                                print("   - In localMessages: \(targetInLocalMessages)")
-                                print("   - In viewState: \(targetInViewState)")
+                                // print(
+                                    // "🎯 loadInitialMessages: Target message \(targetId) loaded check:"
+                                // )
+                                // print("   - In localMessages: \(targetInLocalMessages)")
+                                // print("   - In viewState: \(targetInViewState)")
 
                                 if targetInLocalMessages && targetInViewState {
-                                    print("✅ Target message is loaded, scrolling to it")
+                                    // print("✅ Target message is loaded, scrolling to it")
                                     self.scrollToTargetMessage()
 
                                     // CRITICAL FIX: Only reset loading state AFTER successful scroll
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                                         self.messageLoadingState = .notLoading
-                                        print(
-                                            "🎯 NEARBY_COMPLETE: Reset messageLoadingState after scroll completion"
-                                        )
+                                        // print(
+                                            // "🎯 NEARBY_COMPLETE: Reset messageLoadingState after scroll completion"
+                                        // )
                                     }
                                 } else {
-                                    print(
-                                        "❌ Target message NOT loaded, keeping targetMessageId for later"
-                                    )
+                                    // print(
+                                        // "❌ Target message NOT loaded, keeping targetMessageId for later"
+                                    // )
                                     // Reset loading state since we couldn't scroll
                                     self.messageLoadingState = .notLoading
                                 }
@@ -414,9 +414,9 @@ extension MessageableChannelViewController {
                             self.messageLoadingState = .notLoading
                             self.isInTargetMessagePosition = false
                             self.lastTargetMessageHighlightTime = nil
-                            print(
-                                "🎯 NEARBY_EMPTY: Reset protection flags after empty nearby response"
-                            )
+                            // print(
+                                // "🎯 NEARBY_EMPTY: Reset protection flags after empty nearby response"
+                            // )
 
                             // Still try to scroll to target in case it was loaded by regular loading
                             self.scrollToTargetMessage()
@@ -434,7 +434,7 @@ extension MessageableChannelViewController {
                     self.messageLoadingState = .notLoading
                     self.isInTargetMessagePosition = false
                     self.lastTargetMessageHighlightTime = nil
-                    print("🎯 NEARBY_ERROR: Reset protection flags after nearby call error")
+                    // print("🎯 NEARBY_ERROR: Reset protection flags after nearby call error")
 
                     // Clear target message from ViewState if it failed to load
                     self.viewModel.viewState.currentTargetMessageId = nil
@@ -446,7 +446,7 @@ extension MessageableChannelViewController {
                 }
 
                 // Fall back to regular loading
-                print("🔄 FALLBACK: Falling back to regular loading after target message failure")
+                // print("🔄 FALLBACK: Falling back to regular loading after target message failure")
                 await loadRegularMessages()
             }
         } else {
@@ -459,7 +459,7 @@ extension MessageableChannelViewController {
     private func loadRegularMessages(forceFetchFromServer: Bool = false) async {
         // COMPREHENSIVE TARGET MESSAGE PROTECTION
         if targetMessageProtectionActive {
-            print("🎯 LOAD_REGULAR: Target message protection active, skipping regular load")
+            // print("🎯 LOAD_REGULAR: Target message protection active, skipping regular load")
             return
         }
 
@@ -467,13 +467,13 @@ extension MessageableChannelViewController {
         messageLoadingState = .loading
         DispatchQueue.main.async {
             self.hideEmptyStateView()
-            print("🚫 LOAD_REGULAR: Hidden empty state for regular loading")
+            // print("🚫 LOAD_REGULAR: Hidden empty state for regular loading")
         }
 
         // Ensure cleanup when done
         defer {
             messageLoadingState = .notLoading
-            print("🎯 LOAD_REGULAR: Reset loading state - complete")
+            // print("🎯 LOAD_REGULAR: Reset loading state - complete")
         }
 
         // print("📜 Loading regular messages")
@@ -586,24 +586,24 @@ extension MessageableChannelViewController {
 
             do {
                 // Call API with proper error handling
-                print("🌐 API CALL: loadMoreMessages (initial) - Channel: \(viewModel.channel.id)")
+                // print("🌐 API CALL: loadMoreMessages (initial) - Channel: \(viewModel.channel.id)")
                 let result = await viewModel.loadMoreMessages(before: nil)
-                print(
-                    "✅ API RESPONSE: loadMoreMessages (initial) - Result: \(result != nil ? "Success with \(result!.messages.count) messages" : "Nil")"
-                )
+                // print(
+                    // "✅ API RESPONSE: loadMoreMessages (initial) - Result: \(result != nil ? "Success with \(result!.messages.count) messages" : "Nil")"
+                // )
 
                 // DEBUG: Check if any messages have replies
                 if let fetchResult = result {
                     let messagesWithReplies = fetchResult.messages.filter {
                         $0.replies?.isEmpty == false
                     }
-                    print(
-                        "🔗 API_DEBUG: Out of \(fetchResult.messages.count) messages, \(messagesWithReplies.count) have replies"
-                    )
+                    // print(
+                        // "🔗 API_DEBUG: Out of \(fetchResult.messages.count) messages, \(messagesWithReplies.count) have replies"
+                    // )
                     for message in messagesWithReplies {
-                        print(
-                            "🔗 API_DEBUG: Message \(message.id) has replies: \(message.replies ?? [])"
-                        )
+                        // print(
+                            // "🔗 API_DEBUG: Message \(message.id) has replies: \(message.replies ?? [])"
+                        // )
                     }
                 }
 
@@ -642,21 +642,6 @@ extension MessageableChannelViewController {
                     for message in fetchResult.messages {
                         viewModel.viewState.messages[message.id] = message
                     }
-
-                    // Fetch reply message content for messages that have replies
-                    print(
-                        "🔗 CALLING fetchReplyMessagesContentAndRefreshUI with \(fetchResult.messages.count) messages"
-                    )
-                    await fetchReplyMessagesContentAndRefreshUI(for: fetchResult.messages)
-
-                    // CRITICAL FIX: Also check for any preloaded messages that might have replies
-                    let allCurrentMessages = localMessages.compactMap { messageId in
-                        viewModel.viewState.messages[messageId]
-                    }
-                    print(
-                        "🔗 PRELOAD_CHECK: Checking \(allCurrentMessages.count) total messages for missing replies after regular load"
-                    )
-                    await fetchReplyMessagesContentAndRefreshUI(for: allCurrentMessages)
 
                     // Merge with existing (e.g. from cache): union IDs, dedupe, sort by canonical order.
                     // Single MainActor.run to read state, then sort/filter off main thread, then one more to write back.
@@ -721,7 +706,7 @@ extension MessageableChannelViewController {
 
                         // CRITICAL: Mark data source as updating before changes
                         self.isDataSourceUpdating = true
-                        print("📊 DATA_SOURCE: Marking as updating for loadInitialMessages")
+                        // print("📊 DATA_SOURCE: Marking as updating for loadInitialMessages")
 
                         // Create data source with local messages
                         self.dataSource = LocalMessagesDataSource(
@@ -736,7 +721,7 @@ extension MessageableChannelViewController {
                         // CRITICAL: Reset flag after changes complete
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                             self?.isDataSourceUpdating = false
-                            print("📊 DATA_SOURCE: Marking as stable after loadInitialMessages")
+                            // print("📊 DATA_SOURCE: Marking as stable after loadInitialMessages")
                         }
                         // print("📊 TABLE_VIEW reloaded with \(self.localMessages.count) messages")
 
@@ -789,6 +774,19 @@ extension MessageableChannelViewController {
                         // print("⏱️ TOTAL_LOAD_DURATION: \(String(format: "%.2f", totalDuration)) seconds")
                         // print("⏱️ BREAKDOWN: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s, UI=\(String(format: "%.2f", uiDuration))s")
                     }
+
+                    // Fetch reply content in background — don't block message display.
+                    // fetchReplyMessagesContentAndRefreshUI calls tableView.reloadData() internally
+                    // when replies arrive, so cells will update automatically.
+                    let fetchedMessages = fetchResult.messages
+                    Task { [weak self] in
+                        guard let self else { return }
+                        await self.fetchReplyMessagesContentAndRefreshUI(for: fetchedMessages)
+                        let allCurrentMessages = await MainActor.run {
+                            self.localMessages.compactMap { self.viewModel.viewState.messages[$0] }
+                        }
+                        await self.fetchReplyMessagesContentAndRefreshUI(for: allCurrentMessages)
+                    }
                 } else {
                     // TIMING: Calculate failed API call duration
                     let apiEndTime = Date()
@@ -829,7 +827,7 @@ extension MessageableChannelViewController {
     
     internal func loadInitialMessagesImmediate() async {
         let channelId = viewModel.channel.id
-        print("⚡ IMMEDIATE_LOAD: Starting FASTEST possible API call for channel \(channelId)")
+        // print("⚡ IMMEDIATE_LOAD: Starting FASTEST possible API call for channel \(channelId)")
 
         // Ensure table is visible at the end
         defer {
@@ -841,7 +839,7 @@ extension MessageableChannelViewController {
 
         // FASTEST POSSIBLE API CALL - NO CHECKS, NO DELAYS
         let apiStartTime = Date()
-        print("⚡ IMMEDIATE_API_START: \(apiStartTime.timeIntervalSince1970)")
+        // print("⚡ IMMEDIATE_API_START: \(apiStartTime.timeIntervalSince1970)")
 
         do {
             // Get server ID if this is a server channel
@@ -853,9 +851,9 @@ extension MessageableChannelViewController {
                     && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : 50
 
             // IMMEDIATE API CALL
-            print(
-                "⚡ API CALL: fetchHistory IMMEDIATE - Channel: \(channelId), Limit: \(messageLimit)"
-            )
+            // print(
+                // "⚡ API CALL: fetchHistory IMMEDIATE - Channel: \(channelId), Limit: \(messageLimit)"
+            // )
             let result = try await viewModel.viewState.http.fetchHistory(
                 channel: channelId,
                 limit: messageLimit,
@@ -866,9 +864,9 @@ extension MessageableChannelViewController {
 
             let apiEndTime = Date()
             let apiDuration = apiEndTime.timeIntervalSince(apiStartTime)
-            print(
-                "⚡ API_RESPONSE_IMMEDIATE: Received \(result.messages.count) messages in \(String(format: "%.2f", apiDuration))s"
-            )
+            // print(
+                // "⚡ API_RESPONSE_IMMEDIATE: Received \(result.messages.count) messages in \(String(format: "%.2f", apiDuration))s"
+            // )
 
             // IMMEDIATE PROCESSING
             let processingStartTime = Date()
@@ -892,9 +890,9 @@ extension MessageableChannelViewController {
             }
 
             // Fetch reply message content for messages that have replies
-            print(
-                "🔗 CALLING fetchReplyMessagesContentAndRefreshUI (immediate load) with \(result.messages.count) messages"
-            )
+            // print(
+                // "🔗 CALLING fetchReplyMessagesContentAndRefreshUI (immediate load) with \(result.messages.count) messages"
+            // )
             await fetchReplyMessagesContentAndRefreshUI(for: result.messages)
 
             // Sort messages immediately
@@ -906,9 +904,9 @@ extension MessageableChannelViewController {
 
             let processingEndTime = Date()
             let processingDuration = processingEndTime.timeIntervalSince(processingStartTime)
-            print(
-                "⚡ PROCESSING_IMMEDIATE: Processed \(sortedIds.count) messages in \(String(format: "%.2f", processingDuration))s"
-            )
+            // print(
+                // "⚡ PROCESSING_IMMEDIATE: Processed \(sortedIds.count) messages in \(String(format: "%.2f", processingDuration))s"
+            // )
 
             // IMMEDIATE UI UPDATE
             let uiStartTime = Date()
@@ -939,15 +937,15 @@ extension MessageableChannelViewController {
                 let uiDuration = uiEndTime.timeIntervalSince(uiStartTime)
                 let totalDuration = uiEndTime.timeIntervalSince(apiStartTime)
 
-                print("⚡ UI_UPDATE_IMMEDIATE: Updated UI in \(String(format: "%.2f", uiDuration))s")
-                print("⚡ TOTAL_IMMEDIATE_DURATION: \(String(format: "%.2f", totalDuration))s")
-                print(
-                    "⚡ BREAKDOWN: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s, UI=\(String(format: "%.2f", uiDuration))s"
-                )
+                // print("⚡ UI_UPDATE_IMMEDIATE: Updated UI in \(String(format: "%.2f", uiDuration))s")
+                // print("⚡ TOTAL_IMMEDIATE_DURATION: \(String(format: "%.2f", totalDuration))s")
+                // print(
+                    // "⚡ BREAKDOWN: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s, UI=\(String(format: "%.2f", uiDuration))s"
+                // )
             }
 
         } catch {
-            print("❌ IMMEDIATE_LOAD_ERROR: \(error)")
+            // print("❌ IMMEDIATE_LOAD_ERROR: \(error)")
 
             DispatchQueue.main.async {
                 self.hideSkeletonView()
@@ -972,7 +970,7 @@ extension MessageableChannelViewController {
             offset: currentOffset
         )
         guard !cached.isEmpty else { return false }
-        print("📂 [MessageCache] UI: loading older page from cache for channel \(channelId) (offset \(currentOffset), \(cached.count) messages)")
+        // print("📂 [MessageCache] UI: loading older page from cache for channel \(channelId) (offset \(currentOffset), \(cached.count) messages)")
         let authorIds = Set(cached.map { $0.author })
         let cachedUsers = await MessageCacheManager.shared.loadCachedUsers(for: Array(authorIds), currentUserId: userId, baseURL: baseURL)
         await MainActor.run {
@@ -1031,9 +1029,9 @@ extension MessageableChannelViewController {
                 return
             }
 
-            print(
-                "🌐 API CALL: loadMoreMessages (before) - Channel: \(viewModel.channel.id), Before: \(messageId ?? "nil")"
-            )
+            // print(
+                // "🌐 API CALL: loadMoreMessages (before) - Channel: \(viewModel.channel.id), Before: \(messageId ?? "nil")"
+            // )
 
             // CRITICAL FIX: Set flag to prevent memory cleanup during older message loading
             isLoadingOlderMessages = true
@@ -1093,17 +1091,17 @@ extension MessageableChannelViewController {
                         curHeight = await MainActor.run { self.tableView.contentSize.height }
                     }
 
-                    print(
-                        "⏳ BEFORE_CALL: Waiting for API response for messageId=\(apiMessageId ?? "nil"), channelId=\(self.viewModel.channel.id)"
-                    )
-                    print(
-                        "⏳ BEFORE_CALL: Calling viewModel.loadMoreMessages with before=\(apiMessageId ?? "nil")"
-                    )
+                    // print(
+                        // "⏳ BEFORE_CALL: Waiting for API response for messageId=\(apiMessageId ?? "nil"), channelId=\(self.viewModel.channel.id)"
+                    // )
+                    // print(
+                        // "⏳ BEFORE_CALL: Calling viewModel.loadMoreMessages with before=\(apiMessageId ?? "nil")"
+                    // )
                     let loadResult = await self.viewModel.loadMoreMessages(
                         before: apiMessageId
                     )
 
-                    print("✅ BEFORE_CALL: API call completed, result is nil? \(loadResult == nil)")
+                    // print("✅ BEFORE_CALL: API call completed, result is nil? \(loadResult == nil)")
 
                     // If result is not nil, log more details
                     if let result = loadResult {
@@ -1217,7 +1215,7 @@ extension MessageableChannelViewController {
 
                                 // CRITICAL: Mark data source as updating before changes
                                 self.isDataSourceUpdating = true
-                                print("📊 DATA_SOURCE: Marking as updating for loadMoreMessages")
+                                // print("📊 DATA_SOURCE: Marking as updating for loadMoreMessages")
 
                                 // Update data source
                                 self.dataSource = LocalMessagesDataSource(
@@ -1237,7 +1235,7 @@ extension MessageableChannelViewController {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                     [weak self] in
                                     self?.isDataSourceUpdating = false
-                                    print("📊 DATA_SOURCE: Marking as stable after loadMoreMessages")
+                                    // print("📊 DATA_SOURCE: Marking as stable after loadMoreMessages")
                                 }
 
                                 // Multiple attempts to ensure precise scrolling
@@ -1370,7 +1368,7 @@ extension MessageableChannelViewController {
         if let lastEmpty = lastEmptyResponseTime,
             Date().timeIntervalSince(lastEmpty) < 60.0
         {  // Don't retry for 1 minute
-            print("⏹️ LOAD_BLOCKED: Reached beginning of conversation recently, skipping load")
+            // print("⏹️ LOAD_BLOCKED: Reached beginning of conversation recently, skipping load")
             return
         }
 
@@ -1516,8 +1514,8 @@ extension MessageableChannelViewController {
     // Load messages near a specific message ID
     internal func loadMessagesNearby(messageId: String) async -> Bool {
         do {
-            print("🔍 NEARBY_API: Fetching messages nearby \(messageId) using nearby API")
-            print("🌐 NEARBY_API: Channel: \(viewModel.channel.id), Target: \(messageId)")
+            // print("🔍 NEARBY_API: Fetching messages nearby \(messageId) using nearby API")
+            // print("🌐 NEARBY_API: Channel: \(viewModel.channel.id), Target: \(messageId)")
 
             // Use the nearby API to fetch messages around the target message with timeout
             let result = try await withThrowingTaskGroup(of: FetchHistory.self) { group in
@@ -1542,57 +1540,57 @@ extension MessageableChannelViewController {
                 return result
             }
 
-            print(
-                "✅ NEARBY_API: Response received with \(result.messages.count) messages, \(result.users.count) users"
-            )
+            // print(
+                // "✅ NEARBY_API: Response received with \(result.messages.count) messages, \(result.users.count) users"
+            // )
 
             // DEBUG: Check if any messages have replies
             let messagesWithReplies = result.messages.filter { $0.replies?.isEmpty == false }
-            print(
-                "🔗 NEARBY_DEBUG: Out of \(result.messages.count) messages, \(messagesWithReplies.count) have replies"
-            )
+            // print(
+                // "🔗 NEARBY_DEBUG: Out of \(result.messages.count) messages, \(messagesWithReplies.count) have replies"
+            // )
             for message in messagesWithReplies {
-                print("🔗 NEARBY_DEBUG: Message \(message.id) has replies: \(message.replies ?? [])")
+                // print("🔗 NEARBY_DEBUG: Message \(message.id) has replies: \(message.replies ?? [])")
             }
 
             // Check if we got messages and the target message is included
             if !result.messages.isEmpty {
                 let targetFound = result.messages.contains { $0.id == messageId }
-                print(
-                    "🎯 NEARBY_API: Target message \(messageId) found in nearby results: \(targetFound)"
-                )
+                // print(
+                    // "🎯 NEARBY_API: Target message \(messageId) found in nearby results: \(targetFound)"
+                // )
 
                 // Debug: Print all message IDs we got
                 let messageIds = result.messages.map { $0.id }
-                print(
-                    "🔍 NEARBY_API: Returned message IDs: \(messageIds.prefix(5))...\(messageIds.suffix(5))"
-                )
+                // print(
+                    // "🔍 NEARBY_API: Returned message IDs: \(messageIds.prefix(5))...\(messageIds.suffix(5))"
+                // )
 
                 if !targetFound {
-                    print(
-                        "⚠️ NEARBY_API: Target message not found in nearby results, trying direct fetch"
-                    )
+                    // print(
+                        // "⚠️ NEARBY_API: Target message not found in nearby results, trying direct fetch"
+                    // )
                     // Try to fetch the target message directly
                     do {
-                        print("🌐 DIRECT_FETCH: Attempting to fetch target message directly")
+                        // print("🌐 DIRECT_FETCH: Attempting to fetch target message directly")
                         let targetMessage = try await viewModel.viewState.http.fetchMessage(
                             channel: viewModel.channel.id,
                             message: messageId
                         ).get()
 
-                        print(
-                            "✅ DIRECT_FETCH: Successfully fetched target message directly: \(targetMessage.id)"
-                        )
+                        // print(
+                            // "✅ DIRECT_FETCH: Successfully fetched target message directly: \(targetMessage.id)"
+                        // )
                         // Store it in viewState
                         viewModel.viewState.messages[targetMessage.id] = targetMessage
                     } catch {
-                        print("❌ DIRECT_FETCH: Could not fetch target message directly: \(error)")
+                        // print("❌ DIRECT_FETCH: Could not fetch target message directly: \(error)")
                         // Return false since we couldn't get the target message
                         return false
                     }
                 }
             } else {
-                print("❌ NEARBY_API: No messages returned from nearby API")
+                // print("❌ NEARBY_API: No messages returned from nearby API")
                 return false
             }
 
@@ -1735,15 +1733,15 @@ extension MessageableChannelViewController {
                 }
             }
         } catch {
-            print("❌ NEARBY_API: Error loading messages nearby target: \(error)")
+            // print("❌ NEARBY_API: Error loading messages nearby target: \(error)")
 
             // Check if it's a specific error type
             if let revoltError = error as? RevoltError {
-                print("❌ NEARBY_API: Revolt error details: \(revoltError)")
+                // print("❌ NEARBY_API: Revolt error details: \(revoltError)")
             } else if let httpError = error as? HTTPError {
-                print("❌ NEARBY_API: HTTP error details: \(httpError)")
+                // print("❌ NEARBY_API: HTTP error details: \(httpError)")
             } else {
-                print("❌ NEARBY_API: Unknown error type: \(type(of: error))")
+                // print("❌ NEARBY_API: Unknown error type: \(type(of: error))")
             }
 
             // Reset loading states in case of error

@@ -13,15 +13,15 @@ import AVKit
 extension MessageCell {
     @objc internal func handleReplyTap() {
         guard let replyId = currentReplyId else {
-            print("❌ REPLY_TAP_CELL: No currentReplyId found")
+            // print("❌ REPLY_TAP_CELL: No currentReplyId found")
             return
         }
         
         // Cancel any pending reply loading timeout since user is actively interacting
         replyLoadingTimeoutWorkItem?.cancel()
         
-        print("🔗 REPLY_TAP_CELL: MessageCell reply tap detected!")
-        print("🔗 REPLY_TAP_CELL: replyId=\(replyId)")
+        // print("🔗 REPLY_TAP_CELL: MessageCell reply tap detected!")
+        // print("🔗 REPLY_TAP_CELL: replyId=\(replyId)")
         
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -38,8 +38,8 @@ extension MessageCell {
         
         // Check if the reply message exists in viewState
         if let viewState = self.viewState, let replyMessage = viewState.messages[replyId] {
-            print("✅ REPLY_TAP_CELL: Found reply message in viewState")
-            print("🔗 REPLY_TAP_CELL: Reply message channel=\(replyMessage.channel)")
+            // print("✅ REPLY_TAP_CELL: Found reply message in viewState")
+            // print("🔗 REPLY_TAP_CELL: Reply message channel=\(replyMessage.channel)")
             
             // Check if the reply is in the same channel
             if let currentMessage = self.currentMessage,
@@ -50,7 +50,7 @@ extension MessageCell {
                 // Find the parent MessageableChannelViewController
                 if let viewController = findParentViewController() as? MessageableChannelViewController {
                     // CRITICAL FIX: Activate target message protection to prevent jumping
-                    print("🛡️ REPLY_TAP_CELL: Activating target message protection")
+                    // print("🛡️ REPLY_TAP_CELL: Activating target message protection")
                     viewController.activateTargetMessageProtection(reason: "reply tap")
                     
                     // Clear any existing target message first
@@ -77,7 +77,7 @@ extension MessageCell {
                                 
                                 // FIXED: Don't clear protection with timer - let scroll detection handle it
                                 // The target message protection will be cleared when user actually scrolls away
-                                print("✅ REPLY_TAP_CELL: Message loaded successfully, protection will be maintained until user scrolls away")
+                                // print("✅ REPLY_TAP_CELL: Message loaded successfully, protection will be maintained until user scrolls away")
                             }
                         } catch {
                             // Ensure loading indicator is hidden on error
@@ -91,7 +91,7 @@ extension MessageCell {
                                 viewController.targetMessageId = nil
                                 viewController.viewModel.viewState.currentTargetMessageId = nil
                                 
-                                print("❌ REPLY_TAP_CELL: Error loading reply message, states reset")
+                                // print("❌ REPLY_TAP_CELL: Error loading reply message, states reset")
                             }
                         }
                         
@@ -100,7 +100,7 @@ extension MessageCell {
                             // Wait a bit then check if message was actually loaded
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                 if !viewController.viewModel.messages.contains(replyId) {
-                                    print("⚠️ REPLY_TAP_CELL: Fallback cleanup - message still not loaded after refresh")
+                                    // print("⚠️ REPLY_TAP_CELL: Fallback cleanup - message still not loaded after refresh")
                                     self.hideReplyLoadingIndicator()
                                     self.showReplyNotFoundMessage()
                                     
@@ -130,7 +130,7 @@ extension MessageCell {
             // Find the parent MessageableChannelViewController
             if let viewController = findParentViewController() as? MessageableChannelViewController {
                 // CRITICAL FIX: Activate target message protection to prevent jumping
-                print("🛡️ REPLY_TAP_CELL: Activating target message protection for loading")
+                // print("🛡️ REPLY_TAP_CELL: Activating target message protection for loading")
                 viewController.activateTargetMessageProtection(reason: "reply tap loading")
                 
                 // Clear any existing target message first
@@ -154,12 +154,12 @@ extension MessageCell {
                                 // Message was not found or could not be loaded
                                 self.showReplyNotFoundMessage()
                             } else {
-                                print("✅ REPLY_TAP_CELL: Message loaded successfully after refresh")
+                                // print("✅ REPLY_TAP_CELL: Message loaded successfully after refresh")
                             }
                             
                             // FIXED: Don't clear protection with timer - let scroll detection handle it
                             // The target message protection will be cleared when user actually scrolls away
-                            print("✅ REPLY_TAP_CELL: Loading completed, protection maintained until user scrolls away")
+                            // print("✅ REPLY_TAP_CELL: Loading completed, protection maintained until user scrolls away")
                         }
                     } catch {
                         // Ensure loading indicator is hidden on error
@@ -173,7 +173,7 @@ extension MessageCell {
                             viewController.targetMessageId = nil
                             viewController.viewModel.viewState.currentTargetMessageId = nil
                             
-                            print("❌ REPLY_TAP_CELL: Error loading reply message (second path), states reset")
+                            // print("❌ REPLY_TAP_CELL: Error loading reply message (second path), states reset")
                         }
                     }
                     
@@ -182,7 +182,7 @@ extension MessageCell {
                         // Wait a bit then check if message was actually loaded
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                             if !viewController.viewModel.messages.contains(replyId) {
-                                print("⚠️ REPLY_TAP_CELL: Fallback cleanup (path 2) - message still not loaded after refresh")
+                                // print("⚠️ REPLY_TAP_CELL: Fallback cleanup (path 2) - message still not loaded after refresh")
                                 self.hideReplyLoadingIndicator()
                                 self.showReplyNotFoundMessage()
                                 
