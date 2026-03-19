@@ -83,9 +83,9 @@ extension ViewState {
                 Task {
                     await self.preloadImportantChannels()
                 }
-                print("🚀 PRELOAD_ENABLED: Started automatic preloading after Ready event")
+                // print("🚀 PRELOAD_ENABLED: Started automatic preloading after Ready event")
             } else {
-                print("📵 PRELOAD_DISABLED: Skipped automatic preloading after Ready event")
+                // print("📵 PRELOAD_DISABLED: Skipped automatic preloading after Ready event")
             }
             
             // CLEANUP: Clean up stale unreads after Ready event
@@ -93,7 +93,7 @@ extension ViewState {
             Task {
                 await MainActor.run {
                     self.cleanupStaleUnreads()
-                    print("🧹 Cleaned up stale unreads after Ready event")
+                    // print("🧹 Cleaned up stale unreads after Ready event")
                 }
             }
 
@@ -184,7 +184,7 @@ extension ViewState {
                 if let queuedIndex = queuedIndex {
                     matchedQueuedMessage = true
                     let queuedMessage = channelQueuedMessages[queuedIndex]
-                    print("📥 VIEWSTATE: Found matching queued message, cleaning up nonce: \(queuedMessage.nonce)")
+                    // print("📥 VIEWSTATE: Found matching queued message, cleaning up nonce: \(queuedMessage.nonce)")
                     
                     // Remove the temporary message from messages dictionary (if it exists)
                     messages.removeValue(forKey: queuedMessage.nonce)
@@ -194,14 +194,14 @@ extension ViewState {
                     if let nonceMsgIndex = channelMessages[m.channel]?.firstIndex(of: queuedMessage.nonce) {
                         // This was an optimistic message (no attachments), replace it
                         channelMessages[m.channel]?[nonceMsgIndex] = m.id
-                        print("📥 VIEWSTATE: Replaced optimistic nonce \(queuedMessage.nonce) with real ID \(m.id)")
+                        // print("📥 VIEWSTATE: Replaced optimistic nonce \(queuedMessage.nonce) with real ID \(m.id)")
                     } else if queuedMessage.hasAttachments {
                         // This was an attachment message (not shown optimistically), add it now
                         if channelMessages[m.channel] == nil {
                             channelMessages[m.channel] = []
                         }
                         channelMessages[m.channel]?.append(m.id)
-                        print("📥 VIEWSTATE: Added attachment message \(m.id) to channel messages for first time")
+                        // print("📥 VIEWSTATE: Added attachment message \(m.id) to channel messages for first time")
                     }
                     
                     // Remove from queued messages for this channel
@@ -209,7 +209,7 @@ extension ViewState {
                     if queuedMessages[m.channel]?.isEmpty == true {
                         queuedMessages.removeValue(forKey: m.channel)
                     }
-                    print("📥 VIEWSTATE: Removed queued message from channel \(m.channel)")
+                    // print("📥 VIEWSTATE: Removed queued message from channel \(m.channel)")
                 }
             }
             if !matchedQueuedMessage {
@@ -338,8 +338,9 @@ extension ViewState {
             }
             
         case .authenticated:
-            print("authenticated")
+            // print("authenticated")
             
+            break
         case .invalid_session:
             Task {
                 await self.signOut()
@@ -791,23 +792,22 @@ extension ViewState {
                 if let index = dms.firstIndex(where: { $0.id == e.id }) {
                     dms[index] = .group_dm_channel(channel)
                 }
-                
-                //TOOD
-                //fetch user
-                let response = await self.http.fetchUser(user: e.user)
-                switch response {
-                    case .success(let user):
-                        // MEMORY FIX: Only add users if we have space
-                        if self.users.count < self.maxUsersInMemory {
-                            self.users[user.id] = user
-                            // print("📥 VIEWSTATE: Added user \(user.id) during channel_group_join")
-                        }
-                        self.checkAndCleanupIfNeeded()
-                        
-                    case .failure(let error):
-                        print(error)
+
+                // Fetch user in background — don't block batch event processing
+                Task { [weak self] in
+                    guard let self else { return }
+                    let response = await self.http.fetchUser(user: e.user)
+                    switch response {
+                        case .success(let user):
+                            if self.users.count < self.maxUsersInMemory {
+                                self.users[user.id] = user
+                            }
+                            self.checkAndCleanupIfNeeded()
+                        case .failure(let error):
+                            print(error)
+                    }
                 }
-                
+
             } else {
                 //Todo other types channel
             }
@@ -883,7 +883,8 @@ extension ViewState {
                         }
                         self.checkAndCleanupIfNeeded()
                     case .failure(_):
-                         print("error fetching user")
+                         // print("error fetching user")
+                        break
                 }
                 
                 switch memberResult {
@@ -892,7 +893,8 @@ extension ViewState {
                         serverMembers[e.user] = member
                         self.members[e.id] = serverMembers
                     case .failure(_):
-                         print("error fetching member")
+                         // print("error fetching member")
+                        break
                 }
 
             }

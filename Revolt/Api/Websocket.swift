@@ -488,7 +488,7 @@ class WebSocketStream: ObservableObject {
     private var url: URL // The URL of the WebSocket server.
     private var client: WebSocket? // The WebSocket client instance. Made optional to allow cleanup
     private weak var onEventDelegate: AnyObject? // Weak reference to prevent retain cycles
-    private var onEvent: ((WsMessage) async -> ())? // Callback for handling received events.
+    private var onEvent: (([WsMessage]) async -> ())? // Callback for handling received events (batched).
     
     public var token: String // Authentication token.
     @Published public var currentState: WsState = .connecting // Current connection state.
@@ -510,6 +510,11 @@ class WebSocketStream: ObservableObject {
     private let maxPendingMessages = 200 // Increased from 100 to 200
     private var pendingMessageCount = 0
     private let pendingMessageCountLock = NSLock()
+
+    // EVENT BATCHING: Buffer events for ~16ms (one frame) to coalesce into a single MainActor batch
+    private var eventBuffer: [WsMessage] = []
+    private let eventBufferLock = NSLock()
+    private var flushScheduled = false
     
     // Add app state observers
     private var appStateObservers: [NSObjectProtocol] = []
@@ -522,7 +527,7 @@ class WebSocketStream: ObservableObject {
     init(url: String,
          token: String,
          onChangeCurrentState : @escaping (WsState) -> (),
-         onEvent: @escaping (WsMessage) async -> ()) {
+         onEvent: @escaping ([WsMessage]) async -> ()) {
         self.token = token
         self.onEvent = onEvent
         self.url = URL(string: url)! // Create URL from the string.
@@ -580,15 +585,66 @@ class WebSocketStream: ObservableObject {
     }
     
     /// Stops the WebSocket connection.
+    // MARK: - Event Batching
+
+    /// Buffer a decoded event for batched processing. Priority events (ready, auth) flush immediately.
+    private func bufferEvent(_ event: WsMessage) {
+        switch event {
+        case .ready, .authenticated, .invalid_session, .logout:
+            // Priority events bypass the buffer — flush everything accumulated plus this event
+            flushEventBuffer(appending: event)
+            return
+        default:
+            break
+        }
+
+        eventBufferLock.lock()
+        eventBuffer.append(event)
+        let needsSchedule = !flushScheduled
+        flushScheduled = true
+        eventBufferLock.unlock()
+
+        if needsSchedule {
+            // Schedule flush after one frame (~16ms) to coalesce rapid events
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 16_000_000)
+                self?.flushEventBuffer()
+            }
+        }
+    }
+
+    /// Flush all buffered events as a single batch to the onEvent callback.
+    private func flushEventBuffer(appending extra: WsMessage? = nil) {
+        eventBufferLock.lock()
+        var batch = eventBuffer
+        eventBuffer.removeAll(keepingCapacity: true)
+        flushScheduled = false
+        eventBufferLock.unlock()
+
+        if let extra { batch.append(extra) }
+        guard !batch.isEmpty else { return }
+
+        Task { [weak self] in
+            guard let onEvent = self?.onEvent else { return }
+            await onEvent(batch)
+        }
+    }
+
     public func stop() {
         currentState = .disconnected
         onChangeCurrentState(currentState)
         pingTask?.cancel()
         pingTask = nil
-        
+
+        // Drain event buffer to prevent stale events leaking on reconnect
+        eventBufferLock.lock()
+        eventBuffer.removeAll()
+        flushScheduled = false
+        eventBufferLock.unlock()
+
         // NETWORK OPTIMIZATION: Proper connection cleanup to prevent warnings
         cleanupConnection()
-        
+
         client?.disconnect(closeCode: .zero) // Disconnect without a specific close code.
         client = nil // MEMORY FIX: Release the client
         onEvent = nil // MEMORY FIX: Release the callback
@@ -639,7 +695,7 @@ class WebSocketStream: ObservableObject {
             }
             
             let payload = Authenticate(token: token) // Create authentication payload.
-            print(payload.description) // Print the payload description.
+            // print(payload.description) // Print the payload description.
             
             let s = try! WebSocketStream.sharedEncoder.encode(payload) // Encode the payload to JSON.
             client?.write(string: String(data: s, encoding: .utf8)!) // Send the encoded payload.
@@ -720,32 +776,30 @@ class WebSocketStream: ObservableObject {
                         // Log the decoded message type
                         switch e {
                         case .authenticated:
-                            print("📨 WEBSOCKET: Decoded message type: authenticated")
+                            // print("📨 WEBSOCKET: Decoded message type: authenticated")
+                            break
                         case .ready(let event):
-                            print("📨 WEBSOCKET: Decoded message type: ready (users: \(event.users.count), servers: \(event.servers.count), channels: \(event.channels.count))")
+                            // print("📨 WEBSOCKET: Decoded message type: ready (users: \(event.users.count), servers: \(event.servers.count), channels: \(event.channels.count))")
+                            break
                         case .message(let msg):
                             let contentLength = msg.content?.count ?? 0
-                            print("📨 WEBSOCKET: Decoded message type: message (id: \(msg.id), channel: \(msg.channel), content length: \(contentLength))")
+                            // print("📨 WEBSOCKET: Decoded message type: message (id: \(msg.id), channel: \(msg.channel), content length: \(contentLength))")
                         case .message_update(let event):
-                            print("📨 WEBSOCKET: Decoded message type: message_update (id: \(event.id))")
+                            // print("📨 WEBSOCKET: Decoded message type: message_update (id: \(event.id))")
+                            break
                         case .channel_start_typing(let event):
-                            print("📨 WEBSOCKET: Decoded message type: channel_start_typing (user: \(event.user))")
+                            // print("📨 WEBSOCKET: Decoded message type: channel_start_typing (user: \(event.user))")
+                            break
                         case .channel_stop_typing(let event):
-                            print("📨 WEBSOCKET: Decoded message type: channel_stop_typing (user: \(event.user))")
+                            // print("📨 WEBSOCKET: Decoded message type: channel_stop_typing (user: \(event.user))")
+                            break
                         default:
-                            print("📨 WEBSOCKET: Decoded message type: \(String(describing: e))")
+                            // print("📨 WEBSOCKET: Decoded message type: \(String(describing: e))")
+                            break
                         }
                         
-                        // MEMORY FIX: Use weak self in Task to prevent retain cycle
-                        Task { [weak self] in
-                            guard let onEvent = self?.onEvent else { 
-                                // print("⚠️ WEBSOCKET: onEvent callback is nil, dropping message")
-                                return 
-                            }
-                            // print("📨 WEBSOCKET: Forwarding message to ViewState")
-                        await onEvent(e)
-                            // print("📨 WEBSOCKET: Message forwarded successfully")
-                    }
+                        // EVENT BATCHING: Buffer event for coalesced processing
+                        self.bufferEvent(e)
                 } catch {
                         // print("❌ WEBSOCKET: Decode error: \(error)")
                         // Try to log more details about the error
@@ -919,7 +973,7 @@ class WebSocketStream: ObservableObject {
         }
         
         let beginTypingPayload = BeginTyping(channel: channel)
-        print(beginTypingPayload.description)
+        // print(beginTypingPayload.description)
         
         do {
             let beginTypingData = try WebSocketStream.sharedEncoder.encode(beginTypingPayload)
@@ -936,7 +990,7 @@ class WebSocketStream: ObservableObject {
         }
         
         let endTypingPayload = EndTyping(channel: channel)
-        print(endTypingPayload.description)
+        // print(endTypingPayload.description)
         
         do {
             let endTypingData = try WebSocketStream.sharedEncoder.encode(endTypingPayload)

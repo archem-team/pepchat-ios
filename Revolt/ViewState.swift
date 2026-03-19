@@ -279,7 +279,7 @@ public class ViewState: ObservableObject {
     
     /// Temporarily disable automatic acknowledgment after marking as unread
     func disableAutoAcknowledgment() {
-        print("🚫 ViewState: Disabling auto-acknowledgment for \(autoAckDisableDuration) seconds")
+        // print("🚫 ViewState: Disabling auto-acknowledgment for \(autoAckDisableDuration) seconds")
         isAutoAckDisabled = true
         autoAckDisableTime = Date()
     }
@@ -295,7 +295,7 @@ public class ViewState: ObservableObject {
             return true
         } else {
             // Disable period has expired, re-enable auto-ack
-            print("✅ ViewState: Auto-acknowledgment re-enabled after disable period")
+            // print("✅ ViewState: Auto-acknowledgment re-enabled after disable period")
             isAutoAckDisabled = false
             autoAckDisableTime = nil
             return false
@@ -456,7 +456,7 @@ public class ViewState: ObservableObject {
         if let data = try? JSONEncoder().encode(users) {
             UserDefaults.standard.set(data, forKey: "users")
             UserDefaults.standard.synchronize() // Force synchronization
-            print("💾 Forced save of users data completed")
+            // print("💾 Forced save of users data completed")
         }
     }
     
@@ -744,24 +744,24 @@ public class ViewState: ObservableObject {
     internal func preloadChannel(channelId: String) async {
         // Check if channel has already been preloaded
         if preloadedChannels.contains(channelId) {
-            print("🚀 PRELOAD: Channel \(channelId) has already been preloaded, skipping")
+            // print("🚀 PRELOAD: Channel \(channelId) has already been preloaded, skipping")
             return
         }
         
         // Check if channel exists in our channels dictionary
         guard let channel = channels[channelId] else {
-            print("🚀 PRELOAD: Channel \(channelId) not found in channels dictionary")
+            // print("🚀 PRELOAD: Channel \(channelId) not found in channels dictionary")
             return
         }
         
         // Check if we already have messages for this channel
         if let existingMessages = channelMessages[channelId], !existingMessages.isEmpty {
-            print("🚀 PRELOAD: Channel \(channelId) already has \(existingMessages.count) messages, skipping preload")
+            // print("🚀 PRELOAD: Channel \(channelId) already has \(existingMessages.count) messages, skipping preload")
             preloadedChannels.insert(channelId) // Mark as preloaded since it has messages
             return
         }
         
-        print("🚀 PRELOAD: Loading messages for channel: \(channelId)")
+        // print("🚀 PRELOAD: Loading messages for channel: \(channelId)")
         
         do {
             // Get server ID if this is a server channel
@@ -779,7 +779,7 @@ public class ViewState: ObservableObject {
                 include_users: true
             ).get()
             
-            print("🚀 PRELOAD: Successfully loaded \(result.messages.count) messages for channel \(channelId)")
+            // print("🚀 PRELOAD: Successfully loaded \(result.messages.count) messages for channel \(channelId)")
             
             // Process users from the response
             for user in result.users {
@@ -810,13 +810,13 @@ public class ViewState: ObservableObject {
             // Store sorted message IDs in channelMessages
             channelMessages[channelId] = sortedIds
             
-            print("🚀 PRELOAD: Successfully stored \(sortedIds.count) messages for channel \(channelId) in memory")
+            // print("🚀 PRELOAD: Successfully stored \(sortedIds.count) messages for channel \(channelId) in memory")
             
             // Mark channel as preloaded
             preloadedChannels.insert(channelId)
             
         } catch {
-            print("🚀 PRELOAD: Failed to load messages for channel \(channelId): \(error)")
+            // print("🚀 PRELOAD: Failed to load messages for channel \(channelId): \(error)")
         }
     }
     
@@ -996,7 +996,7 @@ public class ViewState: ObservableObject {
         let endTime = CFAbsoluteTimeGetCurrent()
         let duration = (endTime - startTime) * 1000
 
-        print("⚡ USER_INSTANT_CLEANUP: Removed \(usersToRemove.count) users in \(String(format: "%.2f", duration))ms (\(initialUserCount) -> \(finalUserCount))")
+        // print("⚡ USER_INSTANT_CLEANUP: Removed \(usersToRemove.count) users in \(String(format: "%.2f", duration))ms (\(initialUserCount) -> \(finalUserCount))")
     }
     
     
@@ -1184,8 +1184,8 @@ public class ViewState: ObservableObject {
                 }
             }
         },
-                                 onEvent: { [weak self] event in
-            await self?.onEvent(event)
+                                 onEvent: { [weak self] events in
+            await self?.onEvents(events)
         })
         self.ws = ws
     }
@@ -1227,30 +1227,31 @@ public class ViewState: ObservableObject {
         )
     }
     
-    func onEvent(_ event: WsMessage) async {
-        // print("🔄 VIEWSTATE: Processing WebSocket event: \(String(describing: event).prefix(50))...")
-        
-        // CRITICAL FIX: Always process events regardless of current view
-        // This ensures messages are updated even when in DM list
-        await processEvent(event)
-        
-        // Post notification for UI updates when in DM list
-        if case .message(let msg) = event {
-            // Check if this message is for a DM channel
-            if let channel = channels[msg.channel] {
-                switch channel {
-                case .dm_channel(_), .group_dm_channel(_):
-                    // This is a DM message - notify DM list to update
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(
-                            name: NSNotification.Name("DMListNeedsUpdate"),
-                            object: ["channelId": msg.channel, "messageId": msg.id]
-                        )
-                    }
-                default:
-                    break
-                }
+    func onEvents(_ events: [WsMessage]) async {
+        // Process all events in a single MainActor block so SwiftUI coalesces
+        // objectWillChange sends into one re-render pass instead of N passes.
+        for event in events {
+            await processEvent(event)
+        }
+
+        // Coalesced DM notification — one post per batch instead of per-message
+        var hasDmUpdate = false
+        for event in events {
+            guard case .message(let msg) = event,
+                  let channel = channels[msg.channel] else { continue }
+            switch channel {
+            case .dm_channel, .group_dm_channel:
+                hasDmUpdate = true
+            default:
+                break
             }
+            if hasDmUpdate { break }
+        }
+        if hasDmUpdate {
+            NotificationCenter.default.post(
+                name: NSNotification.Name("DMListNeedsUpdate"),
+                object: nil
+            )
         }
     }
     
@@ -1972,7 +1973,7 @@ public class ViewState: ObservableObject {
                 }
             case .failure(let error):
                 // Log and show a safe error to the user instead of crashing
-                print("⚠️ openDm failed for user \(user): \(error)")
+                // print("⚠️ openDm failed for user \(user): \(error)")
                 await MainActor.run {
                     showAlert(message: "Failed to open DM.", icon: .peptideWarningCircle)
                 }
@@ -2396,8 +2397,8 @@ public class ViewState: ObservableObject {
     
     /// Debug badge count and print detailed analysis to console
     func debugBadgeCount() {
-        print("🔍 === BADGE COUNT DEBUG ===")
-        print("📊 Total unreads entries: \(unreads.count)")
+        // print("🔍 === BADGE COUNT DEBUG ===")
+        // print("📊 Total unreads entries: \(unreads.count)")
         
         var totalCount = 0
         var mutedCount = 0
@@ -2413,23 +2414,23 @@ public class ViewState: ObservableObject {
             let serverIdForChannel = channel?.server
             let isServerMuted = serverIdForChannel != nil ? userSettingsStore.cache.notificationSettings.server[serverIdForChannel!] == .muted : false
             
-            print("  📌 Channel: \(channelName) (\(channelId))")
-            print("     - Channel exists: \(channelExists)")
-            print("     - Last read ID: \(unread.last_id ?? "nil")")
-            print("     - Last message ID: \(channel?.last_message_id ?? "nil")")
+            // print("  📌 Channel: \(channelName) (\(channelId))")
+            // print("     - Channel exists: \(channelExists)")
+            // print("     - Last read ID: \(unread.last_id ?? "nil")")
+            // print("     - Last message ID: \(channel?.last_message_id ?? "nil")")
             
             // Check if has unread
             var hasUnread = false
             if let lastUnreadId = unread.last_id, let lastMessageId = channel?.last_message_id {
                 hasUnread = lastUnreadId < lastMessageId
-                print("     - Has unread: \(hasUnread) (\(lastUnreadId) < \(lastMessageId))")
+                // print("     - Has unread: \(hasUnread) (\(lastUnreadId) < \(lastMessageId))")
             }
             
             if let mentions = unread.mentions {
-                print("     - Mentions: \(mentions.count) - \(mentions)")
+                // print("     - Mentions: \(mentions.count) - \(mentions)")
             }
-            print("     - Channel Muted: \(isChannelMuted)")
-            print("     - Server Muted: \(isServerMuted)")
+            // print("     - Channel Muted: \(isChannelMuted)")
+            // print("     - Server Muted: \(isServerMuted)")
             
             totalCount += 1
             if !channelExists {
@@ -2444,16 +2445,16 @@ public class ViewState: ObservableObject {
             }
         }
         
-        print("\n📊 Summary:")
-        print("  - Total unread entries: \(totalCount)")
-        print("  - Missing channels: \(missingChannels)")
-        print("  - Muted channels: \(mutedCount)")
-        print("  - Valid (unmuted) channels: \(validCount)")
-        print("  - Channels with actual unread: \(channelsWithUnread)")
-        print("  - Current app badge: \(ViewState.application?.applicationIconBadgeNumber ?? -1)")
-        print("  - Total channels loaded: \(channels.count)")
-        print("  - Total channels stored: \(allEventChannels.count)")
-        print("🔍 === END DEBUG ===\n")
+        // print("\n📊 Summary:")
+        // print("  - Total unread entries: \(totalCount)")
+        // print("  - Missing channels: \(missingChannels)")
+        // print("  - Muted channels: \(mutedCount)")
+        // print("  - Valid (unmuted) channels: \(validCount)")
+        // print("  - Channels with actual unread: \(channelsWithUnread)")
+        // print("  - Current app badge: \(ViewState.application?.applicationIconBadgeNumber ?? -1)")
+        // print("  - Total channels loaded: \(channels.count)")
+        // print("  - Total channels stored: \(allEventChannels.count)")
+        // print("🔍 === END DEBUG ===\n")
     }
     // MARK: - Message queue processing state
     internal var isProcessingQueue: [String: Bool] = [:] // Prevent concurrent processing per channel
@@ -2463,7 +2464,7 @@ public class ViewState: ObservableObject {
         InternetMonitor.shared.$isConnected
             .sink { isConnected in
                 if isConnected {
-                    print("🌐 Internet restored → trying to flush queue")
+                    // print("🌐 Internet restored → trying to flush queue")
                     self.trySendingQueuedMessages()
                 }
             }
