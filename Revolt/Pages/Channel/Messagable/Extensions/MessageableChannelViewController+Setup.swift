@@ -27,6 +27,7 @@ extension MessageableChannelViewController {
         backButton.tintColor = .textDefaultGray01
         backButton.translatesAutoresizingMaskIntoConstraints = false
         backButton.addTarget(self, action: #selector(backButtonTapped), for: .touchUpInside)
+        backButton.accessibilityIdentifier = AccessibilityID.channel.backButton
         headerView.addSubview(backButton)
 
         // Channel icon (next to back button)

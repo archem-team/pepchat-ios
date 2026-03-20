@@ -193,11 +193,12 @@ struct HomeRewritten: View {
                             Circle().fill(Color.bgYellow07)
                         }
                     }
+                    .accessibilityID(AccessibilityID.home.newMessageButton)
                     .padding(.padding16)
-                    
+
                 }
-                
-               
+
+
             }
             
             

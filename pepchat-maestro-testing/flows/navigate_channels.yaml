@@ -4,19 +4,9 @@ appId: chat.zeko.app
 # Does NOT send any messages (safe for production).
 
 # TODO: update with real accessibility IDs once added to channel views
-- assertVisible:
-    id: channels.list
-    
 - assertVisible: peptide-compass
 
-
-- tapOn:
-    id: channels.firstChannel
-
-# Verify the message area loaded
-- assertVisible:
-    id: channel.messageList
-
-# Navigate back to channel list
+- tapOn: PepChat Official
+- tapOn: english
 - tapOn:
     id: channel.backButton

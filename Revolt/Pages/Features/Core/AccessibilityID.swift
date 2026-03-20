@@ -42,6 +42,20 @@ enum AccessibilityID {
             static let registerLink = "auth.login.registerLink"
         }
     }
+
+    // MARK: - Home
+
+    /// Home screen
+    enum home {
+        static let newMessageButton = "home.newMessageButton"
+    }
+
+    // MARK: - Channel (message view)
+
+    /// Inside a channel / conversation
+    enum channel {
+        static let backButton = "channel.backButton"
+    }
 }
 
 // MARK: - View Extensions
