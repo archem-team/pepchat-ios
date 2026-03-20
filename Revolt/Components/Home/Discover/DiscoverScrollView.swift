@@ -152,6 +152,11 @@ struct DiscoverScrollView: View {
         )
         .padding(.horizontal, .padding16)
         .padding(.bottom, .padding8)
+        .onAppear {
+            Task {
+                await checkAndCacheMembership(for: item)
+            }
+        }
     }
     
     private func handleItemClick(item: DiscoverItem, isMember: Bool) {
@@ -262,10 +267,7 @@ struct DiscoverScrollView: View {
                         let cache = ServerChatCache(timestamp: Date(), items: fetchedServerChats)
                         ServerChatDataFetcher.shared.saveCache(cache)
                     
-                    // Check membership for all items asynchronously
-                    Task {
-                        await self.checkMembershipForAllItems()
-                    }
+                    // Membership checks happen lazily per-row via .onAppear
 
                         
                     case .failure(let error):
@@ -276,32 +278,19 @@ struct DiscoverScrollView: View {
             }
         }
     
-    // MARK: - Enhanced Membership Checking
-    
-    /// Checks membership for all discover items asynchronously
-    private func checkMembershipForAllItems() async {
-        
-        // Check membership for each item
-        for item in discoverItems {
-            await checkAndCacheMembership(for: item)
-        }
-        
-        // Trigger UI update
-        await MainActor.run {
-            // Force a UI refresh by updating the state
-            self.discoverItems = self.discoverItems
-        }
-        
-        // print("✅ [DiscoverScrollView] Completed membership check for all servers")
-    }
-    
-    /// Checks and caches membership for a specific discover item
+    // MARK: - Lazy Membership Checking
+
+    /// Checks and caches membership for a specific discover item (called per-row on appear)
     private func checkAndCacheMembership(for item: DiscoverItem) async {
         // Skip if already checking this invite
-        if checkingInvites.contains(item.code) { return }
+        if checkingInvites.contains(item.code) {
+            print("🔍 [Discover] SKIP (in-flight): \(item.title) [\(item.code)]")
+            return
+        }
 
         // Skip if we already have membership cached by server ID (from CSV item.id); seed inviteCache so UI uses fast path
         if viewState.discoverMembershipCache[item.id] != nil || membershipCache[item.id] != nil {
+            print("🔍 [Discover] CACHE HIT: \(item.title) [\(item.code)]")
             let cached = viewState.discoverMembershipCache[item.id] ?? membershipCache[item.id]!
             await MainActor.run {
                 inviteCache[item.code] = item.id
@@ -313,6 +302,7 @@ struct DiscoverScrollView: View {
         // Skip if we already have cached membership info (from inviteCache + membershipCache)
         if let serverId = inviteCache[item.code],
            membershipCache[serverId] != nil {
+            print("🔍 [Discover] CACHE HIT (invite): \(item.title) [\(item.code)]")
             return
         }
 
@@ -320,6 +310,7 @@ struct DiscoverScrollView: View {
             checkingInvites.insert(item.code)
         }
 
+        print("🌐 [Discover] FETCHING: \(item.title) [\(item.code)]")
         do {
             let inviteResponse = try await viewState.http.fetchInvite(code: item.code).get()
             let extractedServerId = inviteResponse.getServerID()
