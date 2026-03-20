@@ -6,28 +6,31 @@
 
 import UIKit
 
-// PERFORMANCE: Cache for processed markdown to avoid reprocessing same content
-private var markdownCache: [String: NSAttributedString] = [:]
-private let maxCacheSize = 100
+// PERFORMANCE: NSCache auto-evicts under memory pressure — no manual size management needed
+private let markdownCache: NSCache<NSString, NSAttributedString> = {
+    let cache = NSCache<NSString, NSAttributedString>()
+    cache.countLimit = 200
+    return cache
+}()
 
 // PERFORMANCE: Main function to process markdown with caching
 func processMarkdownOptimized(_ text: String) -> NSAttributedString {
-    // Check cache first
-    if let cached = markdownCache[text] {
+    let cacheKey = text as NSString
+    if let cached = markdownCache.object(forKey: cacheKey) {
         return cached
     }
-    
+
     // For very long text, limit processing to prevent UI lag
     let shouldLimitProcessing = text.count > 1500
-    
+
     let mutableAttributedString = NSMutableAttributedString(string: text)
-    
+
     // Apply default font and color
     mutableAttributedString.addAttributes([
         .font: UIFont.systemFont(ofSize: 15, weight: .light),
         .foregroundColor: UIColor.textDefaultGray01
     ], range: NSRange(location: 0, length: mutableAttributedString.length))
-    
+
     if !shouldLimitProcessing {
         // Only apply heavy processing for shorter messages
         processMarkdownLists(mutableAttributedString)
@@ -39,16 +42,12 @@ func processMarkdownOptimized(_ text: String) -> NSAttributedString {
         // For long messages, only apply lightweight formatting
         processLightweightMarkdown(mutableAttributedString)
     }
-    
-    // Cache the result
-    if markdownCache.count >= maxCacheSize {
-        // Clear half the cache to prevent memory issues
-        let keysToRemove = Array(markdownCache.keys.prefix(maxCacheSize / 2))
-        keysToRemove.forEach { markdownCache.removeValue(forKey: $0) }
-    }
-    markdownCache[text] = mutableAttributedString
-    
-    return mutableAttributedString
+
+    // Cache as immutable copy
+    let result = NSAttributedString(attributedString: mutableAttributedString)
+    markdownCache.setObject(result, forKey: cacheKey)
+
+    return result
 }
 
 // PERFORMANCE: Lightweight markdown processing for long messages

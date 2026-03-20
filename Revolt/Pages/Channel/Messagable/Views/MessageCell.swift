@@ -10,6 +10,14 @@ import AVKit
 
 // MARK: - MessageCell
 class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDelegate {
+    // PERFORMANCE: Cache pre-emoji NSAttributedString by message ID.
+    // NSCache auto-evicts under memory pressure. Invalidated on message edit.
+    static let attributedStringCache: NSCache<NSString, NSAttributedString> = {
+        let cache = NSCache<NSString, NSAttributedString>()
+        cache.countLimit = 300
+        return cache
+    }()
+
     private let messageContentView = UIView()
     internal let avatarImageView = UIImageView()
     internal let usernameLabel = UILabel()
@@ -1850,32 +1858,42 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
 
     
     private func configureMessageContent(message: Message, viewState: ViewState) {
-        if let content = message.content, !content.isEmpty {
-            // Process content for display
-            let processedContent = removeEmptyMarkdownLinks(from: content)
-            
-            // Check if content contains mentions
-            let hasMentions = processedContent.contains("<@") || processedContent.contains("<#")
-            
-            if hasMentions {
-                // Use clickable mentions
-                let mutableAttributedText = NSMutableAttributedString(attributedString: createAttributedTextWithClickableMentions(from: processedContent, viewState: viewState))
-                // Process custom emojis
-                processCustomEmojis(in: mutableAttributedText, textView: contentLabel)
-                contentLabel.attributedText = mutableAttributedText
-                contentLabel.isSelectable = true
-            } else {
-                // Use markdown processing
-                let mutableAttributedText = NSMutableAttributedString(attributedString: processMarkdownOptimized(processedContent))
-                // Process custom emojis
-                processCustomEmojis(in: mutableAttributedText, textView: contentLabel)
-                contentLabel.attributedText = mutableAttributedText
-                contentLabel.isSelectable = false
-            }
-        } else {
+        guard let content = message.content, !content.isEmpty else {
             contentLabel.text = ""
             contentLabel.isSelectable = false
+            return
         }
+
+        let cacheKey = message.id as NSString
+        let hasMentions = content.contains("<@") || content.contains("<#")
+
+        // Check message-level cache for the pre-emoji attributed string
+        if let cached = MessageCell.attributedStringCache.object(forKey: cacheKey) {
+            let mutableCopy = NSMutableAttributedString(attributedString: cached)
+            processCustomEmojis(in: mutableCopy, textView: contentLabel)
+            contentLabel.attributedText = mutableCopy
+            contentLabel.isSelectable = hasMentions
+            return
+        }
+
+        // Cache miss — do full processing
+        let processedContent = removeEmptyMarkdownLinks(from: content)
+        let baseAttributedString: NSAttributedString
+
+        if hasMentions {
+            baseAttributedString = createAttributedTextWithClickableMentions(from: processedContent, viewState: viewState)
+        } else {
+            baseAttributedString = processMarkdownOptimized(processedContent)
+        }
+
+        // Cache the pre-emoji result (immutable copy)
+        MessageCell.attributedStringCache.setObject(baseAttributedString, forKey: cacheKey)
+
+        // Apply emoji processing on a mutable copy
+        let mutableAttributedText = NSMutableAttributedString(attributedString: baseAttributedString)
+        processCustomEmojis(in: mutableAttributedText, textView: contentLabel)
+        contentLabel.attributedText = mutableAttributedText
+        contentLabel.isSelectable = hasMentions
     }
     
     private func configureAvatar(author: User, member: Member?, message: Message, viewState: ViewState) {
