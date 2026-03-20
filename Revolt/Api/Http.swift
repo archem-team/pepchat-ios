@@ -179,17 +179,24 @@ struct HTTPClient {
         headers: HTTPHeaders? = nil // Headers (optional)
     ) async -> Result<O, RevoltError> {
         // Perform the inner request and handle the result
-        return await innerReq(method: method, route: route, parameters: parameters, encoder: encoder, headers: headers).flatMap { response in
+        let result = await innerReq(method: method, route: route, parameters: parameters, encoder: encoder, headers: headers)
+        switch result {
+        case .failure(let error):
+            return .failure(error)
+        case .success(let response):
             if let error = response.error {
-                return .failure(.Alamofire(error)) // Return Alamofire error if present
+                return .failure(.Alamofire(error))
             } else if let data = response.data {
                 do {
-                    return .success(try JSONDecoder().decode(O.self, from: data)) // Decode JSON response to type O
+                    let decoded = try await Task.detached(priority: .userInitiated) {
+                        try JSONDecoder().decode(O.self, from: data)
+                    }.value
+                    return .success(decoded)
                 } catch {
-                    return .failure(.JSONDecoding(error)) // Handle JSON decoding error
+                    return .failure(.JSONDecoding(error))
                 }
             } else {
-                return .failure(.HTTPError("No error or body", 0)) // Handle case where no response or error is returned
+                return .failure(.HTTPError("No error or body", 0))
             }
         }
     }
