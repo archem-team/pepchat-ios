@@ -1433,8 +1433,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             // Load the custom emoji using Kingfisher with weak self to prevent retain cycles
             emojiImageView.kf.setImage(
                 with: emojiURL,
-                placeholder: UIImage(systemName: "face.smiling"), // Placeholder while loading
+                placeholder: UIImage(systemName: "face.smiling"),
                 options: [
+                    .processor(DownsamplingImageProcessor(size: CGSize(width: 40, height: 40))),
+                    .scaleFactor(UIScreen.main.scale),
                     .transition(.fade(0.2)),
                     .cacheOriginalImage
                 ],
@@ -1903,6 +1905,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             with: avatarInfo.url,
             placeholder: UIImage(systemName: "person.circle.fill"),
             options: [
+                .processor(DownsamplingImageProcessor(size: CGSize(width: 80, height: 80))),
+                .scaleFactor(UIScreen.main.scale),
                 .transition(.fade(0.2)),
                 .cacheOriginalImage
             ]

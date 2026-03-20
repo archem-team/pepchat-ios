@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Sentry
 import UserNotificationsUI
+import Kingfisher
 
 #if os(macOS)
 import AppKit
@@ -62,6 +63,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Register the notification categories, including actions like "Reply".
         declareNotificationCategoryTypes()
         
+        // Configure Kingfisher image cache limits
+        let imageCache = ImageCache.default
+        imageCache.memoryStorage.config.totalCostLimit = 50 * 1024 * 1024  // 50 MB memory
+        imageCache.memoryStorage.config.countLimit = 200
+        imageCache.diskStorage.config.sizeLimit = 100 * 1024 * 1024  // 100 MB disk
+        imageCache.diskStorage.config.expiration = .days(7)
+
         // Initialize audio session manager for proper audio handling
         _ = AudioSessionManager.shared
         

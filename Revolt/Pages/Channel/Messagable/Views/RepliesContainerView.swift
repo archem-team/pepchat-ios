@@ -221,6 +221,8 @@ class ReplyItemView: UIView {
             with: avatarInfo.url,
             placeholder: UIImage(systemName: "person.circle.fill"),
             options: [
+                .processor(DownsamplingImageProcessor(size: CGSize(width: 48, height: 48))),
+                .scaleFactor(UIScreen.main.scale),
                 .transition(.fade(0.2)),
                 .cacheOriginalImage
             ]

@@ -88,6 +88,8 @@ extension MessageableChannelViewController {
                         with: iconUrl,
                         placeholder: UIImage(systemName: "number"),
                         options: [
+                            .processor(DownsamplingImageProcessor(size: CGSize(width: 72, height: 72))),
+                            .scaleFactor(UIScreen.main.scale),
                             .transition(.fade(0.2)),
                             .cacheOriginalImage,
                         ]
@@ -108,6 +110,8 @@ extension MessageableChannelViewController {
                         with: iconUrl,
                         placeholder: UIImage(systemName: "speaker.wave.2.fill"),
                         options: [
+                            .processor(DownsamplingImageProcessor(size: CGSize(width: 72, height: 72))),
+                            .scaleFactor(UIScreen.main.scale),
                             .transition(.fade(0.2)),
                             .cacheOriginalImage,
                         ]
@@ -127,6 +131,8 @@ extension MessageableChannelViewController {
                         with: iconUrl,
                         placeholder: UIImage(systemName: "person.2.circle.fill"),
                         options: [
+                            .processor(DownsamplingImageProcessor(size: CGSize(width: 72, height: 72))),
+                            .scaleFactor(UIScreen.main.scale),
                             .transition(.fade(0.2)),
                             .cacheOriginalImage,
                         ]
