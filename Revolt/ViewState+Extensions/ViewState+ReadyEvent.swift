@@ -216,22 +216,8 @@ extension ViewState {
             }
         }
         
-        // MEMORY FIX: Fetch unreads separately to prevent memory spike
-        Task {
-            // print("🚀 VIEWSTATE: Starting unreads fetch after ready completion")
-            if let remoteUnreads = try? await http.fetchUnreads().get() {
-                await MainActor.run {
-                    for unread in remoteUnreads {
-                        unreads[unread.id.channel] = unread
-                    }
-                    // print("🚀 VIEWSTATE: Unreads loaded: \(remoteUnreads.count)")
-                    
-                    // Update app badge count after loading unreads from server
-                    updateAppBadgeCount()
-                    // print("🔔 Updated badge count after loading \(remoteUnreads.count) unreads from server (mentions not counted)")
-                }
-            }
-        }
+        // PERF: Unreads fetch moved to processEvent() in ViewState+WebSocketEvents.swift
+        // to run in parallel with processReadyData() instead of sequentially after it
     }
     
     private func processChannelsFromData(_ eventChannels: [Channel]) {

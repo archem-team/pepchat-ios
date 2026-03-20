@@ -48,8 +48,13 @@ extension ViewState {
             // MEMORY FIX: Extract only needed data and process immediately
             // This allows the large event object to be released from memory
             let neededData = extractNeededDataFromReadyEvent(event)
-            
-            // Process the extracted data
+
+            // PERF: Start unreads fetch in parallel (only needs auth token, not processed data)
+            let unreadsTask = Task { () -> [Unread]? in
+                try? await self.http.fetchUnreads().get()
+            }
+
+            // Process the extracted data (runs concurrently with unreads fetch)
             await processReadyData(neededData)
             
             // CRITICAL FIX: Restore saved state after ready event processing
@@ -94,6 +99,18 @@ extension ViewState {
                 await MainActor.run {
                     self.cleanupStaleUnreads()
                     // print("🧹 Cleaned up stale unreads after Ready event")
+                }
+            }
+
+            // PERF: Apply unreads from parallel fetch (likely already finished by now)
+            Task {
+                if let remoteUnreads = await unreadsTask.value {
+                    await MainActor.run {
+                        for unread in remoteUnreads {
+                            self.unreads[unread.id.channel] = unread
+                        }
+                        self.updateAppBadgeCount()
+                    }
                 }
             }
 
@@ -314,8 +331,11 @@ extension ViewState {
             
             
         case .message_update(let event):
+            // Invalidate cached attributed string so the cell re-renders with new content
+            MessageCell.attributedStringCache.removeObject(forKey: event.id as NSString)
+
             let message = messages[event.id]
-            
+
             if var message = message {
                 message.edited = event.data.edited
                 if let content = event.data.content {
