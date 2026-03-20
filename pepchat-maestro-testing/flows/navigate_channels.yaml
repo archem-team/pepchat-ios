@@ -6,6 +6,9 @@ appId: chat.zeko.app
 # TODO: update with real accessibility IDs once added to channel views
 - assertVisible:
     id: channels.list
+    
+- assertVisible: peptide-compass
+
 
 - tapOn:
     id: channels.firstChannel

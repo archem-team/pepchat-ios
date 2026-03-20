@@ -113,6 +113,7 @@ struct Welcome: View {
                             PeptideButton(title: "register"){
                                 self.path.append(WelcomePath.signup)
                             }
+                            .accessibilityID(AccessibilityID.welcome.registerButton)
                             .padding(top: .padding32, bottom: .padding12)
                             
                             // Navigation link to Sign Up view.
@@ -128,6 +129,7 @@ struct Welcome: View {
                                           contentColor: .textDefaultGray01){
                                 self.path.append(WelcomePath.login)
                             }
+                            .accessibilityID(AccessibilityID.welcome.loginButton)
                         }
                         
                         //Spacer()
@@ -161,6 +163,7 @@ struct Welcome: View {
                             NavigationLink("resend-verification", value: WelcomePath.resendEmail)
                                 .font(.peptideButtonFont)
                                 .foregroundStyle(.textYellow07)
+                                .accessibilityID(AccessibilityID.welcome.resendVerificationLink)
                             
                         }
                         .padding(top: .padding24, bottom: .padding12)

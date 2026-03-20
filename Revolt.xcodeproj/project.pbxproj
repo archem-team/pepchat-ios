@@ -53,6 +53,7 @@
 		055F68FF2CDF57CC007F475A /* IntroHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 055F68FE2CDF57C1007F475A /* IntroHeader.swift */; };
 		055F69052CDFDFC8007F475A /* NavigationTransitions in Frameworks */ = {isa = PBXBuildFile; productRef = 055F69042CDFDFC8007F475A /* NavigationTransitions */; };
 		055F69102CE00D92007F475A /* BaseViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 055F690F2CE00D89007F475A /* BaseViewModel.swift */; };
+		AA0000012D8C000000000001 /* AccessibilityID.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000012D8C000000000000 /* AccessibilityID.swift */; };
 		056929292D16CD16003BDC7B /* NotificationSettingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 056929282D16CD15003BDC7B /* NotificationSettingSheet.swift */; };
 		056EFBDA2D0459C300E45E3C /* AttachmentsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 056EFBD92D0459C300E45E3C /* AttachmentsSheet.swift */; };
 		0570B5282DC4D0BA0029105C /* MessageableChannelViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0570B5272DC4D0B40029105C /* MessageableChannelViewController.swift */; };
@@ -445,6 +446,7 @@
 		055C33CC2CD279DE00A6DCAE /* ComponentState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentState.swift; sourceTree = "<group>"; };
 		055F68FE2CDF57C1007F475A /* IntroHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroHeader.swift; sourceTree = "<group>"; };
 		055F690F2CE00D89007F475A /* BaseViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseViewModel.swift; sourceTree = "<group>"; };
+		AA0000012D8C000000000000 /* AccessibilityID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityID.swift; sourceTree = "<group>"; };
 		056929282D16CD15003BDC7B /* NotificationSettingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingSheet.swift; sourceTree = "<group>"; };
 		056EFBD92D0459C300E45E3C /* AttachmentsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentsSheet.swift; sourceTree = "<group>"; };
 		0570B5272DC4D0B40029105C /* MessageableChannelViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageableChannelViewController.swift; sourceTree = "<group>"; };
@@ -865,6 +867,7 @@
 		0559302F2CD12E6E002BA191 /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				AA0000012D8C000000000000 /* AccessibilityID.swift */,
 				055F690F2CE00D89007F475A /* BaseViewModel.swift */,
 				055F690A2CE00116007F475A /* Components */,
 			);
@@ -2024,6 +2027,7 @@
 				170C23D92C224BA40057E399 /* View.swift in Sources */,
 				052F64302CF674160035DFFF /* PeptideCheckBox.swift in Sources */,
 				055F69102CE00D92007F475A /* BaseViewModel.swift in Sources */,
+				AA0000012D8C000000000001 /* AccessibilityID.swift in Sources */,
 				1750EF6E2B0585B300DD3EB3 /* ResendEmail.swift in Sources */,
 				050E93312D04DA01006B2330 /* MessageOptionSheet.swift in Sources */,
 				05EEF20F2CFCB77E002E5255 /* UIFont.swift in Sources */,

@@ -7,19 +7,24 @@ appId: chat.zeko.app
     arguments:
       UI_TESTING: true
 
-# TODO: update with real accessibility IDs once added to login views
-- tapOn: Pepchat
-- tapOn: Confirm
-- tapOn: Log In
-
-
+# Intro screen: select platform and confirm
 - tapOn:
-    id: login.emailField
+    id: intro.platformButton.Pepchat
+- tapOn:
+    id: intro.confirmButton
+
+# Welcome screen: choose Log In
+- tapOn:
+    id: welcome.loginButton
+
+# Login form
+- tapOn:
+    id: auth.login.emailField
 - inputText: ${EMAIL}
 
 - tapOn:
-    id: login.passwordField
+    id: auth.login.passwordField
 - inputText: ${PASSWORD}
 
 - tapOn:
-    id: login.submitButton
+    id: auth.login.loginButton
