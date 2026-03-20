@@ -106,10 +106,11 @@ extension ViewState {
             Task {
                 if let remoteUnreads = await unreadsTask.value {
                     await MainActor.run {
-                        for unread in remoteUnreads {
-                            self.unreads[unread.id.channel] = unread
-                        }
-                        self.updateAppBadgeCount()
+                        let newUnreads = Dictionary(
+                            remoteUnreads.map { ($0.id.channel, $0) },
+                            uniquingKeysWith: { _, latest in latest }
+                        )
+                        self.unreads.merge(newUnreads) { _, remote in remote }
                     }
                 }
             }
