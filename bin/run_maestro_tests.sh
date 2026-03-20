@@ -86,9 +86,9 @@ fi
 echo -e "${BLUE}=== Maestro Test Runner ===${NC}"
 echo ""
 
-# Simulator is already fully booted by run_on_clean_emulator.sh, so the
-# XCTest driver only needs time for its own setup — 120s is plenty.
-export MAESTRO_DRIVER_STARTUP_TIMEOUT=120000
+# After a full simulator erase the XCTest driver must install from scratch,
+# which can take well over 120s. 300s covers worst-case on cold simulators.
+export MAESTRO_DRIVER_STARTUP_TIMEOUT=300000
 
 # Step 1: Prepare clean simulator
 echo -e "${YELLOW}[1/2] Preparing clean simulator...${NC}"

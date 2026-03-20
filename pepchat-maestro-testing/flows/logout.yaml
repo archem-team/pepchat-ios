@@ -1,10 +1,19 @@
 appId: chat.zeko.app
 ---
-# Logout flow — navigates to settings and signs out.
+# Logout flow — navigates to You tab, opens settings, and signs out.
 
-# TODO: update with real accessibility IDs once added to settings views
+# Navigate to settings (You tab → settings gear)
 - tapOn:
-    id: settings.tab
+    id: home.youTab
+- tapOn:
+    id: you.settingsButton
+
+# Wait for settings screen to load
+- assertVisible: Settings
+
+# Tap Log Out button
 - tapOn:
     id: settings.logoutButton
-- tapOn: Log Out
+
+# Confirm logout in the dialog
+- tapOn: "Yes"

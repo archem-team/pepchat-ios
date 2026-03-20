@@ -48,6 +48,21 @@ enum AccessibilityID {
     /// Home screen
     enum home {
         static let newMessageButton = "home.newMessageButton"
+        static let youTab = "home.youTab"
+    }
+
+    // MARK: - You
+
+    /// You / profile screen
+    enum you {
+        static let settingsButton = "you.settingsButton"
+    }
+
+    // MARK: - Settings
+
+    /// Settings screen
+    enum settings {
+        static let logoutButton = "settings.logoutButton"
     }
 
     // MARK: - Channel (message view)

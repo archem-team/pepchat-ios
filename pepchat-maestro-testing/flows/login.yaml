@@ -4,8 +4,7 @@ appId: chat.zeko.app
 # Expects env vars: EMAIL, PASSWORD
 
 - launchApp:
-    arguments:
-      UI_TESTING: true
+    appId: chat.zeko.app
 
 # Intro screen: select platform and confirm
 - tapOn:

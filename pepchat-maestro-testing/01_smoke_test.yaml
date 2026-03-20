@@ -13,13 +13,6 @@ appId: chat.zeko.app
 - runFlow:
     file: flows/navigate_channels.yaml
 
-# Navigate to settings and verify profile loads
-# TODO: update with real accessibility ID
-- tapOn:
-    id: settings.tab
-- assertVisible:
-    id: settings.profileSection
-
-# Logout
+# Logout (navigates to You → Settings → Log Out)
 - runFlow:
     file: flows/logout.yaml

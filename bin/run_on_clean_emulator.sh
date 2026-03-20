@@ -147,9 +147,12 @@ detect_project_config() {
     PROJECT_NAME="${XCODEPROJ_FILES[0]%.xcodeproj}"
     print_success "Found project: $PROJECT_NAME"
 
-    # Extract bundle identifier from project file
-    # Exclude test bundle IDs to get the main iOS app bundle ID
-    BUNDLE_ID=$(grep "PRODUCT_BUNDLE_IDENTIFIER" "$PROJECT_NAME.xcodeproj/project.pbxproj" | grep -v "Tests" | grep -v "UITests" | grep -v "NotificationService" | head -1 | sed 's/.*= \(.*\);/\1/')
+    # Extract the main app bundle identifier from the project file.
+    # Exclude extensions (.notifications), frameworks (.types), and test targets.
+    BUNDLE_ID=$(grep "PRODUCT_BUNDLE_IDENTIFIER" "$PROJECT_NAME.xcodeproj/project.pbxproj" \
+        | grep -v "Tests" | grep -v "UITests" \
+        | grep -v "\.notifications" | grep -v "\.types" \
+        | head -1 | sed 's/.*= \(.*\);/\1/')
     if [ -z "$BUNDLE_ID" ]; then
         print_error "Could not detect bundle identifier from project file"
         exit 1
@@ -249,12 +252,24 @@ erase_simulator() {
     print_status "Shutting down simulator..."
     xcrun simctl shutdown "$SIMULATOR_UDID" 2>/dev/null || true
 
-    # Erase the simulator - this is the key step for a truly clean state
+    # Erase the simulator
     if xcrun simctl erase "$SIMULATOR_UDID"; then
-        print_success "Simulator erased - completely fresh state"
+        print_success "Simulator erased"
     else
         print_error "Failed to erase simulator"
         exit 1
+    fi
+
+    # IMPORTANT: simctl erase does NOT delete the Keychain database.
+    # The app stores its session token in Keychain (service: chat.peptide.app),
+    # so a stale token survives the erase and causes the app to hang on
+    # "Connecting..." instead of showing the intro/login screen.
+    # Delete the keychain DB files directly to get a truly clean state.
+    local KEYCHAIN_DIR="$HOME/Library/Developer/CoreSimulator/Devices/$SIMULATOR_UDID/data/Library/Keychains"
+    if [ -d "$KEYCHAIN_DIR" ]; then
+        print_status "Deleting Keychain database (simctl erase leaves it intact)..."
+        rm -f "$KEYCHAIN_DIR"/keychain-*.db*
+        print_success "Keychain cleared"
     fi
 }
 
