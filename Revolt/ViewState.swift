@@ -266,11 +266,20 @@ public class ViewState: ObservableObject {
         }
     }
     @Published var isOnboarding: Bool = false
+    private var _badgeFlushTask: Task<Void, Never>?
+
     @Published var unreads: [String: Unread] = [:] {
         didSet {
-            unreadsVersion = UUID()
-            // Update app badge count when unreads change
-            updateAppBadgeCount()
+            _scheduleBadgeFlush()
+        }
+    }
+
+    @MainActor private func _scheduleBadgeFlush() {
+        _badgeFlushTask?.cancel()
+        _badgeFlushTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms debounce
+            guard let self, !Task.isCancelled else { return }
+            self.updateAppBadgeCount()
         }
     }
     
@@ -318,8 +327,7 @@ public class ViewState: ObservableObject {
     private let cleanupTriggeredAt = 800 // Start cleanup when 80% full (legacy, not used)
     internal let maxChannelsInMemory = 2000 // Maximum channels to keep in memory (increased to load all servers)
     
-    @Published var unreadsVersion: UUID = UUID()
-    @Published var currentUserSheet: UserMaybeMember? = nil
+        @Published var currentUserSheet: UserMaybeMember? = nil
     @Published var currentUserOptionsSheet: UserMaybeMember? = nil
     @Published var atTopOfChannel: Set<String> = []
     
