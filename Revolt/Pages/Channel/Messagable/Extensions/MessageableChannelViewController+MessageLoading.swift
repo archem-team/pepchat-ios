@@ -74,6 +74,12 @@ extension MessageableChannelViewController {
             return
         }
 
+        // MARK: - Start API fetch concurrently (runs in parallel with cache load below)
+        let apiFetchTask = Task { [weak self] () -> FetchHistory? in
+            guard let self else { return nil }
+            return await self.viewModel.loadMoreMessages(before: nil)
+        }
+
         // MARK: - Cache check first (instant show when we have cache)
         let currentChannelId = channelId
         activeChannelId = currentChannelId
@@ -226,6 +232,9 @@ extension MessageableChannelViewController {
         // print("📱 Starting initial message load for channel: \(viewModel.channel.id)")
 
         if let targetId = self.targetMessageId {
+            // Cancel the concurrent API fetch — target message uses the nearby API instead
+            apiFetchTask.cancel()
+
             // We have a specific target message to load
             // print("📜 Loading channel with target message ID: \(targetId)")
 
@@ -450,11 +459,157 @@ extension MessageableChannelViewController {
                 await loadRegularMessages()
             }
         } else {
-            // No target message ID, load regular messages (force fetch so cache is refreshed with server messages that arrived while app was closed)
-            await loadRegularMessages(forceFetchFromServer: true)
+            // No target message ID — API fetch was started concurrently with cache load above.
+            // Await the already-running task and merge results.
+            await processAPIFetchResult(apiFetchTask, channelId: channelId)
         }
     }
     
+    /// Awaits the result of a concurrent API fetch task and merges it into the current channel state.
+    /// Called from `loadInitialMessages` after cache has been displayed.
+    private func processAPIFetchResult(_ task: Task<FetchHistory?, Never>, channelId: String) async {
+        let fetchResult = await task.value
+
+        guard let fetchResult, !fetchResult.messages.isEmpty else {
+            // No messages from API — hide skeleton / show empty state if needed
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.hideSkeletonView()
+                self.tableView.tableFooterView = nil
+                self.updateEmptyStateVisibility()
+            }
+            return
+        }
+
+        // Enqueue cache write
+        if let userId = viewModel.viewState.currentUser?.id,
+           let baseURL = viewModel.viewState.baseURL {
+            let lastId = fetchResult.messages.first?.id
+            MessageCacheWriter.shared.enqueueCacheMessagesAndUsers(
+                fetchResult.messages,
+                users: fetchResult.users,
+                channelId: channelId,
+                userId: userId,
+                baseURL: baseURL,
+                lastMessageId: lastId
+            )
+        }
+
+        // Process users from the response
+        for user in fetchResult.users {
+            viewModel.viewState.users[user.id] = user
+        }
+
+        // Process members if present
+        if let members = fetchResult.members {
+            for member in members {
+                viewModel.viewState.members[member.id.server, default: [:]][
+                    member.id.user] = member
+            }
+        }
+
+        // Process messages
+        for message in fetchResult.messages {
+            viewModel.viewState.messages[message.id] = message
+        }
+
+        // Merge with existing (e.g. from cache): union IDs, dedupe, sort by canonical order.
+        let (existingIds, deleted, userId, baseURL) = await MainActor.run {
+            (self.viewModel.viewState.channelMessages[channelId] ?? [],
+             self.viewModel.viewState.deletedMessageIds[channelId] ?? Set<String>(),
+             self.viewModel.viewState.currentUser?.id,
+             self.viewModel.viewState.baseURL)
+        }
+        let apiIds = fetchResult.messages.map { $0.id }
+
+        // Reconcile with server: locally-cached messages in the API's time window
+        // that are absent from the response are treated as server-side deletes.
+        let apiIdSet = Set(apiIds)
+        let deletedByServer: [String]
+        if apiIds.count >= 100 {
+            let oldestApiId = apiIds.min() ?? ""
+            deletedByServer = existingIds.filter { $0 >= oldestApiId && !apiIdSet.contains($0) }
+        } else {
+            deletedByServer = []
+        }
+
+        // Sort and filter off main thread
+        let sortedIds = self.mergeAndSortMessageIds(existing: existingIds, new: apiIds)
+        let allDeleted = deleted.union(deletedByServer)
+        let filteredIds = allDeleted.isEmpty ? sortedIds : sortedIds.filter { !allDeleted.contains($0) }
+
+        // Write results back on main thread
+        await MainActor.run {
+            if !deletedByServer.isEmpty, let userId, let baseURL {
+                for id in deletedByServer {
+                    self.viewModel.viewState.deletedMessageIds[channelId, default: Set()].insert(id)
+                    MessageCacheWriter.shared.enqueueDeleteMessage(id: id, channelId: channelId, userId: userId, baseURL: baseURL)
+                }
+            }
+            self.localMessages = filteredIds
+            self.viewModel.viewState.channelMessages[channelId] = filteredIds
+            self.viewModel.messages = filteredIds
+        }
+
+        // Update UI
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            self.hideSkeletonView()
+            self.tableView.tableFooterView = nil
+
+            self.isDataSourceUpdating = true
+
+            self.dataSource = LocalMessagesDataSource(
+                viewModel: self.viewModel,
+                viewController: self,
+                localMessages: self.localMessages)
+            self.tableView.dataSource = self.dataSource
+            self.tableView.reloadData()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                self?.isDataSourceUpdating = false
+            }
+
+            let hasManuallyScrolledUp =
+                self.lastManualScrollUpTime != nil
+                && Date().timeIntervalSince(self.lastManualScrollUpTime!) < 10.0
+
+            if !hasManuallyScrolledUp {
+                if let highlightTime = self.lastTargetMessageHighlightTime,
+                    Date().timeIntervalSince(highlightTime) < 10.0
+                {
+                    self.tableView.alpha = 1.0
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        self.adjustTableInsetsForMessageCount()
+                    }
+                } else {
+                    self.positionTableAtBottomBeforeShowing()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        self.adjustTableInsetsForMessageCount()
+                    }
+                }
+            } else {
+                self.showTableViewWithFade()
+                self.tableView.alpha = 1.0
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.adjustTableInsetsForMessageCount()
+                }
+            }
+        }
+
+        // Fetch reply content in background
+        let fetchedMessages = fetchResult.messages
+        Task { [weak self] in
+            guard let self else { return }
+            await self.fetchReplyMessagesContentAndRefreshUI(for: fetchedMessages)
+            let allCurrentMessages = await MainActor.run {
+                self.localMessages.compactMap { self.viewModel.viewState.messages[$0] }
+            }
+            await self.fetchReplyMessagesContentAndRefreshUI(for: allCurrentMessages)
+        }
+    }
+
     /// - Parameter forceFetchFromServer: When true (e.g. initial channel open), always fetch from server and merge with existing (cache). When false, use in-memory messages if present.
     private func loadRegularMessages(forceFetchFromServer: Bool = false) async {
         // COMPREHENSIVE TARGET MESSAGE PROTECTION
