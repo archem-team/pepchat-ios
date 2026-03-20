@@ -150,6 +150,7 @@ extension ViewState {
         // print("🚀 VIEWSTATE: Skipping unreads fetch during ready processing to prevent memory spike")
         
         // Update state
+        readyHasBeenProcessed = true
         state = .connected
         wsCurrentState = .connected
         ws?.currentState = .connected

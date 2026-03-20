@@ -42,6 +42,10 @@ public class ViewState: ObservableObject {
     }
     
     @Published var wsCurrentState : WsState = .connecting
+    /// Set to `true` once the WebSocket Ready event has been fully processed.
+    /// The deferred cache-loading Task checks this and bails if Ready already
+    /// provided authoritative state, avoiding stale-cache overwrites.
+    var readyHasBeenProcessed = false
     @Published var ws: WebSocketStream? = nil
     
     @Published var apiInfo: ApiInfo? = nil {
@@ -583,117 +587,89 @@ public class ViewState: ObservableObject {
         }
         let decoder = JSONDecoder()
         
-        // Initialize HTTPClient with self reference for immediate state updates
+        // Read token from keychain before any self access
+        let token = Keychain(service: "chat.peptide.app")["sessionToken"]
+
+        // === FAST PATH: Minimum needed for first frame ===
         self.http = HTTPClient(token: nil, baseURL: "https://peptide.chat/api", viewState: nil)
-        
         self.apiInfo = ViewState.decodeUserDefaults(forKey: "apiInfo", withDecoder: decoder, defaultingTo: nil)
         self.baseURL = ViewState.decodeUserDefaults(forKey: "baseURL", withDecoder: decoder, defaultingTo: defaultBaseURL)
-        
-        self.userSettingsStore = UserSettingsData.maybeRead(viewState: nil, isLoginUser: keychain["sessionToken"] != nil)
-        self.sessionToken = keychain["sessionToken"]
-        self.userSettingsStore = UserSettingsData.maybeRead(viewState: nil, isLoginUser: true)
-        
 
-        // CRITICAL DEBUG: Add logging for data loading from UserDefaults
-        // print("📱 INIT: Loading data from UserDefaults...")
-        
-        self.users = ViewState.decodeUserDefaults(forKey: "users", withDecoder: decoder, defaultingTo: [:])
-        // Force refresh servers and channels from backend instead of using cached data
-        /*self.servers = [:]*/ // ViewState.decodeUserDefaults(forKey: "servers", withDecoder: decoder, defaultingTo: [:])
-        let cachedServers = ViewState.loadServersCacheSync()
-        
-        if !cachedServers.isEmpty {
-            self.servers = cachedServers
-        } else {
-            self.servers = [:]
-        }
-        if Keychain(service: "chat.peptide.app")["sessionToken"] != nil {
-            self.discoverMembershipCache = ViewState.loadMembershipCacheSync()
-        } else {
-            self.discoverMembershipCache = [:]
-        }
-
-        self.channels = [:] // ViewState.decodeUserDefaults(forKey: "channels", withDecoder: decoder, defaultingTo: [:])
-        /*self.messages = ViewState.decodeUserDefaults(forKey: "messages", withDecoder: decoder, defaultingTo: [:])
-         self.channelMessages = ViewState.decodeUserDefaults(forKey: "channelMessages", withDecoder: decoder, defaultingTo: [:])*/
+        // Lightweight defaults — no disk I/O
+        self.users = [:]
+        self.servers = [:]
+        self.channels = [:]
         self.messages = [:]
         self.channelMessages = [:]
-        // Force refresh members from backend
-        self.members = [:] // ViewState.decodeUserDefaults(forKey: "members", withDecoder: decoder, defaultingTo: [:])
-        // Force refresh DMs from backend
-        self.dms = [] // ViewState.decodeUserDefaults(forKey: "dms", withDecoder: decoder, defaultingTo: [])
-        self.emojis = ViewState.decodeUserDefaults(forKey: "emojis", withDecoder: decoder, defaultingTo: [:])
-        
-        //self.currentSelection = ViewState.decodeUserDefaults(forKey: "currentSelection", withDecoder: decoder, defaultingTo: .dms)
-        //self.currentChannel = ViewState.decodeUserDefaults(forKey: "currentChannel", withDecoder: decoder, defaultingTo: .home)
-        
+        self.members = [:]
+        self.dms = []
+        self.emojis = [:]
+        self.discoverMembershipCache = [:]
         self.currentSelection = .discover
         self.currentChannel = .home
-        
         self.currentLocale = ViewState.decodeUserDefaults(forKey: "locale", withDecoder: decoder, defaultingTo: nil)
-        
         self.currentSessionId = UserDefaults.standard.string(forKey: "currentSessionId")
-        
         self.theme = ViewState.decodeUserDefaults(forKey: "theme", withDecoder: decoder, defaultingTo: .dark)
-        
         self.currentUser = ViewState.decodeUserDefaults(forKey: "currentUser", withDecoder: decoder, defaultingTo: nil)
-        
-        /*if let value = UserDefaults.standard.data(forKey: "path"), let path = try? decoder.decode(NavigationPath.CodableRepresentation.self, from: value) {
-         self.path = NavigationPath(path)
-         } else {
-         self.path = NavigationPath()
-         }*/
-        
         self.path = []
+        self.userSettingsStore = UserSettingsData.maybeRead(viewState: nil, isLoginUser: token != nil)
 
+        // Now safe to use self — all stored properties initialized
+        self.sessionToken = token
+        self.http.token = token
         self.users["00000000000000000000000000"] = User(id: "00000000000000000000000000", username: "Revolt", discriminator: "0000")
-        
-        self.http.token = self.sessionToken
-        
-       
-        // Set viewState reference after initialization
         self.http.viewState = self
-        
-        self.userSettingsStore.viewState = self // this is a cursed workaround
+        self.userSettingsStore.viewState = self
         ViewState.shared = self
-        
-        // Apply server ordering after all properties are initialized
-        if !self.servers.isEmpty && !self.userSettingsStore.cache.orderSettings.servers.isEmpty {
-            self.applyServerOrdering()
-        }
-        
-        // Load channel cache at launch so cached server channels show before Ready (and when offline). Filter by current servers (§0.6); Ready will replace authoritatively.
-        if let userId = self.currentUser?.id, let base = self.baseURL, !self.servers.isEmpty {
-            let cached = ViewState.loadChannelCacheSync(userId: userId, baseURL: base)
-            for (serverId, channelList) in cached {
-                guard self.servers[serverId] != nil else { continue }
-                let allowedIds = Set(self.servers[serverId]?.channels ?? [])
-                for ch in channelList where allowedIds.contains(ch.id) {
-                    self.allEventChannels[ch.id] = ch
+
+        // === DEFERRED: Heavy disk I/O after first frame renders ===
+        Task { @MainActor [weak self] in
+            // Yield to let SwiftUI render the first frame before doing heavy work
+            await Task.yield()
+            guard let self else { return }
+
+            // These must run regardless of whether Ready beat us
+            self.loadPendingNotificationToken()
+            self.startPeriodicMemoryCleanup()
+            self.cleanupStaleUnreads()
+
+            // If Ready already provided authoritative state, skip stale cache
+            guard !self.readyHasBeenProcessed else { return }
+
+            let decoder = JSONDecoder()
+            self.users = ViewState.decodeUserDefaults(forKey: "users", withDecoder: decoder, defaultingTo: [:])
+            self.users["00000000000000000000000000"] = User(id: "00000000000000000000000000", username: "Revolt", discriminator: "0000")
+
+            let cachedServers = ViewState.loadServersCacheSync()
+            if !cachedServers.isEmpty {
+                self.servers = cachedServers
+            }
+
+            if self.sessionToken != nil {
+                self.discoverMembershipCache = ViewState.loadMembershipCacheSync()
+            }
+
+            self.emojis = ViewState.decodeUserDefaults(forKey: "emojis", withDecoder: decoder, defaultingTo: [:])
+
+            if !self.servers.isEmpty && !self.userSettingsStore.cache.orderSettings.servers.isEmpty {
+                self.applyServerOrdering()
+            }
+
+            if let userId = self.currentUser?.id, let base = self.baseURL, !self.servers.isEmpty {
+                let cached = ViewState.loadChannelCacheSync(userId: userId, baseURL: base)
+                for (serverId, channelList) in cached {
+                    guard self.servers[serverId] != nil else { continue }
+                    let allowedIds = Set(self.servers[serverId]?.channels ?? [])
+                    for ch in channelList where allowedIds.contains(ch.id) {
+                        self.allEventChannels[ch.id] = ch
+                    }
                 }
             }
+
+            self.baseEmojis = loadEmojis()
         }
-        
-        self.baseEmojis = loadEmojis()
-        
-        // Load any pending notification token
-        self.loadPendingNotificationToken()
-        
-        // MEMORY MANAGEMENT: Start periodic memory cleanup
-        startPeriodicMemoryCleanup()
-        
-        // Log loaded data counts after all initialization is complete
-        // print("📱 INIT: Loaded \(users.count) users from UserDefaults")
-        // print("📱 INIT: Loaded \(servers.count) servers from UserDefaults")
-        // print("📱 INIT: Loaded \(channels.count) channels from UserDefaults")
-        // print("📱 INIT: ViewState initialization completed")
-        
-        // PRELOAD: Start preloading important channels after initialization
-        Task {
-            await preloadImportantChannels()
-        }
-        
-        // PRELOAD: Listen for WebSocket reconnection to trigger preload
+
+        // Listen for WebSocket reconnection to trigger preload
         NotificationCenter.default.addObserver(
             forName: NSNotification.Name("WebSocketReconnected"),
             object: nil,
@@ -703,14 +679,7 @@ public class ViewState: ObservableObject {
                 await self?.preloadImportantChannels()
             }
         }
-        
-        // CLEANUP: Clean up stale unreads on startup
-        // This ensures badge count is accurate even if channels were deleted while app was closed
-        Task {
-            await MainActor.run { [weak self] in
-                self?.cleanupStaleUnreads()
-            }
-        }
+
         self.setupInternetObservation()
     }
     
@@ -1152,35 +1121,37 @@ public class ViewState: ObservableObject {
             return
         }
 
-        let cachedWsUrl = self.apiInfo?.ws
-
-        // If we have a cached WS URL, connect immediately while fetching fresh apiInfo
-        if let wsUrl = cachedWsUrl {
-            createWebSocket(url: wsUrl, token: token)
-        }
-
         let fetchApiInfoSpan = launchTransaction?.startChild(operation: "fetchApiInfo")
 
-        do {
-            let freshApiInfo = try await self.http.fetchApiInfo().get()
-            self.http.apiInfo = freshApiInfo
-            self.apiInfo = freshApiInfo
-
-            fetchApiInfoSpan?.finish()
-
-            // If no cached URL or the URL changed, (re)create WebSocket with fresh URL
-            if cachedWsUrl == nil || freshApiInfo.ws != cachedWsUrl {
-                createWebSocket(url: freshApiInfo.ws, token: token)
+        let wsUrl: String
+        if let cachedWsUrl = self.apiInfo?.ws {
+            // Use cached WS URL immediately, fetch fresh apiInfo in background
+            wsUrl = cachedWsUrl
+            Task {
+                if let freshApiInfo = try? await self.http.fetchApiInfo().get() {
+                    await MainActor.run {
+                        self.http.apiInfo = freshApiInfo
+                        self.apiInfo = freshApiInfo
+                    }
+                }
             }
-        } catch {
             fetchApiInfoSpan?.finish()
-            // If no cached URL either, we can't connect
-            if cachedWsUrl == nil {
+        } else {
+            // No cached URL — must fetch first
+            do {
+                let freshApiInfo = try await self.http.fetchApiInfo().get()
+                self.http.apiInfo = freshApiInfo
+                self.apiInfo = freshApiInfo
+                wsUrl = freshApiInfo.ws
+            } catch {
                 state = .connecting
+                fetchApiInfoSpan?.finish()
                 return
             }
-            // Otherwise, already connecting with cached URL — continue
+            fetchApiInfoSpan?.finish()
         }
+
+        createWebSocket(url: wsUrl, token: token)
     }
 
     private func createWebSocket(url: String, token: String) {
@@ -2211,12 +2182,13 @@ public class ViewState: ObservableObject {
     
     @MainActor
     func loadEmojis() -> [EmojiGroup] {
+        return ViewState.loadEmojisStatic()
+    }
+
+    static func loadEmojisStatic() -> [EmojiGroup] {
         let file = Bundle.main.url(forResource: "emoji_15_1_ordering.json", withExtension: nil)!
         let data = try! Data(contentsOf: file)
-        
-        let baseEmojis = try! JSONDecoder().decode([EmojiGroup].self, from: data)
-        
-        return baseEmojis
+        return try! JSONDecoder().decode([EmojiGroup].self, from: data)
     }
     
     
