@@ -358,7 +358,7 @@ struct ChannelOptionsSheet: View {
                     
                     
                     Button {
-                        onClick(.copyGroupId(channelId: textChannel.name))
+                        onClick(.copyGroupId(channelId: textChannel.id))
                         isPresented.toggle()
                     } label: {
                         PeptideActionButton(

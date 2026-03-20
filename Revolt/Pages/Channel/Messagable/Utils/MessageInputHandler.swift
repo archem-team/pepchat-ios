@@ -153,6 +153,9 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             viewModel.viewState.messages[messageNonce] = queuedMessage.toTemporaryMessage()
             viewModel.viewState.clearDraft(channelId: viewModel.channel.id)
             
+            // Immediately sync + reload visible table so first messag appears
+            viewController.refreshMessagesAfterLocalDelete()
+            
             print("📝 MESSAGE_INPUT_HANDLER: Sending with \(apiReplies.count) replies")
             
             // Hide new message button when sending message
@@ -177,15 +180,21 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             
             // Add notification for debugging - post MessagesDidChange notification without an object
             print("📝 MESSAGE_INPUT_HANDLER: Posting MessagesDidChange notification")
-            // Only post notification if we actually have messages
-            if !viewModel.messages.isEmpty {
-                NotificationCenter.default.post(
-                    name: NSNotification.Name("NewMessagesReceived"),
-                    object: ["channelId": viewModel.channel.id, "messageCount": viewModel.messages.count]
-                )
-            } else {
-                print("📝 MESSAGE_INPUT_HANDLER: Skipping notification post because no messages exist")
-            }
+            
+            NotificationCenter.default.post(
+                name: NSNotification.Name("NewMessagesReceived"),
+                object: nil,
+                userInfo: ["channelId": viewModel.channel.id]
+            )
+//            // Only post notification if we actually have messages
+//            if !viewModel.messages.isEmpty {
+//                NotificationCenter.default.post(
+//                    name: NSNotification.Name("NewMessagesReceived"),
+//                    object: ["channelId": viewModel.channel.id, "messageCount": viewModel.messages.count]
+//                )
+//            } else {
+//                print("📝 MESSAGE_INPUT_HANDLER: Skipping notification post because no messages exist")
+//            }
             
             // Send message to server with replies
             Task {
@@ -287,6 +296,9 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             // Store the temporary message in the messages dictionary for rendering
             viewModel.viewState.messages[messageNonce] = queuedMessage.toTemporaryMessage()
             viewModel.viewState.clearDraft(channelId: viewModel.channel.id)
+            
+            // Immediately sync + reload visible table so first messag appears
+            viewController.refreshMessagesAfterLocalDelete()
             
             print("📝 MESSAGE_INPUT_HANDLER: Sending with \(apiReplies.count) replies")
             

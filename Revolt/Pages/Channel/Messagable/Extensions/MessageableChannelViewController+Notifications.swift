@@ -16,31 +16,27 @@ import ULID
 extension MessageableChannelViewController {
     // Update handleNewMessages to only scroll if user is near bottom
     @objc internal func handleNewMessages(_ notification: Notification) {
-        // CRITICAL FIX: Don't handle new messages during nearby loading
-        if messageLoadingState == .loading {
-            print("📬 BLOCKED: handleNewMessages blocked - nearby loading in progress")
-            return
-        }
-
-        // CRITICAL FIX: Don't handle if target message protection is active
-        if targetMessageProtectionActive {
-            print("📬 BLOCKED: handleNewMessages blocked - target message protection active")
-            return
-        }
-
         // If notification includes channelId, only refresh when the new message is for this channel (e.g. message from another device).
         let channelId = notification.userInfo?["channelId"] as? String
         if let channelId = channelId, channelId != viewModel.channel.id {
             return
         }
 
-        // Sync table from ViewState so messages from other devices (WebSocket) appear immediately.
-        syncLocalMessagesWithViewState()
-        if let localDataSource = dataSource as? LocalMessagesDataSource {
-            localDataSource.updateMessages(localMessages)
+        if messageLoadingState == .loading {
+            // Sync table from ViewState so messages from other devices (WebSocket) appear immediately.
+            syncLocalMessagesWithViewState()
+            if let localDataSource = dataSource as? LocalMessagesDataSource {
+                localDataSource.updateMessages(localMessages)
+            }
+            tableView.reloadData()
+            updateTableViewBouncing()
+            return
         }
-        tableView.reloadData()
-        updateTableViewBouncing()
+
+        if targetMessageProtectionActive {
+            print("📬 BLOCKED: handleNewMessages blocked - target message protection active")
+            return
+        }
 
         let currentMessageCount = viewModel.messages.count
         let storedMessageCount = UserDefaults.standard.integer(

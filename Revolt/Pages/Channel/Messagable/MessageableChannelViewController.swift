@@ -1776,6 +1776,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                             reason: "System cell dequeue failed")
                     }
                     systemCell.configure(with: message, viewState: viewModelRef.viewState)
+                    systemCell.onPinnedMessageTap = { [weak viewControllerRef] messageId in
+                        guard let vc = viewControllerRef else { return }
+                        DispatchQueue.main.async {
+                            // Safe-scroll guards
+                            guard vc.tableView.dataSource != nil else { return }
+                            vc.targetMessageId = messageId
+                            vc.scrollToTargetMessage()
+                        }
+                    }
                     return systemCell
                 }
 

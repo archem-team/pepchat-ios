@@ -8,10 +8,14 @@
 import UIKit
 import Types
 
-class SystemMessageCell: UITableViewCell {
+final class SystemMessageCell: UITableViewCell {
     private let containerView = UIView()
     private let messageLabel = UILabel()
     private let dateLabel = UILabel()
+    
+    var onPinnedMessageTap: ((String) -> Void)?
+    
+    private var pinnedTargetMessageId: String?
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -28,6 +32,9 @@ class SystemMessageCell: UITableViewCell {
         
         contentView.addSubview(containerView)
         containerView.translatesAutoresizingMaskIntoConstraints = false
+        
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handlePinnedSystemMessageTap))
+        containerView.addGestureRecognizer(tap)
         
         // Setup message label - centered and styled
         messageLabel.numberOfLines = 0
@@ -60,6 +67,9 @@ class SystemMessageCell: UITableViewCell {
     
     override func prepareForReuse() {
         super.prepareForReuse()
+        
+        pinnedTargetMessageId = nil
+        onPinnedMessageTap = nil
         
         // Reset message label
         messageLabel.text = nil
@@ -107,14 +117,21 @@ class SystemMessageCell: UITableViewCell {
             configureChannelOwnershipChanged(content: content, viewState: viewState, message: message)
             
         case .message_pinned(let content):
+            pinnedTargetMessageId = content.id
             configureMessagePinned(content: content, isPinned: true)
             
         case .message_unpinned(let content):
+            pinnedTargetMessageId = content.id
             configureMessagePinned(content: content, isPinned: false)
             
         case .text(let content):
             configureTextSystemMessage(content: content)
         }
+    }
+    
+    @objc private func handlePinnedSystemMessageTap() {
+        guard let id = pinnedTargetMessageId else { return }
+        onPinnedMessageTap?(id)
     }
     
     private func configureUserJoined(content: UserJoinedSystemContent, viewState: ViewState) {

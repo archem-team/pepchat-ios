@@ -1937,6 +1937,11 @@ public class ViewState: ObservableObject {
         
         if let safeChannel = channel {
             await MainActor.run {
+                channels[safeChannel.id] = safeChannel
+                allEventChannels[safeChannel.id] = safeChannel
+                if channelMessages[safeChannel.id] == nil {
+                    channelMessages[safeChannel.id] = []
+                }
                 currentSelection = .dms
                 currentChannel = .channel(safeChannel.id)
             }
