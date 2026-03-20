@@ -291,22 +291,19 @@ struct InnerApp: View {
     var body: some View {
         // Stack-based navigation structure for managing views
         NavigationStack(path: $viewState.path) {
-            // Handle different app states (signed out, connecting, connected)
-            switch viewState.state {
-            case .signedOut:
+            // Show MainApp for authenticated users regardless of connection state.
+            // Using a single code path prevents SwiftUI from destroying/recreating
+            // the view tree when state transitions from .connecting → .connected.
+            if viewState.sessionToken != nil && viewState.state != .signedOut {
+                MainApp()
+            } else if viewState.state == .connecting {
+                VStack {
+                    PeptideText(text: "Connecting...",
+                                font: .peptideBody1)
+                }
+            } else {
                 PeptideText(text: "Signed out... How did you get here?",
                             font: .peptideBody1)
-            case .connecting:
-                if viewState.sessionToken != nil {
-                    MainApp()
-                } else {
-                    VStack {
-                        PeptideText(text: "Connecting...",
-                                    font: .peptideBody1)
-                    }
-                }
-            case .connected:
-                MainApp()  // Show the main app when connected
             }
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in

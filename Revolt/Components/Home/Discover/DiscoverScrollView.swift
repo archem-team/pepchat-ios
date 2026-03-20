@@ -16,17 +16,20 @@ struct DiscoverScrollView: View {
     
     @State private var discoverItems: [DiscoverItem] = []
     @State private var isLoading : Bool = false
+    @State private var hasLoadedData: Bool = false
     @State private var inviteCache: [String: String] = [:] // Cache for invite code -> server ID mapping
     @State private var membershipCache: [String: Bool] = [:] // Cache for server ID -> membership status
     @State private var checkingInvites: Set<String> = [] // Track ongoing invite checks
-    
-    
+
+
     var body: some View {
         content
             .background(backgroundView)
             .onAppear {
                 // Sync from persisted cache for instant UI before any async work
                 membershipCache = viewState.discoverMembershipCache
+                guard !hasLoadedData else { return }
+                hasLoadedData = true
                 loadData()
             }
     }
@@ -237,7 +240,7 @@ struct DiscoverScrollView: View {
                 }
             }
         }
-        self.isLoading = true
+        self.isLoading = discoverItems.isEmpty
         // print("🌐 [DiscoverScrollView] Loading server list from CSV...")
         
         ServerChatDataFetcher.shared.fetchData { result in
