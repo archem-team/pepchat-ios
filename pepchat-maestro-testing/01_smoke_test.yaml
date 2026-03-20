@@ -1,0 +1,25 @@
+appId: chat.zeko.app
+---
+# Smoke Test — read-only navigation test (safe for production)
+# Verifies login, channel navigation, and settings without mutating any data.
+
+- runFlow:
+    file: flows/login.yaml
+    env:
+      EMAIL: topasture@gmail.com
+      PASSWORD: temp4now
+
+# Navigate channels (read-only)
+- runFlow:
+    file: flows/navigate_channels.yaml
+
+# Navigate to settings and verify profile loads
+# TODO: update with real accessibility ID
+- tapOn:
+    id: settings.tab
+- assertVisible:
+    id: settings.profileSection
+
+# Logout
+- runFlow:
+    file: flows/logout.yaml

@@ -1,0 +1,25 @@
+appId: chat.zeko.app
+---
+# Login flow — launches app and authenticates with email/password.
+# Expects env vars: EMAIL, PASSWORD
+
+- launchApp:
+    arguments:
+      UI_TESTING: true
+
+# TODO: update with real accessibility IDs once added to login views
+- tapOn: Pepchat
+- tapOn: Confirm
+- tapOn: Log In
+
+
+- tapOn:
+    id: login.emailField
+- inputText: ${EMAIL}
+
+- tapOn:
+    id: login.passwordField
+- inputText: ${PASSWORD}
+
+- tapOn:
+    id: login.submitButton

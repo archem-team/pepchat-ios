@@ -1,0 +1,19 @@
+appId: chat.zeko.app
+---
+# Navigate channels — read-only test that opens a channel and verifies messages load.
+# Does NOT send any messages (safe for production).
+
+# TODO: update with real accessibility IDs once added to channel views
+- assertVisible:
+    id: channels.list
+
+- tapOn:
+    id: channels.firstChannel
+
+# Verify the message area loaded
+- assertVisible:
+    id: channel.messageList
+
+# Navigate back to channel list
+- tapOn:
+    id: channel.backButton

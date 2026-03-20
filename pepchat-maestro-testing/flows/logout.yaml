@@ -1,0 +1,10 @@
+appId: chat.zeko.app
+---
+# Logout flow — navigates to settings and signs out.
+
+# TODO: update with real accessibility IDs once added to settings views
+- tapOn:
+    id: settings.tab
+- tapOn:
+    id: settings.logoutButton
+- tapOn: Log Out
