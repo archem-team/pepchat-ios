@@ -324,20 +324,10 @@ struct InnerApp: View {
                 
                 break
             case .active:
-                // print("🔄 SCENE_PHASE: App became active")
-                // CRITICAL FIX: Don't restart everything when coming back from background
-                if viewState.state == .connected {
-                    // print("🔄 SCENE_PHASE: App was already connected, preserving state")
-                    // Just verify WebSocket connection, don't recreate everything
-                    Task {
-                        if viewState.ws == nil || viewState.wsCurrentState != .connected {
-                            // print("🔄 SCENE_PHASE: WebSocket disconnected, reconnecting...")
-                            await viewState.backgroundWsTask()
-                        }
-                    }
-                } else {
-                    // print("🔄 SCENE_PHASE: App was not connected, initializing...")
-                    Task {
+                // Only reconnect if WebSocket is actually disconnected — the .task modifier
+                // on ApplicationSwitcher already handles initial connection at launch.
+                Task {
+                    if viewState.ws == nil || viewState.wsCurrentState == .disconnected {
                         await viewState.backgroundWsTask()
                     }
                 }
