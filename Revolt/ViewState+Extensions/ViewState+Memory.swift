@@ -313,8 +313,11 @@ extension ViewState {
     /// Preloads messages for important channels when the app starts or WebSocket reconnects
     @MainActor
     internal func preloadImportantChannels() async {
-        // Wait a bit for the WebSocket to fully authenticate
-        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+        // Wait for connected state (up to 5 seconds) instead of fixed 2-second sleep
+        let deadline = Date().addingTimeInterval(5.0)
+        while state != .connected && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 200_000_000) // Poll every 200ms
+        }
         
         // Only preload if user is authenticated and WebSocket is connected
         guard sessionToken != nil, currentUser != nil, state == .connected else {

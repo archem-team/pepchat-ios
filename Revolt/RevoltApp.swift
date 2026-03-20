@@ -189,49 +189,9 @@ struct ApplicationSwitcher: View {
     @EnvironmentObject var viewState: ViewState
     @State var wasSignedOut = false
     //@State var banner: WsState? = nil
-    
-    @State var isFirstTimeLaunch : Bool = true
-    
+
     var body: some View {
-        
-        if isFirstTimeLaunch {
-            
-            PeptideTemplateView{_,_   in
-                
-                ZStack(alignment: .bottom){
-                    
-                    Image(.peptideLogo)
-                    
-                }
-                .fillMaxSize()
-                .overlay(alignment: .bottom){
-                    
-                    PeptideText(text: "ZekoChat v\(Bundle.main.releaseVersionNumber)",
-                                font: .peptideFootnote,
-                                textColor: .textGray06,
-                                alignment: .center)
-                    .padding(.padding24)
-                }
-                
-            }
-            .task {
-                // Start initialization during splash instead of waiting idle for 2 seconds.
-                // Minimum 0.5s so the logo isn't a flash; dismiss as soon as init begins.
-                viewState.setBaseUrlToHttp()
-                async let initTask: () = viewState.backgroundWsTask()
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s minimum splash
-                withAnimation {
-                    self.isFirstTimeLaunch = false
-                }
-                await initTask
-                if viewState.state != .signedOut {
-                    withAnimation {
-                        viewState.state = .connecting
-                    }
-                }
-            }
-            
-        } else {
+        Group {
             if viewState.state != .signedOut && !viewState.isOnboarding {
                 // Main app interface if the user is signed in or not onboarding
                 InnerApp()
@@ -316,9 +276,10 @@ struct ApplicationSwitcher: View {
                     }
             }
         }
-        
-        
-        
+        .task {
+            viewState.setBaseUrlToHttp()
+            await viewState.backgroundWsTask()
+        }
     }
 }
 
@@ -330,34 +291,22 @@ struct InnerApp: View {
     var body: some View {
         // Stack-based navigation structure for managing views
         NavigationStack(path: $viewState.path) {
-            if viewState.forceMainScreen {
-                MainApp()  // Show the main screen
-            } else {
-                // Handle different app states (signed out, connecting, connected)
-                switch viewState.state {
-                case .signedOut:
-                    PeptideText(text: "Signed out... How did you get here?",
-                                font: .peptideBody1)
-                case .connecting:
+            // Handle different app states (signed out, connecting, connected)
+            switch viewState.state {
+            case .signedOut:
+                PeptideText(text: "Signed out... How did you get here?",
+                            font: .peptideBody1)
+            case .connecting:
+                if viewState.sessionToken != nil {
+                    MainApp()
+                } else {
                     VStack {
                         PeptideText(text: "Connecting...",
                                     font: .peptideBody1)
-#if DEBUG
-                        // Debug button to reset app state
-                        /*Button {
-                            viewState.destroyCache()
-                            viewState.sessionToken = nil
-                            viewState.state = .signedOut
-                        } label: {
-                            
-                            PeptideText(text: "Developer: Nuke everything and force welcome screen",
-                                        font: .peptideBody1)
-                        }*/
-#endif
                     }
-                case .connected:
-                    MainApp()  // Show the main app when connected
                 }
+            case .connected:
+                MainApp()  // Show the main app when connected
             }
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in

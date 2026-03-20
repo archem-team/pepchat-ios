@@ -211,8 +211,7 @@ public class ViewState: ObservableObject {
     }
     
     @Published var state: ConnectionState = .connecting
-    @Published var forceMainScreen: Bool = false
-    @Published var queuedMessages: [String: [QueuedMessage]] = [:]
+@Published var queuedMessages: [String: [QueuedMessage]] = [:]
     /// Per-channel draft text (composer only). Session-bound; loaded in processReadyData, cleared in signOut/destroyCache.
     var channelDrafts: [String: String] = [:]
     @Published var loadingMessages: Set<String> = Set()
@@ -646,9 +645,6 @@ public class ViewState: ObservableObject {
          }*/
         
         self.path = []
-        if self.currentUser != nil, self.apiInfo != nil {
-            self.forceMainScreen = true
-        }
 
         self.users["00000000000000000000000000"] = User(id: "00000000000000000000000000", username: "Revolt", discriminator: "0000")
         
@@ -1150,37 +1146,55 @@ public class ViewState: ObservableObject {
             ws?.stop()
             ws = nil
         }
-        
+
         guard let token = sessionToken else {
             state = .signedOut
             return
         }
-        
-        let fetchApiInfoSpan = launchTransaction?.startChild(operation: "fetchApiInfo")
-        
-        do {
-            let apiInfo = try await self.http.fetchApiInfo().get()
-            self.http.apiInfo = apiInfo
-            self.apiInfo = apiInfo
-        } catch {
-            // DISABLED: SentrySDK.capture(error: error) - was causing timeout errors
-            // print("Error fetching API info: \(error)")
-            state = .connecting
-            fetchApiInfoSpan?.finish()
-            return
+
+        let cachedWsUrl = self.apiInfo?.ws
+
+        // If we have a cached WS URL, connect immediately while fetching fresh apiInfo
+        if let wsUrl = cachedWsUrl {
+            createWebSocket(url: wsUrl, token: token)
         }
-        
-        fetchApiInfoSpan?.finish()
-        
-        let ws = WebSocketStream(url: apiInfo!.ws,
+
+        let fetchApiInfoSpan = launchTransaction?.startChild(operation: "fetchApiInfo")
+
+        do {
+            let freshApiInfo = try await self.http.fetchApiInfo().get()
+            self.http.apiInfo = freshApiInfo
+            self.apiInfo = freshApiInfo
+
+            fetchApiInfoSpan?.finish()
+
+            // If no cached URL or the URL changed, (re)create WebSocket with fresh URL
+            if cachedWsUrl == nil || freshApiInfo.ws != cachedWsUrl {
+                createWebSocket(url: freshApiInfo.ws, token: token)
+            }
+        } catch {
+            fetchApiInfoSpan?.finish()
+            // If no cached URL either, we can't connect
+            if cachedWsUrl == nil {
+                state = .connecting
+                return
+            }
+            // Otherwise, already connecting with cached URL — continue
+        }
+    }
+
+    private func createWebSocket(url: String, token: String) {
+        // Stop existing WebSocket if any
+        ws?.stop()
+
+        let ws = WebSocketStream(url: url,
                                  token: token,
                                  onChangeCurrentState: { [weak self] state in
             Task {@MainActor in
                 self?.wsCurrentState = state
-                
-                // CRITICAL FIX: If disconnected while in DM list, try to reconnect
+
                 if state == .disconnected && self?.currentSelection == .dms {
-                    // print("🔌 WebSocket disconnected while in DM list - will reconnect")
+                    // WebSocket disconnected while in DM list - will reconnect
                 }
             }
         },
