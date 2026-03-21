@@ -73,7 +73,9 @@ extension MessageableChannelViewController: UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
-        // PERF Issue #9: Context-aware height estimates reduce scroll bar jitter
+        // PERF Issue #9: Return exact cached height when available (best estimate),
+        // otherwise fall back to the static 120pt. Smaller heuristics can cause UIKit
+        // to underestimate contentSize, making scrollToRow undershoot the bottom.
         guard indexPath.row < localMessages.count else { return 120 }
 
         let messageId = localMessages[indexPath.row]
@@ -84,26 +86,7 @@ extension MessageableChannelViewController: UITableViewDelegate {
             tableWidth: Int(tableView.bounds.width)
         )
 
-        // Best estimate: a previously measured height
-        if let cached = cellHeightCache.height(for: key) {
-            return cached
-        }
-
-        // Heuristic estimate based on message content
-        guard let message = viewModel.viewState.messages[messageId] else { return 120 }
-
-        var estimate: CGFloat = isContinuation ? 44 : 68
-        if let attachments = message.attachments, !attachments.isEmpty {
-            let hasImages = attachments.contains {
-                if case .image = $0.metadata { return true }
-                return false
-            }
-            estimate += hasImages ? 200 : 60
-        }
-        if let embeds = message.embeds, !embeds.isEmpty { estimate += 120 }
-        if let reactions = message.reactions, !reactions.isEmpty { estimate += 36 }
-        if let replies = message.replies, !replies.isEmpty { estimate += 28 }
-        return estimate
+        return cellHeightCache.height(for: key) ?? 120
     }
     
 

@@ -90,12 +90,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     internal var nonContinuationWithReplyConstraints: [NSLayoutConstraint] = []
     internal var contentLabelBottomToContentViewConstraint: NSLayoutConstraint?
 
-    // Additional property to determine if this is a continuation message
-    var isContinuation: Bool = false {
-        didSet {
-            updateAppearanceForContinuation()
-        }
-    }
+    // Additional property to determine if this is a continuation message.
+    // Note: updateAppearanceForContinuation() is called explicitly at the end of configure(),
+    // after content and embeds are set up. No didSet trigger — the old didSet caused a premature
+    // layoutIfNeeded() with empty content, making embeds anchor to a stale contentLabel.bottom.
+    var isContinuation: Bool = false
     
     // Property to track if this message is pending (optimistic update)
     var isPendingMessage: Bool = false {
@@ -224,7 +223,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         
         // PERFORMANCE: Clear content label bottom constraints for clean reuse
         clearContentLabelBottomConstraints()
-        
+
         // PERFORMANCE: Clear ALL dynamic constraints that might cause layout conflicts
         clearDynamicConstraints()
         

@@ -39,7 +39,10 @@ extension MessageCell {
             }
         }
 
+        // Force layout so embed/attachment constraints resolve before first draw.
+        // Without this, link previews can overlap the content label (docs/Fix/LinkPreviewImage.md).
         setNeedsLayout()
+        layoutIfNeeded()
     }
     
     internal func updatePendingAppearance() {
