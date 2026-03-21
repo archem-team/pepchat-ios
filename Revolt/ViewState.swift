@@ -16,6 +16,37 @@ import Network
 public class ViewState: ObservableObject {
     var cancellables = Set<AnyCancellable>()
     static var shared: ViewState? = nil
+
+    // MARK: - Batch Update Infrastructure
+    // Suppresses per-property objectWillChange notifications during WebSocket event
+    // processing, coalescing them into a single notification. Mirrors the proven
+    // pattern used by currentlyTyping's debounced flush.
+    private var _batchDepth = 0
+
+    /// Execute a block of mutations with a single coalesced `objectWillChange` notification.
+    /// All hot-path property mutations inside the block are suppressed; one notification
+    /// fires before the block runs (matching @Published willSet semantics), and deferred
+    /// side effects (debouncedSave, badge flush) run once after the block completes.
+    func batchUpdate(_ work: () -> Void) {
+        objectWillChange.send()
+        _batchDepth += 1
+        defer {
+            _batchDepth -= 1
+            _runDeferredBatchSideEffects()
+        }
+        work()
+    }
+
+    private func _runDeferredBatchSideEffects() {
+        guard _batchDepth == 0 else { return }
+        // Debounced saves — capture final snapshots once
+        let usersSnapshot = self.users
+        debouncedSave(key: "users") { try? JSONEncoder().encode(usersSnapshot) }
+        let cmSnapshot = self.channelMessages
+        debouncedSave(key: "channelMessages") { try? JSONEncoder().encode(cmSnapshot) }
+        // Badge flush
+        _scheduleBadgeFlush()
+    }
     
 #if os(iOS)
     static var application: UIApplication? = nil
@@ -62,17 +93,16 @@ public class ViewState: ObservableObject {
             keychain["sessionToken"] = sessionToken
         }
     }
-    @Published var users: [String: Types.User] {
+    var users: [String: Types.User] {
         didSet {
-            // MEMORY MANAGEMENT: Use debounced save (memory limits disabled for users)
-            // Move JSON encoding off main thread to prevent app hanging
-            // CRITICAL FIX: Capture value directly and perform encoding ONLY in the debounced work item.
-            // This ensures we don't re-encode on every tiny change or for each user removal.
-            let usersSnapshot = self.users
-            debouncedSave(key: "users") {
-                try? JSONEncoder().encode(usersSnapshot)
+            if _batchDepth == 0 {
+                objectWillChange.send()
+                // Debounced save only outside batch (batch does one save at end)
+                let usersSnapshot = self.users
+                debouncedSave(key: "users") {
+                    try? JSONEncoder().encode(usersSnapshot)
+                }
             }
-//            saveUsersToSharedContainer()
         }
     }
     
@@ -85,68 +115,44 @@ public class ViewState: ObservableObject {
         }
     }
     
-    @Published var servers: OrderedDictionary<String, Server> {
+    var servers: OrderedDictionary<String, Server> {
         didSet {
-            // DISABLED: Don't save servers to UserDefaults to force refresh from backend
-            // let servers = self.servers
-            // Task.detached(priority: .background) { [weak self] in
-            //     guard let self = self else { return }
-            //     if let data = try? JSONEncoder().encode(servers) {
-            //         await MainActor.run {
-            //             self.debouncedSave(key: "servers", data: data)
-            //         }
-            //     }
-            // }
+            if _batchDepth == 0 { objectWillChange.send() }
         }
     }
     /// Persisted cache of server ID -> membership for Discover screen. Loaded on launch for instant UI; updated when user joins/leaves (local or via WebSocket).
     @Published var discoverMembershipCache: [String: Bool] = [:]
-    @Published var channels: [String: Channel] {
+    var channels: [String: Channel] {
         didSet {
-            // DISABLED: Don't save channels to UserDefaults to force refresh from backend
-            // let channels = self.channels
-            // Task.detached(priority: .background) { [weak self] in
-            //     guard let self = self else { return }
-            //     if let data = try? JSONEncoder().encode(channels) {
-            //         await MainActor.run {
-            //             self.debouncedSave(key: "channels", data: data)
-            //         }
-            //     }
-            // }
+            if _batchDepth == 0 { objectWillChange.send() }
         }
     }
-    @Published var messages: [String: Message] {
+    var messages: [String: Message] = [:] {
         didSet {
-            // MEMORY MANAGEMENT: Don't persist messages to UserDefaults - they're loaded from server
-            // This prevents memory spikes from encoding large dictionaries
-            Task { @MainActor in
-                // If we have messages and loading was active, turn off loading
-                if self.isLoadingChannelMessages && !messages.isEmpty {
-                    self.setChannelLoadingState(isLoading: false)
+            if _batchDepth == 0 { objectWillChange.send() }
+            // Loading state check: if messages arrived and we were loading, stop loading.
+            // This runs even inside batches since it's lightweight and UI-relevant.
+            if isLoadingChannelMessages && !messages.isEmpty {
+                setChannelLoadingState(isLoading: false)
+            }
+            // NOTE: enforceMemoryLimits() removed — it was disabled (returns immediately)
+        }
+    }
+    var channelMessages: [String: [String]] {
+        didSet {
+            if _batchDepth == 0 {
+                objectWillChange.send()
+                // Debounced save only outside batch (batch does one save at end)
+                let channelMessagesSnapshot = self.channelMessages
+                debouncedSave(key: "channelMessages") {
+                    try? JSONEncoder().encode(channelMessagesSnapshot)
                 }
-                self.enforceMemoryLimits()
             }
-        }
-    }
-    @Published var channelMessages: [String: [String]] {
-        didSet {
-            // MEMORY MANAGEMENT: Use debounced save for channelMessages
-            // Move JSON encoding off main thread to prevent app hanging
-            // CRITICAL FIX: Capture value directly and encode only once per debounce window.
-            let channelMessagesSnapshot = self.channelMessages
-            debouncedSave(key: "channelMessages") {
-                try? JSONEncoder().encode(channelMessagesSnapshot)
-            }
-            
-            // Check if we should turn off loading state
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                if self.isLoadingChannelMessages {
-                    if case .channel(let channelId) = self.currentChannel {
-                        let hasMessages = (self.channelMessages[channelId]?.count ?? 0) > 0
-                        if hasMessages {
-                            self.setChannelLoadingState(isLoading: false)
-                        }
+            // Loading state check (lightweight, runs always)
+            if isLoadingChannelMessages {
+                if case .channel(let channelId) = self.currentChannel {
+                    if (self.channelMessages[channelId]?.count ?? 0) > 0 {
+                        setChannelLoadingState(isLoading: false)
                     }
                 }
             }
@@ -154,37 +160,21 @@ public class ViewState: ObservableObject {
     }
     /// Channel ID -> set of message IDs that have been deleted (soft delete); used by WebSocket and cache so deleted IDs are not shown.
     var deletedMessageIds: [String: Set<String>] = [:]
-    @Published var members: [String: [String: Member]] {
+    var members: [String: [String: Member]] {
         didSet {
-            // DISABLED: Don't save members to UserDefaults to force refresh from backend
-            // let members = self.members
-            // Task.detached(priority: .background) { [weak self] in
-            //     guard let self = self else { return }
-            //     if let data = try? JSONEncoder().encode(members) {
-            //         await MainActor.run {
-            //             self.debouncedSave(key: "members", data: data)
-            //         }
-            //     }
-            // }
+            if _batchDepth == 0 { objectWillChange.send() }
         }
     }
-    @Published var dms: [Channel] {
+    var dms: [Channel] {
         didSet {
-            // DISABLED: Don't save DMs to UserDefaults to force refresh from backend
-            // let dms = self.dms
-            // Task.detached(priority: .background) { [weak self] in
-            //     guard let self = self else { return }
-            //     if let data = try? JSONEncoder().encode(dms) {
-            //         await MainActor.run {
-            //             self.debouncedSave(key: "dms", data: data)
-            //         }
-            //     }
-            // }
+            if _batchDepth == 0 { objectWillChange.send() }
         }
     }
     
     // LAZY LOADING: DM Management
-    @Published var allDmChannelIds: [String] = [] // All DM channel IDs in order
+    var allDmChannelIds: [String] = [] { // All DM channel IDs in order
+        didSet { if _batchDepth == 0 { objectWillChange.send() } }
+    }
     @Published var loadedDmBatches: Set<Int> = [] // Track which batches are loaded
     let dmBatchSize = 15 // Load 15 DMs per batch
     internal var isLoadingDmBatch = false
@@ -215,7 +205,9 @@ public class ViewState: ObservableObject {
     }
     
     @Published var state: ConnectionState = .connecting
-@Published var queuedMessages: [String: [QueuedMessage]] = [:]
+    var queuedMessages: [String: [QueuedMessage]] = [:] {
+        didSet { if _batchDepth == 0 { objectWillChange.send() } }
+    }
     /// Per-channel draft text (composer only). Session-bound; loaded in processReadyData, cleared in signOut/destroyCache.
     var channelDrafts: [String: String] = [:]
     @Published var loadingMessages: Set<String> = Set()
@@ -268,9 +260,12 @@ public class ViewState: ObservableObject {
     @Published var isOnboarding: Bool = false
     private var _badgeFlushTask: Task<Void, Never>?
 
-    @Published var unreads: [String: Unread] = [:] {
+    var unreads: [String: Unread] = [:] {
         didSet {
-            _scheduleBadgeFlush()
+            if _batchDepth == 0 {
+                objectWillChange.send()
+                _scheduleBadgeFlush()
+            }
         }
     }
 

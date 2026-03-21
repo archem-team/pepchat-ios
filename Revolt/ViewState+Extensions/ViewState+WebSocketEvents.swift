@@ -116,9 +116,10 @@ extension ViewState {
             }
 
         case .message(let m):
+          batchUpdate {
             // print("📥 VIEWSTATE: Processing new message - id: \(m.id), channel: \(m.channel)")
             // print("📥 VIEWSTATE: Current messages count BEFORE: \(messages.count)")
-            
+
             if let user = m.user {
                 // CRITICAL FIX: Always add/update message authors to prevent black messages
                 users[user.id] = user
@@ -329,8 +330,9 @@ extension ViewState {
                     saveChannelCacheAsync()
                 }
             }
-            
-            
+          } // end batchUpdate for .message
+
+
         case .message_update(let event):
             // Invalidate cached attributed string so the cell re-renders with new content
             MessageCell.attributedStringCache.removeObject(forKey: event.id as NSString)
@@ -463,6 +465,7 @@ extension ViewState {
         case .user_update(let e):
             updateUser(with: e)
         case .server_create(let e):
+          batchUpdate {
             for channel in e.channels {
                 self.allEventChannels[channel.id] = channel
                 self.channels[channel.id] = channel
@@ -478,8 +481,10 @@ extension ViewState {
             self.updateMembershipCache(serverId: e.id, isMember: true)
             self.saveChannelCacheAsync()
             self.saveServersCacheAsync()
-            
+          }
+
         case .server_delete(let e):
+          batchUpdate {
             if let server = self.servers[e.id] {
                 for channelId in server.channels {
                     self.channels.removeValue(forKey: channelId)
@@ -502,6 +507,7 @@ extension ViewState {
                 self.path = .init()
                 self.selectDms()
             }
+          }
             
             
         case .server_update(let e):
