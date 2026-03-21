@@ -2083,39 +2083,17 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         // Fetch reply messages concurrently for better performance
         // print(
             // "🌐 FETCH_REPLIES: Starting concurrent fetch of \(replyIdsToFetch.count) reply messages")
+        // Fetch all reply messages concurrently (without per-reply user fetches)
         await withTaskGroup(of: Void.self) { group in
             for replyId in replyIdsToFetch {
                 group.addTask { [weak self] in
                     guard let self = self,
                         let channelId = replyChannelMap[replyId]
-                    else {
-                        // print("❌ FETCH_REPLIES: Missing self or channelId for reply \(replyId)")
-                        return
-                    }
-
-                    // print(
-                        // "🔍 FETCH_REPLIES: Starting fetch for reply \(replyId) in channel \(channelId)"
-                    // )
-                    if let replyMessage = await self.fetchMessageForReply(
+                    else { return }
+                    if let _ = await self.fetchMessageForReply(
                         messageId: replyId, channelId: channelId)
                     {
-                        // print("✅ FETCH_REPLIES: Successfully fetched reply \(replyId)")
-
-                        // Also fetch the author if needed
-                        await MainActor.run {
-                            if self.viewModel.viewState.users[replyMessage.author] == nil {
-                                // print(
-                                    // "👥 FETCH_REPLIES: Fetching author \(replyMessage.author) for reply \(replyId)"
-                                // )
-                                Task {
-                                    await self.fetchUserForMessage(userId: replyMessage.author)
-                                }
-                            } else {
-                                // print(
-                                    // "👥 FETCH_REPLIES: Author \(replyMessage.author) already cached for reply \(replyId)"
-                                // )
-                            }
-                        }
+                        // Message stored in viewState.messages by fetchMessageForReply
                     } else {
                         print("❌ FETCH_REPLIES: Failed to fetch reply \(replyId)")
                     }
@@ -2123,18 +2101,29 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             }
         }
 
-        // print("🔗 FETCH_REPLIES: Completed fetching reply messages")
+        // Batch-fetch all missing reply authors after all replies are collected
+        let replyAuthorIds: Set<String> = await MainActor.run {
+            let fetched = replyIdsToFetch.compactMap { viewModel.viewState.messages[$0]?.author }
+            return Set(fetched).filter {
+                viewModel.viewState.users[$0] == nil
+                && viewModel.viewState.allEventUsers[$0] == nil
+            }
+        }
+        if !replyAuthorIds.isEmpty {
+            await withTaskGroup(of: Void.self) { group in
+                for userId in replyAuthorIds {
+                    group.addTask { [weak self] in
+                        await self?.fetchUserForMessage(userId: userId)
+                    }
+                }
+            }
+        }
 
-        // CRITICAL FIX: Force UI refresh after fetching replies
+        // Clear ongoing fetch tracking
         await MainActor.run {
-            // Clear ongoing fetches
             for replyId in replyIdsToFetch {
                 ongoingReplyFetches.remove(replyId)
             }
-
-            // Reply content is now cached in viewState.messages.
-            // The caller (fetchReplyMessagesContentAndRefreshUI) handles the UI refresh,
-            // so we skip reloading here to avoid redundant reloads that cause visual jitter.
         }
 
     }

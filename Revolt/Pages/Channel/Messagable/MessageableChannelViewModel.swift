@@ -20,7 +20,7 @@ extension MessageableChannelViewModel {
     private static let delayAfterNearby: TimeInterval = 10.0
     
     // Combined method to load messages before or after a specific message ID
-    func loadMoreMessages(before: String? = nil, after: String? = nil, sort: String? = nil) async -> FetchHistory? {
+    func loadMoreMessages(before: String? = nil, after: String? = nil, sort: String? = nil, includeUsers: Bool = true) async -> FetchHistory? {
         // Exit early if in preview mode
         if isPreview { return nil }
         
@@ -56,7 +56,8 @@ extension MessageableChannelViewModel {
             before: before,
             after: after,
             sort: sort ?? "Latest",
-            server: serverId
+            server: serverId,
+            include_users: includeUsers
         ).get()
         
         // TIMING: Calculate API call duration

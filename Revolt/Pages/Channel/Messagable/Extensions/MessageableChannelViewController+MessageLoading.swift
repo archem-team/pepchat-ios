@@ -59,6 +59,26 @@ extension MessageableChannelViewController {
         return (existing.edited ?? "") >= (cached.edited ?? "")
     }
 
+    /// Pure function: determines if include_users can be skipped on the API call.
+    /// Returns true when the local user cache is "warm" (has enough known users).
+    static func canSkipIncludeUsers(
+        users: [String: Types.User],
+        allEventUsers: [String: Types.User],
+        warmThreshold: Int = 150
+    ) -> Bool {
+        let knownCount = Set(users.keys).union(allEventUsers.keys).count
+        return knownCount >= warmThreshold
+    }
+
+    /// Pure function: given messages and known user IDs, returns author IDs not in the known set.
+    static func findMissingAuthorIds(
+        messages: [Types.Message],
+        knownUserIds: Set<String>
+    ) -> Set<String> {
+        let authorIds = Set(messages.map { $0.author })
+        return authorIds.subtracting(knownUserIds)
+    }
+
     internal func loadInitialMessages() async {
         let channelId = viewModel.channel.id
 
@@ -75,9 +95,16 @@ extension MessageableChannelViewController {
         }
 
         // MARK: - Start API fetch concurrently (runs in parallel with cache load below)
+        // Skip include_users when local user cache is warm to reduce server-side latency
+        let skipIncludeUsers = await MainActor.run {
+            Self.canSkipIncludeUsers(
+                users: viewModel.viewState.users,
+                allEventUsers: viewModel.viewState.allEventUsers
+            )
+        }
         let apiFetchTask = Task { [weak self] () -> FetchHistory? in
             guard let self else { return nil }
-            return await self.viewModel.loadMoreMessages(before: nil)
+            return await self.viewModel.loadMoreMessages(before: nil, includeUsers: !skipIncludeUsers)
         }
 
         // MARK: - Cache check first (instant show when we have cache)
@@ -250,13 +277,18 @@ extension MessageableChannelViewController {
 
             do {
                 // Use the API to fetch messages near the specified message
-                // print(
-                    // "🌐 API CALL: fetchHistory (nearby) - Channel: \(viewModel.channel.id), Target: \(targetId), Limit: 100"
-                // )
+                // Skip include_users when local user cache is warm
+                let skipNearbyUsers = await MainActor.run {
+                    Self.canSkipIncludeUsers(
+                        users: viewModel.viewState.users,
+                        allEventUsers: viewModel.viewState.allEventUsers
+                    )
+                }
                 let result = try await viewModel.viewState.http.fetchHistory(
                     channel: viewModel.channel.id,
                     limit: 100,  // Get context around the target message
-                    nearby: targetId
+                    nearby: targetId,
+                    include_users: !skipNearbyUsers
                 ).get()
                 // print(
                     // "✅ API RESPONSE: fetchHistory (nearby) - Received \(result.messages.count) messages, \(result.users.count) users"
@@ -264,34 +296,45 @@ extension MessageableChannelViewController {
 
                 // print("✅ Nearby API Response received with \(result.messages.count) messages")
 
-                // Fetch reply message content for messages that have replies BEFORE MainActor.run
-                // print(
-                    // "🔗 CALLING fetchReplyMessagesContent (nearby API - first call) with \(result.messages.count) messages"
-                // )
-                await self.fetchReplyMessagesContent(for: result.messages)
+                // Fire-and-forget reply fetch — messages display immediately, reply previews backfill async
+                let replyMessages = result.messages
+                Task { [weak self] in
+                    await self?.fetchReplyMessagesContentAndRefreshUI(for: replyMessages)
+                }
+
+                // Process users from the response before UI update, and identify missing authors in one hop
+                let nearbyMissingAuthors: Set<String> = await MainActor.run {
+                    for user in result.users {
+                        viewModel.viewState.users[user.id] = user
+                    }
+                    if let members = result.members {
+                        for member in members {
+                            viewModel.viewState.members[member.id.server, default: [:]][
+                                member.id.user] = member
+                        }
+                    }
+                    for message in result.messages {
+                        viewModel.viewState.messages[message.id] = message
+                    }
+                    return Self.findMissingAuthorIds(
+                        messages: result.messages,
+                        knownUserIds: Set(viewModel.viewState.users.keys)
+                            .union(viewModel.viewState.allEventUsers.keys)
+                    )
+                }
+                if !nearbyMissingAuthors.isEmpty {
+                    await withTaskGroup(of: Void.self) { group in
+                        for userId in nearbyMissingAuthors {
+                            group.addTask { [weak self] in
+                                await self?.fetchUserForMessage(userId: userId)
+                            }
+                        }
+                    }
+                }
 
                 // Process and merge the nearby messages with existing channel history
                 await MainActor.run {
                     if !result.messages.isEmpty {
-                        // print("📊 Processing \(result.messages.count) nearby messages to merge with existing history")
-
-                        // Process users from the response
-                        for user in result.users {
-                            viewModel.viewState.users[user.id] = user
-                        }
-
-                        // Process members if present
-                        if let members = result.members {
-                            for member in members {
-                                viewModel.viewState.members[member.id.server, default: [:]][
-                                    member.id.user] = member
-                            }
-                        }
-
-                        // Process messages - add them to the messages dictionary
-                        for message in result.messages {
-                            viewModel.viewState.messages[message.id] = message
-                        }
 
                         // Get existing channel messages
                         let existingMessages = viewModel.viewState.channelMessages[channelId] ?? []
@@ -511,6 +554,24 @@ extension MessageableChannelViewController {
         // Process messages
         for message in fetchResult.messages {
             viewModel.viewState.messages[message.id] = message
+        }
+
+        // Fetch any missing authors (needed when include_users was skipped for warm cache)
+        let missingAuthorIds = await MainActor.run {
+            Self.findMissingAuthorIds(
+                messages: fetchResult.messages,
+                knownUserIds: Set(viewModel.viewState.users.keys)
+                    .union(viewModel.viewState.allEventUsers.keys)
+            )
+        }
+        if !missingAuthorIds.isEmpty {
+            await withTaskGroup(of: Void.self) { group in
+                for userId in missingAuthorIds {
+                    group.addTask { [weak self] in
+                        await self?.fetchUserForMessage(userId: userId)
+                    }
+                }
+            }
         }
 
         // Merge with existing (e.g. from cache): union IDs, dedupe, sort by canonical order.
