@@ -1991,18 +1991,31 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
             // Force a complete refresh if we fetched any replies
             if !replyIdsBeingFetched.isEmpty {
-                // Use reloadData instead of refreshMessages for more complete refresh
-                if let tableView = self.tableView {
-                    // print(
-                        // "🔗 FETCH_AND_REFRESH: Forcing complete table reload after fetching \(replyIdsBeingFetched.count) replies"
-                    // )
-                    tableView.reloadData()
+                if let tableView = self.tableView, tableView.dataSource != nil {
+                    // Find rows whose messages reference the fetched reply IDs
+                    var indexPaths: [IndexPath] = []
+                    for (index, messageId) in self.localMessages.enumerated() {
+                        if let message = self.viewModel.viewState.messages[messageId],
+                           let replies = message.replies,
+                           replies.contains(where: { replyIdsBeingFetched.contains($0) }) {
+                            indexPaths.append(IndexPath(row: index, section: 0))
+                        }
+                    }
+                    if !indexPaths.isEmpty {
+                        let wasNearBottom = self.isUserNearBottom()
+                        UIView.performWithoutAnimation {
+                            tableView.reloadRows(at: indexPaths, with: .none)
+                            tableView.layoutIfNeeded()
+                        }
+                        if wasNearBottom {
+                            self.scrollToBottom(animated: false)
+                        }
+                    }
                 } else {
                     self.refreshMessages()
                 }
-            } else {
-                self.refreshMessages()
             }
+            // If no replies were fetched, skip redundant refresh
         }
     }
 
@@ -2119,17 +2132,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                 ongoingReplyFetches.remove(replyId)
             }
 
-            // FORCE refresh UI to show newly loaded reply content.
-            // Use reloadData() instead of reloadRows(at:with:) to avoid a race with loadRegularMessages
-            // (which merges messages and does a full reload). See docs/ReplyMessageLoadingCrash.md.
-            if !replyIdsToFetch.isEmpty {
-                // print(
-                    // "🔗 FORCE_REFRESH: Forcing UI refresh after loading \(replyIdsToFetch.count) reply messages"
-                // )
-                if let tableView = self.tableView, tableView.dataSource != nil {
-                    tableView.reloadData()
-                }
-            }
+            // Reply content is now cached in viewState.messages.
+            // The caller (fetchReplyMessagesContentAndRefreshUI) handles the UI refresh,
+            // so we skip reloading here to avoid redundant reloads that cause visual jitter.
         }
 
     }
@@ -2875,9 +2880,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         if messageCount > 15 {
             // If we have more than 15 messages, remove the spacing
             if tableView.contentInset.top > 0 {
-                UIView.animate(withDuration: 0.2) {
-                    self.tableView.contentInset = UIEdgeInsets.zero
-                }
+                tableView.contentInset = UIEdgeInsets.zero
                 // print("📏 Reset insets to zero (message count > 15)")
             }
             // Enable bouncing for many messages

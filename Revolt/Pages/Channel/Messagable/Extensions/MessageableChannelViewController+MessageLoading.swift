@@ -136,7 +136,7 @@ extension MessageableChannelViewController {
                     tableView.dataSource = dataSource
                     tableView.reloadData()
                     hideSkeletonView()
-                    tableView.alpha = 1.0
+                    positionTableAtBottomBeforeShowing()
                     updateTableViewBouncing()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
                         self?.updateTableViewBouncing()
@@ -539,6 +539,7 @@ extension MessageableChannelViewController {
         let filteredIds = allDeleted.isEmpty ? sortedIds : sortedIds.filter { !allDeleted.contains($0) }
 
         // Write results back on main thread
+        let previousLocalMessages = await MainActor.run { self.localMessages }
         await MainActor.run {
             if !deletedByServer.isEmpty, let userId, let baseURL {
                 for id in deletedByServer {
@@ -551,12 +552,22 @@ extension MessageableChannelViewController {
             self.viewModel.messages = filteredIds
         }
 
+        let idsUnchanged = previousLocalMessages == filteredIds
+
         // Update UI
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
             self.hideSkeletonView()
             self.tableView.tableFooterView = nil
+
+            // Skip full reload if message IDs haven't changed (cache and API returned same set)
+            if idsUnchanged && self.tableView.alpha >= 1.0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    self.adjustTableInsetsForMessageCount()
+                }
+                return
+            }
 
             self.isDataSourceUpdating = true
 
@@ -575,26 +586,36 @@ extension MessageableChannelViewController {
                 self.lastManualScrollUpTime != nil
                 && Date().timeIntervalSince(self.lastManualScrollUpTime!) < 10.0
 
+            let tableAlreadyVisible = self.tableView.alpha >= 1.0
+
             if !hasManuallyScrolledUp {
                 if let highlightTime = self.lastTargetMessageHighlightTime,
                     Date().timeIntervalSince(highlightTime) < 10.0
                 {
                     self.tableView.alpha = 1.0
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        self.adjustTableInsetsForMessageCount()
+                } else if tableAlreadyVisible {
+                    // Table already visible from cache — scroll without fade to avoid blip
+                    self.tableView.layoutIfNeeded()
+                    let rowCount = self.tableView.numberOfRows(inSection: 0)
+                    if rowCount > 0 {
+                        self.tableView.scrollToRow(
+                            at: IndexPath(row: rowCount - 1, section: 0),
+                            at: .bottom,
+                            animated: false
+                        )
                     }
                 } else {
                     self.positionTableAtBottomBeforeShowing()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        self.adjustTableInsetsForMessageCount()
-                    }
                 }
             } else {
-                self.showTableViewWithFade()
-                self.tableView.alpha = 1.0
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    self.adjustTableInsetsForMessageCount()
+                if !tableAlreadyVisible {
+                    self.showTableViewWithFade()
                 }
+                self.tableView.alpha = 1.0
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                self.adjustTableInsetsForMessageCount()
             }
         }
 

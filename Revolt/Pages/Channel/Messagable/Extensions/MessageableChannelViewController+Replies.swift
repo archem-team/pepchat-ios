@@ -155,10 +155,34 @@ extension MessageableChannelViewController {
             // )
             await fetchReplyMessagesContent(for: messagesNeedingReplies)
 
-            // Refresh UI after fetching missing replies
+            // Refresh UI after fetching missing replies — only if replies were actually loaded
             await MainActor.run {
-                // print("🔗 CHECK_MISSING: Refreshing UI after loading missing replies")
-                self.refreshMessages()
+                // Check if any of the previously-missing replies are now loaded
+                let anyNewlyLoaded = messagesNeedingReplies.contains { message in
+                    message.replies?.contains { self.viewModel.viewState.messages[$0] != nil } ?? false
+                }
+                if anyNewlyLoaded, let tableView = self.tableView, tableView.dataSource != nil {
+                    // Find rows whose messages reference the newly loaded replies
+                    let replyIds = Set(messagesNeedingReplies.compactMap { $0.replies }.flatMap { $0 })
+                    var indexPaths: [IndexPath] = []
+                    for (index, messageId) in self.localMessages.enumerated() {
+                        if let message = self.viewModel.viewState.messages[messageId],
+                           let replies = message.replies,
+                           replies.contains(where: { replyIds.contains($0) }) {
+                            indexPaths.append(IndexPath(row: index, section: 0))
+                        }
+                    }
+                    if !indexPaths.isEmpty {
+                        let wasNearBottom = self.isUserNearBottom()
+                        UIView.performWithoutAnimation {
+                            tableView.reloadRows(at: indexPaths, with: .none)
+                            tableView.layoutIfNeeded()
+                        }
+                        if wasNearBottom {
+                            self.scrollToBottom(animated: false)
+                        }
+                    }
+                }
             }
         } else {
             // print("🔗 CHECK_MISSING: All reply content is already loaded!")

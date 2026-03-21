@@ -86,14 +86,14 @@ extension MessageableChannelViewController {
         }
 
         // CRITICAL FIX: Don't apply global fix during cross-channel target message navigation
-        if targetMessageId == nil && !targetMessageProtectionActive {
+        // Also skip if loadInitialMessages is already handling display
+        if targetMessageId == nil && !targetMessageProtectionActive && messageLoadingState != .loading {
             // Apply Global Fix to ensure message display and fix black screen issues
             applyGlobalFix()
 
             // Update table view bouncing behavior when view appears
             updateTableViewBouncing()
         } else {
-            // print("🎯 VIEW_DID_APPEAR: Skipping global fix - target message navigation in progress")
         }
 
         // // print("🔄 VIEW_DID_APPEAR: View appeared, checking notification observers")
@@ -195,8 +195,7 @@ extension MessageableChannelViewController {
                     viewModel.viewState.messages[$0] != nil
                 }) != nil
 
-            if hasActualMessages {
-                // print("✅ VIEW_DID_APPEAR: Messages already loaded, showing immediately")
+            if hasActualMessages && messageLoadingState != .loading {
                 // Messages exist, show them immediately without loading
                 tableView.alpha = 1.0
                 tableView.tableFooterView = nil
@@ -210,6 +209,8 @@ extension MessageableChannelViewController {
                     }
                     await self.checkAndFetchMissingReplies()
                 }
+            } else if hasActualMessages {
+                // loadInitialMessages is already handling display — don't interfere
             } else {
                 // No messages in memory: use loadInitialMessages() so we get cache check + cache write.
                 // Previously we called loadInitialMessagesImmediate() which bypassed cache entirely.
@@ -247,8 +248,9 @@ extension MessageableChannelViewController {
         // Apply global fix after view appears to ensure messages are visible
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             guard let self = self else { return }
-            // Only apply fix if table is empty but we have messages
-            if self.tableView.numberOfRows(inSection: 0) == 0
+            // Only apply fix if table is empty but we have messages, and loading isn't in progress
+            if self.messageLoadingState != .loading
+                && self.tableView.numberOfRows(inSection: 0) == 0
                 && !(self.viewModel.viewState.channelMessages.isEmpty)
             {
                 self.applyGlobalFix()
@@ -366,9 +368,8 @@ extension MessageableChannelViewController {
             {  // Significant increase in height
 
                 // If user is near bottom and scrolling is enabled, scroll to show new content
-                if isUserNearBottom() && !isLoadingMore && tableView.isScrollEnabled {
-                    // print("📏 TableView content size increased significantly while user near bottom - scrolling")
-                    scrollToBottom(animated: true)
+                if isUserNearBottom() && !isLoadingMore && !isDataSourceUpdating && tableView.isScrollEnabled {
+                    scrollToBottom(animated: false)
                 }
             }
         } else {
