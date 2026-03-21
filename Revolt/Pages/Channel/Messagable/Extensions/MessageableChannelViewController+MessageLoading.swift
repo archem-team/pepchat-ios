@@ -1131,20 +1131,35 @@ extension MessageableChannelViewController {
     }
 
     /// Load one page of older messages from cache if available; merge with localMessages and preserve scroll. Returns true if a page was loaded.
-    private func loadOlderMessagesFromCacheIfAvailable(channelId: String, oldContentOffset: CGPoint, oldContentHeight: CGFloat) async -> Bool {
+    private func loadOlderMessagesFromCacheIfAvailable(channelId: String, oldContentOffset: CGPoint, oldContentHeight: CGFloat, prefetchedTotal: Int? = nil) async -> Bool {
         guard let userId = viewModel.viewState.currentUser?.id,
               let baseURL = viewModel.viewState.baseURL else { return false }
-        let totalCount = await MessageCacheManager.shared.cachedMessageCount(for: channelId, userId: userId, baseURL: baseURL)
-        cachedMessageTotal = totalCount
         let currentOffset = cachedMessageOffset
-        guard totalCount > currentOffset else { return false }
-        let cached = await MessageCacheManager.shared.loadCachedMessages(
-            for: channelId,
-            userId: userId,
-            baseURL: baseURL,
-            limit: cachePageSize,
-            offset: currentOffset
-        )
+        let totalCount: Int
+        let cached: [Message]
+        if let prefetchedTotal {
+            guard prefetchedTotal > currentOffset else { return false }
+            totalCount = prefetchedTotal
+            cached = await MessageCacheManager.shared.loadCachedMessages(
+                for: channelId,
+                userId: userId,
+                baseURL: baseURL,
+                limit: cachePageSize,
+                offset: currentOffset
+            )
+        } else {
+            let result = await MessageCacheManager.shared.loadCachedPageWithCount(
+                for: channelId,
+                userId: userId,
+                baseURL: baseURL,
+                limit: cachePageSize,
+                offset: currentOffset
+            )
+            guard result.totalCount > currentOffset else { return false }
+            totalCount = result.totalCount
+            cached = result.messages
+        }
+        cachedMessageTotal = totalCount
         guard !cached.isEmpty else { return false }
         // print("📂 [MessageCache] UI: loading older page from cache for channel \(channelId) (offset \(currentOffset), \(cached.count) messages)")
         let authorIds = Set(cached.map { $0.author })
@@ -1250,21 +1265,24 @@ extension MessageableChannelViewController {
             let loadTask = Task<Void, Never>(priority: .userInitiated) {
                 do {
                     var apiMessageId = messageId
-                    var curOffset = oldContentOffset
-                    var curHeight = oldContentHeight
                     let chId = self.viewModel.channel.id
-                    for _ in 0..<50 {
-                        let loaded = await self.loadOlderMessagesFromCacheIfAvailable(channelId: chId, oldContentOffset: curOffset, oldContentHeight: curHeight)
-                        if !loaded { break }
-                        guard let uid = self.viewModel.viewState.currentUser?.id,
-                              let baseURL = self.viewModel.viewState.baseURL else { break }
+
+                    // Load one page from cache (scroll triggers load the next page naturally)
+                    if let uid = self.viewModel.viewState.currentUser?.id,
+                       let baseURL = self.viewModel.viewState.baseURL {
                         let total = await MessageCacheManager.shared.cachedMessageCount(for: chId, userId: uid, baseURL: baseURL)
-                        if await MainActor.run(body: { self.cachedMessageOffset }) >= total { break }
-                        let msgs = await MainActor.run { self.viewModel.messages }
-                        guard let first = msgs.first else { break }
-                        apiMessageId = first
-                        curOffset = await MainActor.run { self.tableView.contentOffset }
-                        curHeight = await MainActor.run { self.tableView.contentSize.height }
+                        let loaded = await self.loadOlderMessagesFromCacheIfAvailable(
+                            channelId: chId,
+                            oldContentOffset: oldContentOffset,
+                            oldContentHeight: oldContentHeight,
+                            prefetchedTotal: total
+                        )
+                        if loaded {
+                            let msgs = await MainActor.run { self.viewModel.messages }
+                            if let first = msgs.first {
+                                apiMessageId = first
+                            }
+                        }
                     }
 
                     // print(

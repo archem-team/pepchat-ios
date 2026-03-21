@@ -265,32 +265,16 @@ class MessageCacheManager {
         }
     }
     
-    private func _getDeletedMessageIds(channelId: String, userId: String, baseURL: String) -> Set<String> {
-        guard let db = db else { return [] }
-        let sql = "SELECT message_id FROM tombstones WHERE channel_id = ? AND user_id = ? AND base_url = ?"
-        var statement: OpaquePointer?
-        var ids = Set<String>()
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
-        defer { sqlite3_finalize(statement) }
-        bindText(statement, 1, channelId)
-        bindText(statement, 2, userId)
-        bindText(statement, 3, baseURL)
-        while sqlite3_step(statement) == SQLITE_ROW {
-            if let c = sqlite3_column_text(statement, 0) {
-                ids.insert(String(cString: c))
-            }
-        }
-        return ids
-    }
-    
     private func _loadCachedMessages(for channelId: String, userId: String, baseURL: String, limit: Int, offset: Int) -> [Message] {
         guard let db = db else { return [] }
-        let deletedIds = _getDeletedMessageIds(channelId: channelId, userId: userId, baseURL: baseURL)
         let selectSQL = """
-            SELECT message_data FROM messages
-            WHERE channel_id = ? AND user_id = ? AND base_url = ?
-            AND id NOT IN (SELECT message_id FROM tombstones WHERE channel_id = ? AND user_id = ? AND base_url = ?)
-            ORDER BY created_at DESC
+            SELECT m.message_data FROM messages m
+            LEFT JOIN tombstones t
+              ON m.id = t.message_id AND m.channel_id = t.channel_id
+              AND m.user_id = t.user_id AND m.base_url = t.base_url
+            WHERE m.channel_id = ? AND m.user_id = ? AND m.base_url = ?
+              AND t.message_id IS NULL
+            ORDER BY m.created_at DESC
             LIMIT ? OFFSET ?
         """
         var statement: OpaquePointer?
@@ -301,16 +285,13 @@ class MessageCacheManager {
         bindText(statement, 1, channelId)
         bindText(statement, 2, userId)
         bindText(statement, 3, baseURL)
-        bindText(statement, 4, channelId)
-        bindText(statement, 5, userId)
-        bindText(statement, 6, baseURL)
-        sqlite3_bind_int(statement, 7, Int32(limit))
-        sqlite3_bind_int(statement, 8, Int32(offset))
+        sqlite3_bind_int(statement, 4, Int32(limit))
+        sqlite3_bind_int(statement, 5, Int32(offset))
         while sqlite3_step(statement) == SQLITE_ROW {
             if let blob = sqlite3_column_blob(statement, 0) {
                 let size = sqlite3_column_bytes(statement, 0)
                 let data = Data(bytes: blob, count: Int(size))
-                if let message = try? decoder.decode(Message.self, from: data), !deletedIds.contains(message.id) {
+                if let message = try? decoder.decode(Message.self, from: data) {
                     messages.append(message)
                 }
             }
@@ -330,9 +311,12 @@ class MessageCacheManager {
     private func _cachedMessageCount(channelId: String, userId: String, baseURL: String) -> Int {
         guard let db = db else { return 0 }
         let sql = """
-            SELECT COUNT(*) FROM messages
-            WHERE channel_id = ? AND user_id = ? AND base_url = ?
-            AND id NOT IN (SELECT message_id FROM tombstones WHERE channel_id = ? AND user_id = ? AND base_url = ?)
+            SELECT COUNT(*) FROM messages m
+            LEFT JOIN tombstones t
+              ON m.id = t.message_id AND m.channel_id = t.channel_id
+              AND m.user_id = t.user_id AND m.base_url = t.base_url
+            WHERE m.channel_id = ? AND m.user_id = ? AND m.base_url = ?
+              AND t.message_id IS NULL
         """
         var statement: OpaquePointer?
         var count = 0
@@ -341,13 +325,23 @@ class MessageCacheManager {
         bindText(statement, 1, channelId)
         bindText(statement, 2, userId)
         bindText(statement, 3, baseURL)
-        bindText(statement, 4, channelId)
-        bindText(statement, 5, userId)
-        bindText(statement, 6, baseURL)
         if sqlite3_step(statement) == SQLITE_ROW { count = Int(sqlite3_column_int(statement, 0)) }
         return count
     }
     
+    /// Load one page of cached messages along with the total count in a single DB dispatch.
+    /// Avoids two separate async hops and guarantees count/data consistency.
+    func loadCachedPageWithCount(for channelId: String, userId: String, baseURL: String, limit: Int, offset: Int) async -> (totalCount: Int, messages: [Message]) {
+        await withCheckedContinuation { cont in
+            dbQueue.async { [weak self] in
+                guard let self else { cont.resume(returning: (0, [])); return }
+                let count = self._cachedMessageCount(channelId: channelId, userId: userId, baseURL: baseURL)
+                let msgs = self._loadCachedMessages(for: channelId, userId: userId, baseURL: baseURL, limit: limit, offset: offset)
+                cont.resume(returning: (count, msgs))
+            }
+        }
+    }
+
     func hasCachedMessages(for channelId: String, userId: String, baseURL: String) async -> Bool {
         await cachedMessageCount(for: channelId, userId: userId, baseURL: baseURL) > 0
     }
@@ -705,8 +699,8 @@ class MessageCacheManager {
         
         // Clean orphaned users
         let cleanUsersSQL = """
-            DELETE FROM users WHERE id NOT IN (
-                SELECT DISTINCT author_id FROM messages
+            DELETE FROM users WHERE NOT EXISTS (
+                SELECT 1 FROM messages WHERE messages.author_id = users.id
             )
         """
         
