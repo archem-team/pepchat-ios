@@ -1483,11 +1483,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
     // FAST: Lightweight refresh method with minimal overhead
     func refreshMessages(forceUpdate: Bool = false) {
-        // print("🔄 targetMessageProtectionActive: \(targetMessageProtectionActive)")
-
         // CRITICAL FIX: Don't refresh if we're in the middle of nearby loading (unless forced for reactions)
         if messageLoadingState == .loading && !forceUpdate {
-            // print("🔄 BLOCKED: refreshMessages blocked - nearby loading in progress")
+
             return
         }
 
@@ -1495,15 +1493,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         if targetMessageProtectionActive && (targetMessageId == nil || targetMessageProcessed)
             && !forceUpdate
         {
-            // print(
-                // "🔄 BLOCKED: refreshMessages blocked - target message protection active and no new target"
-            // )
+
             return
         }
 
         // Skip if user is interacting with table
         guard !tableView.isDragging, !tableView.isDecelerating else {
-            // print("🔄 Skipping refreshMessages - user is interacting with table")
+
             return
         }
 
@@ -1512,7 +1508,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             Date().timeIntervalSince(lastScrollUpTime) < 10.0,
             targetMessageId == nil
         {
-            // print("🔄 Skipping refreshMessages - user recently scrolled up (no target message)")
+
             return
         } else if targetMessageId != nil {
             // print("🔄 Continuing refreshMessages despite recent scroll - have target message")
@@ -1553,7 +1549,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         }
 
         // Normal sync path: only update and reload when the list actually changed
-        guard localMessages != channelMessages else { return }
+        guard localMessages != channelMessages else {
+
+            return
+        }
+
 
         let wasNearBottom = isUserNearBottom()
         localMessages = channelMessages
@@ -2460,10 +2460,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         // Update localMessages to match current viewModel.messages or channelMessages
         if !channelMessages.isEmpty && localMessages != channelMessages {
             localMessages = Array(channelMessages)
-            // print("🔄 Synced localMessages with channelMessages: \(localMessages.count) messages")
         } else if !viewModel.messages.isEmpty && localMessages != viewModel.messages {
             localMessages = viewModel.messages
-            // print("🔄 Synced localMessages with viewModel.messages: \(localMessages.count) messages")
         }
 
         // Also ensure viewModel.messages is in sync - but ONLY if they're actually different
@@ -2475,7 +2473,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         if needsViewModelSync || needsChannelMessagesSync {
             viewModel.messages = localMessages
             viewModel.viewState.channelMessages[viewModel.channel.id] = localMessages
-            // print("🔄 Synced viewModel.messages and channelMessages with localMessages (only because they differed)")
         }
     }
 

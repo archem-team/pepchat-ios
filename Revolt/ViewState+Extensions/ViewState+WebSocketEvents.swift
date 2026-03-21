@@ -117,8 +117,6 @@ extension ViewState {
 
         case .message(let m):
           batchUpdate {
-            // print("📥 VIEWSTATE: Processing new message - id: \(m.id), channel: \(m.channel)")
-            // print("📥 VIEWSTATE: Current messages count BEFORE: \(messages.count)")
 
             if let user = m.user {
                 // CRITICAL FIX: Always add/update message authors to prevent black messages

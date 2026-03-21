@@ -84,7 +84,6 @@ extension MessageableChannelViewController {
 
         // CRITICAL FIX: Reset empty response time when loading initial messages
         lastEmptyResponseTime = nil
-        // print("🔄 LOAD_INITIAL: Reset lastEmptyResponseTime for initial load")
 
         // CRITICAL FIX: Don't reload if user is in target message position
         if isInTargetMessagePosition && targetMessageId == nil {
@@ -155,6 +154,7 @@ extension MessageableChannelViewController {
                     }
                     let deleted = viewModel.viewState.deletedMessageIds[channelId] ?? []
                     let ids = cached.map { $0.id }.filter { !deleted.contains($0) }
+
                     viewModel.viewState.channelMessages[channelId] = ids
                     viewModel.messages = ids
                     localMessages = ids
@@ -175,14 +175,13 @@ extension MessageableChannelViewController {
         // Check if already loading to prevent duplicate calls
         MessageableChannelViewController.loadingMutex.lock()
         if MessageableChannelViewController.loadingChannels.contains(channelId) {
-            // print("⚠️ Channel \(channelId) is already being loaded, skipping duplicate request")
+
             MessageableChannelViewController.loadingMutex.unlock()
             return
         } else {
-            // print("🚀 LOAD_INITIAL: Starting API call for channel \(channelId)")
             MessageableChannelViewController.loadingChannels.insert(channelId)
             messageLoadingState = .loading
-            // print("🎯 Set messageLoadingState to .loading for initial load")
+
             MessageableChannelViewController.loadingMutex.unlock()
         }
 
@@ -200,7 +199,6 @@ extension MessageableChannelViewController {
 
             // CRITICAL FIX: Reset loading state when done
             messageLoadingState = .notLoading
-            // print("🎯 Reset messageLoadingState to .notLoading - loadInitialMessages complete")
 
             DispatchQueue.main.async {
                 self.tableView.alpha = 1.0
@@ -260,6 +258,7 @@ extension MessageableChannelViewController {
 
         if let targetId = self.targetMessageId {
             // Cancel the concurrent API fetch — target message uses the nearby API instead
+
             apiFetchTask.cancel()
 
             // We have a specific target message to load
@@ -504,6 +503,7 @@ extension MessageableChannelViewController {
         } else {
             // No target message ID — API fetch was started concurrently with cache load above.
             // Await the already-running task and merge results.
+
             await processAPIFetchResult(apiFetchTask, channelId: channelId)
         }
     }
@@ -513,7 +513,9 @@ extension MessageableChannelViewController {
     private func processAPIFetchResult(_ task: Task<FetchHistory?, Never>, channelId: String) async {
         let fetchResult = await task.value
 
+
         guard let fetchResult, !fetchResult.messages.isEmpty else {
+
             // No messages from API — hide skeleton / show empty state if needed
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
@@ -583,6 +585,7 @@ extension MessageableChannelViewController {
         }
         let apiIds = fetchResult.messages.map { $0.id }
 
+
         // Reconcile with server: locally-cached messages in the API's time window
         // that are absent from the response are treated as server-side deletes.
         let apiIdSet = Set(apiIds)
@@ -598,6 +601,7 @@ extension MessageableChannelViewController {
         let sortedIds = self.mergeAndSortMessageIds(existing: existingIds, new: apiIds)
         let allDeleted = deleted.union(deletedByServer)
         let filteredIds = allDeleted.isEmpty ? sortedIds : sortedIds.filter { !allDeleted.contains($0) }
+
 
         // Write results back on main thread
         let previousLocalMessages = await MainActor.run { self.localMessages }
