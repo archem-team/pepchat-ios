@@ -69,6 +69,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     let cachePageSize: Int = 50
     var cacheLoadTask: Task<Void, Never>? = nil
 
+    // PERF Issue #9: Cache measured cell heights to avoid repeated Auto Layout resolution
+    let cellHeightCache = CellHeightCache()
+    private var lastKnownTableWidth: CGFloat = 0
+
     // CRITICAL: Add flag to protect against scrolling during data source updates
     var isDataSourceUpdating: Bool = false
 
@@ -341,6 +345,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     @objc private func handleMessageDeletedLocally(_ notification: Notification) {
         guard let channelId = notification.userInfo?["channelId"] as? String,
               channelId == viewModel.channel.id else { return }
+        // PERF Issue #9: Notification only carries channelId, so flush the whole cache.
+        // Deletes are infrequent so this is fine.
+        cellHeightCache.invalidateAll()
         refreshMessagesAfterLocalDelete()
     }
 
@@ -675,6 +682,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
         // Ensure our view covers the entire screen
         view.frame = UIScreen.main.bounds
+
+        // PERF Issue #9: Invalidate height cache on width change (rotation/resize).
+        // Skip the first call (lastKnownTableWidth == 0) since the cache is already empty.
+        let currentWidth = tableView?.bounds.width ?? 0
+        if lastKnownTableWidth > 0 && currentWidth != lastKnownTableWidth {
+            cellHeightCache.invalidateAll()
+        }
+        if currentWidth > 0 { lastKnownTableWidth = currentWidth }
 
         // Update table view bouncing behavior when layout changes
         if tableView.window != nil {
@@ -1022,6 +1037,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
               row < tableView.numberOfRows(inSection: 0) else { return }
         let messageIdToInvalidate = messageId
         let rowToReload = row
+        // PERF Issue #9: Invalidate cached height for edited message
+        cellHeightCache.invalidate(messageId: messageIdToInvalidate)
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             (self.dataSource as? LocalMessagesDataSource)?.invalidateMessageCache(forMessageId: messageIdToInvalidate)

@@ -15,21 +15,21 @@ extension MessageableChannelViewController: UITableViewDelegate {
         if indexPath.row == 0 {
             isLoadingMore = true
         }
-        
+
         // Safety check for localMessages count
         guard !localMessages.isEmpty, indexPath.row < localMessages.count else {
             return
         }
-        
+
         if indexPath.row == localMessages.count - 1 {
             markLastMessageAsSeen()
         }
-        
+
         if let currentCell = cell as? MessageCell {
             if indexPath.row < localMessages.count - 1 {
                 let nextMessageId = localMessages[indexPath.row + 1]
                 let currentMessageId = localMessages[indexPath.row]
-                
+
                 if let nextMessage = viewModel.viewState.messages[nextMessageId],
                    let currentMessage = viewModel.viewState.messages[currentMessageId] {
                     if nextMessage.author != currentMessage.author {
@@ -42,15 +42,68 @@ extension MessageableChannelViewController: UITableViewDelegate {
             // Link preview overlap fix: finish layout before first draw (docs/Fix/LinkPreviewImage.md)
             currentCell.contentView.setNeedsLayout()
             currentCell.contentView.layoutIfNeeded()
+
+            // PERF Issue #9: Cache the measured height after layout
+            let messageId = localMessages[indexPath.row]
+            let isContinuation = shouldGroupWithPreviousMessage(at: indexPath)
+            let key = CellHeightCacheKey(
+                messageId: messageId,
+                isContinuation: isContinuation,
+                tableWidth: Int(tableView.bounds.width)
+            )
+            cellHeightCache.store(height: currentCell.bounds.height, for: key)
         }
 
         loadMoreMessagesIfNeeded(for: indexPath)
     }
-    
+
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        // Always use automatic dimension to let constraints determine the height
-        // This prevents overlapping issues and ensures proper cell sizing
-        return UITableView.automaticDimension
+        // PERF Issue #9: Return cached height if available, otherwise let Auto Layout resolve
+        guard indexPath.row < localMessages.count else {
+            return UITableView.automaticDimension
+        }
+        let messageId = localMessages[indexPath.row]
+        let isContinuation = shouldGroupWithPreviousMessage(at: indexPath)
+        let key = CellHeightCacheKey(
+            messageId: messageId,
+            isContinuation: isContinuation,
+            tableWidth: Int(tableView.bounds.width)
+        )
+        return cellHeightCache.height(for: key) ?? UITableView.automaticDimension
+    }
+
+    func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
+        // PERF Issue #9: Context-aware height estimates reduce scroll bar jitter
+        guard indexPath.row < localMessages.count else { return 120 }
+
+        let messageId = localMessages[indexPath.row]
+        let isContinuation = shouldGroupWithPreviousMessage(at: indexPath)
+        let key = CellHeightCacheKey(
+            messageId: messageId,
+            isContinuation: isContinuation,
+            tableWidth: Int(tableView.bounds.width)
+        )
+
+        // Best estimate: a previously measured height
+        if let cached = cellHeightCache.height(for: key) {
+            return cached
+        }
+
+        // Heuristic estimate based on message content
+        guard let message = viewModel.viewState.messages[messageId] else { return 120 }
+
+        var estimate: CGFloat = isContinuation ? 44 : 68
+        if let attachments = message.attachments, !attachments.isEmpty {
+            let hasImages = attachments.contains {
+                if case .image = $0.metadata { return true }
+                return false
+            }
+            estimate += hasImages ? 200 : 60
+        }
+        if let embeds = message.embeds, !embeds.isEmpty { estimate += 120 }
+        if let reactions = message.reactions, !reactions.isEmpty { estimate += 36 }
+        if let replies = message.replies, !replies.isEmpty { estimate += 28 }
+        return estimate
     }
     
 

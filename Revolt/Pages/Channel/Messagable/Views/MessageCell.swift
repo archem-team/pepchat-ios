@@ -83,6 +83,13 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     public var isTargetMessageHighlighted: Bool = false
     public var originalBackgroundColorForHighlight: UIColor?
     
+    // PERF Issue #9: Pre-built constraint sets — toggled via isActive instead of remove/recreate
+    internal var continuationNoReplyConstraints: [NSLayoutConstraint] = []
+    internal var continuationWithReplyConstraints: [NSLayoutConstraint] = []
+    internal var nonContinuationNoReplyConstraints: [NSLayoutConstraint] = []
+    internal var nonContinuationWithReplyConstraints: [NSLayoutConstraint] = []
+    internal var contentLabelBottomToContentViewConstraint: NSLayoutConstraint?
+
     // Additional property to determine if this is a continuation message
     var isContinuation: Bool = false {
         didSet {
@@ -1982,6 +1989,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 let bottomConstraint = contentLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -16)
                 bottomConstraint.priority = UILayoutPriority.defaultHigh
                 bottomConstraint.isActive = true
+                // PERF Issue #9: Track for efficient deactivation in clearContentLabelBottomConstraints()
+                contentLabelBottomToContentViewConstraint = bottomConstraint
             }
         }
         

@@ -78,6 +78,7 @@
 		059B24BE2DE5BB18007ACFFB /* MessageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059B24BD2DE5BB16007ACFFB /* MessageLoader.swift */; };
 		059B24C02DE5BB1E007ACFFB /* MessageGroupingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059B24BF2DE5BB1D007ACFFB /* MessageGroupingManager.swift */; };
 		059B24C22DE5BB23007ACFFB /* ScrollPositionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059B24C12DE5BB22007ACFFB /* ScrollPositionManager.swift */; };
+		7750B85D4AE646ED88E708A6 /* CellHeightCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE5E168A3BFE4B0EBD80CD00 /* CellHeightCache.swift */; };
 		059B24C42DE5BB28007ACFFB /* TypingIndicatorManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059B24C32DE5BB28007ACFFB /* TypingIndicatorManager.swift */; };
 		059B24C62DE5BB2D007ACFFB /* RepliesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059B24C52DE5BB2C007ACFFB /* RepliesManager.swift */; };
 		059B24C82DE5BB36007ACFFB /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059B24C72DE5BB31007ACFFB /* PermissionsManager.swift */; };
@@ -470,6 +471,7 @@
 		059B24BD2DE5BB16007ACFFB /* MessageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageLoader.swift; sourceTree = "<group>"; };
 		059B24BF2DE5BB1D007ACFFB /* MessageGroupingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageGroupingManager.swift; sourceTree = "<group>"; };
 		059B24C12DE5BB22007ACFFB /* ScrollPositionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollPositionManager.swift; sourceTree = "<group>"; };
+		AE5E168A3BFE4B0EBD80CD00 /* CellHeightCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellHeightCache.swift; sourceTree = "<group>"; };
 		059B24C32DE5BB28007ACFFB /* TypingIndicatorManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingIndicatorManager.swift; sourceTree = "<group>"; };
 		059B24C52DE5BB2C007ACFFB /* RepliesManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepliesManager.swift; sourceTree = "<group>"; };
 		059B24C72DE5BB31007ACFFB /* PermissionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsManager.swift; sourceTree = "<group>"; };
@@ -929,6 +931,7 @@
 				059B24C52DE5BB2C007ACFFB /* RepliesManager.swift */,
 				059B24C32DE5BB28007ACFFB /* TypingIndicatorManager.swift */,
 				059B24C12DE5BB22007ACFFB /* ScrollPositionManager.swift */,
+				AE5E168A3BFE4B0EBD80CD00 /* CellHeightCache.swift */,
 				059B24BF2DE5BB1D007ACFFB /* MessageGroupingManager.swift */,
 				059B24BD2DE5BB16007ACFFB /* MessageLoader.swift */,
 			);
@@ -2011,6 +2014,7 @@
 				911131412D8807F500667031 /* DeleteMessageView.swift in Sources */,
 				050F35072D5E3A2900609FEE /* ServerEmojiItemView.swift in Sources */,
 				059B24C22DE5BB23007ACFFB /* ScrollPositionManager.swift in Sources */,
+				7750B85D4AE646ED88E708A6 /* CellHeightCache.swift in Sources */,
 				17F9D7632C9208B500D0BB6F /* MessageReactionsSheet.swift in Sources */,
 				178BB1102B02D89A001143A4 /* HCaptchaView.swift in Sources */,
 				059381CA2D29165200A49BD5 /* ServerChannelsView.swift in Sources */,
