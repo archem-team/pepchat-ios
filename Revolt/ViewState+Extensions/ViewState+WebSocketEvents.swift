@@ -581,9 +581,10 @@ extension ViewState {
             }
             
         case .channel_create(let channel):
+          batchUpdate {
             // Store the channel in our event channels for lazy loading
             allEventChannels[channel.id] = channel
-            
+
             // Handle different channel types
             switch channel {
             case .dm_channel(_):
@@ -591,34 +592,29 @@ extension ViewState {
                 self.channels[channel.id] = channel
                 self.channelMessages[channel.id] = []
                 self.dms.insert(channel, at: 0)
-                // print("📥 VIEWSTATE: Added new DM channel \(channel.id) immediately")
-                
+
             case .group_dm_channel(_):
                 // Group DMs are always loaded immediately
                 self.channels[channel.id] = channel
                 self.channelMessages[channel.id] = []
                 self.dms.insert(channel, at: 0)
-                // print("📥 VIEWSTATE: Added new Group DM channel \(channel.id) immediately")
-                
+
             case .text_channel(let textChannel):
                 // Server channels: only load if server is currently active
                 if case .server(let currentServerId) = currentSelection,
                    currentServerId == textChannel.server {
-                    // Load immediately if this server is active
                     self.channels[channel.id] = channel
                     self.channelMessages[channel.id] = []
-                    // print("📥 VIEWSTATE: Added new text channel \(channel.id) immediately (server active)")
                 } else {
                     // Just store for lazy loading later
-                    // print("🔄 LAZY_CHANNEL: Stored new text channel \(channel.id) for lazy loading")
                 }
-                
+
                 // Update server's channel list (duplicate guard §0.37)
                 if let serverId = channel.server, var server = self.servers[serverId], !server.channels.contains(channel.id) {
                     server.channels.append(channel.id)
                     self.servers[serverId] = server
                 }
-                
+
             case .voice_channel(let voiceChannel):
                 // Voice channels: only load if server is currently active
                 if case .server(let currentServerId) = currentSelection,
@@ -629,11 +625,12 @@ extension ViewState {
                     server.channels.append(channel.id)
                     self.servers[serverId] = server
                 }
-                
+
             default:
                 break
             }
-            
+          }
+
             if channel.server != nil {
                 self.saveChannelCacheAsync()
                 self.saveServersCacheAsync()
@@ -641,119 +638,45 @@ extension ViewState {
             updateAppBadgeCount()
             
         case .channel_update(let e):
-            
+          batchUpdate {
             if let index = self.dms.firstIndex(where: { $0.id == e.id }),
                case .group_dm_channel(var groupDMChannel) = self.dms[index] {
-                
-                
-                if let name = e.data?.name {
-                    groupDMChannel.name = name
-                }
-                
-                if let icon = e.data?.icon {
-                    groupDMChannel.icon = icon
-                }
-                
-                if let description = e.data?.description {
-                    groupDMChannel.description = description
-                }
-                
-                if let nsfw = e.data?.nsfw {
-                    groupDMChannel.nsfw = nsfw
-                }
-                
-                if let permission = e.data?.permissions {
-                    groupDMChannel.permissions = permission
-                }
-                
-                if let owner = e.data?.owner {
-                    groupDMChannel.owner = owner
-                }
-                
-                if e.clear?.contains(.icon) == true {
-                    groupDMChannel.icon = nil
-                }
-                
-                if e.clear?.contains(.description) == true {
-                    groupDMChannel.description = nil
-                }
-                
-                
-                
+
+                if let name = e.data?.name { groupDMChannel.name = name }
+                if let icon = e.data?.icon { groupDMChannel.icon = icon }
+                if let description = e.data?.description { groupDMChannel.description = description }
+                if let nsfw = e.data?.nsfw { groupDMChannel.nsfw = nsfw }
+                if let permission = e.data?.permissions { groupDMChannel.permissions = permission }
+                if let owner = e.data?.owner { groupDMChannel.owner = owner }
+                if e.clear?.contains(.icon) == true { groupDMChannel.icon = nil }
+                if e.clear?.contains(.description) == true { groupDMChannel.description = nil }
+
                 self.dms[index] = .group_dm_channel(groupDMChannel)
-                
+
             } else if let index = self.dms.firstIndex(where: { $0.id == e.id }),
                       case .dm_channel(let dmChannel) = self.dms[index] {
-                
                 //TODO
-                
                 self.dms[index] = .dm_channel(dmChannel)
-                
             }
-            
+
             if let channel = self.channels[e.id] {
-                
-                
                 if case .group_dm_channel(var t) = channel {
-                    if let name = e.data?.name {
-                        t.name = name
-                    }
-                    
-                    if let icon = e.data?.icon {
-                        t.icon = icon
-                    }
-                    
-                    
-                    if let description = e.data?.description {
-                        t.description = description
-                    }
-                    
-                    if let nsfw = e.data?.nsfw {
-                        t.nsfw = nsfw
-                    }
-                    
-                    if let permission = e.data?.permissions {
-                        t.permissions = permission
-                    }
-                    
-                    if let owner = e.data?.owner {
-                        t.owner = owner
-                    }
-                    
-                    
-                    if e.clear?.contains(.icon) == true {
-                        t.icon = nil
-                    }
-                    
-                    if e.clear?.contains(.description) == true {
-                        t.description = nil
-                    }
-                    
-                    
+                    if let name = e.data?.name { t.name = name }
+                    if let icon = e.data?.icon { t.icon = icon }
+                    if let description = e.data?.description { t.description = description }
+                    if let nsfw = e.data?.nsfw { t.nsfw = nsfw }
+                    if let permission = e.data?.permissions { t.permissions = permission }
+                    if let owner = e.data?.owner { t.owner = owner }
+                    if e.clear?.contains(.icon) == true { t.icon = nil }
+                    if e.clear?.contains(.description) == true { t.description = nil }
                     self.channels[e.id] = .group_dm_channel(t)
-                    
-                    
+
                 } else if case .text_channel(var t) = channel {
-                    if let name = e.data?.name {
-                        t.name = name
-                    }
-                    
-                    if let icon = e.data?.icon {
-                        t.icon = icon
-                    }
-                    
-                    if let description = e.data?.description {
-                        t.description = description
-                    }
-                    
-                    if let nsfw = e.data?.nsfw {
-                        t.nsfw = nsfw
-                    }
-                    
-                    if let default_permissions = e.data?.default_permissions {
-                        t.default_permissions = default_permissions
-                    }
-                    
+                    if let name = e.data?.name { t.name = name }
+                    if let icon = e.data?.icon { t.icon = icon }
+                    if let description = e.data?.description { t.description = description }
+                    if let nsfw = e.data?.nsfw { t.nsfw = nsfw }
+                    if let default_permissions = e.data?.default_permissions { t.default_permissions = default_permissions }
                     if let newRolePermissions = e.data?.role_permissions {
                         if t.role_permissions == nil {
                             t.role_permissions = newRolePermissions
@@ -763,17 +686,10 @@ extension ViewState {
                             }
                         }
                     }
-                    
-                    if e.clear?.contains(.icon) == true {
-                        t.icon = nil
-                    }
-                    
-                    if e.clear?.contains(.description) == true {
-                        t.description = nil
-                    }
-                    
+                    if e.clear?.contains(.icon) == true { t.icon = nil }
+                    if e.clear?.contains(.description) == true { t.description = nil }
                     self.channels[e.id] = .text_channel(t)
-                    
+
                 } else if case .voice_channel(var v) = channel {
                     if let name = e.data?.name { v.name = name }
                     if let icon = e.data?.icon { v.icon = icon }
@@ -782,6 +698,7 @@ extension ViewState {
                     self.channels[e.id] = .voice_channel(v)
                 }
             }
+          }
             if let ch = self.channels[e.id], ch.server != nil {
                 self.allEventChannels[e.id] = ch
             }
@@ -797,28 +714,30 @@ extension ViewState {
             if e.user == currentUser?.id {
                 deleteChannel(channelId: e.id)
             } else {
-                
-                if case .group_dm_channel(var channel) = self.channels[e.id] {
-                    channel.recipients.removeAll { $0 == e.user }
-                    self.channels[e.id] = .group_dm_channel(channel)
-                    if let index = dms.firstIndex(where: { $0.id == e.id }) {
-                        dms[index] = .group_dm_channel(channel)
+                batchUpdate {
+                    if case .group_dm_channel(var channel) = self.channels[e.id] {
+                        channel.recipients.removeAll { $0 == e.user }
+                        self.channels[e.id] = .group_dm_channel(channel)
+                        if let index = self.dms.firstIndex(where: { $0.id == e.id }) {
+                            self.dms[index] = .group_dm_channel(channel)
+                        }
                     }
-                } else {
-                    //Todo
                 }
-                
             }
             
         case .channel_group_join(let e):
+          batchUpdate {
             if case .group_dm_channel(var channel) = self.channels[e.id] {
                 channel.recipients.append(e.user)
                 self.channels[e.id] = .group_dm_channel(channel)
-                if let index = dms.firstIndex(where: { $0.id == e.id }) {
-                    dms[index] = .group_dm_channel(channel)
+                if let index = self.dms.firstIndex(where: { $0.id == e.id }) {
+                    self.dms[index] = .group_dm_channel(channel)
                 }
+            }
+          }
 
-                // Fetch user in background — don't block batch event processing
+            // Fetch user in background — don't block event processing
+            if case .group_dm_channel(_) = self.channels[e.id] {
                 Task { [weak self] in
                     guard let self else { return }
                     let response = await self.http.fetchUser(user: e.user)
@@ -832,11 +751,8 @@ extension ViewState {
                             print(error)
                     }
                 }
-
-            } else {
-                //Todo other types channel
             }
-            
+
             // MEMORY MANAGEMENT: Cleanup after new user
             checkAndCleanupIfNeeded()
             

@@ -81,15 +81,19 @@ class MessageTableViewDataSource: NSObject, UITableViewDataSource {
                 cell.onMessageAction = { [weak viewController] action, message in
                     viewController?.handleMessageAction(action, message: message)
                 }
-                
+
                 cell.onImageTapped = { [weak viewController] image in
                     viewController?.showFullScreenImage(image)
                 }
-                
+
+                cell.onAsyncContentLoaded = { [weak viewController] messageId in
+                    viewController?.invalidateHeightForMessage(messageId)
+                }
+
                 if let viewController = viewController {
                     cell.textViewContent.delegate = viewController
                 }
-                
+
                 return cell
             }
         } else {
@@ -193,9 +197,13 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                 cell.onMessageAction = { [weak viewControllerRef] action, message in
                     viewControllerRef?.handleMessageAction(action, message: message)
                 }
-                
+
                 cell.onImageTapped = { [weak viewControllerRef] image in
                     viewControllerRef?.showFullScreenImage(image)
+                }
+
+                cell.onAsyncContentLoaded = { [weak viewControllerRef] messageId in
+                    viewControllerRef?.invalidateHeightForMessage(messageId)
                 }
                 
                 // Present user sheet on avatar tap

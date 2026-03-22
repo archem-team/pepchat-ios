@@ -94,10 +94,11 @@ public class ViewState: ObservableObject {
         }
     }
     var users: [String: Types.User] {
+        willSet {
+            if _batchDepth == 0 { objectWillChange.send() }
+        }
         didSet {
             if _batchDepth == 0 {
-                objectWillChange.send()
-                // Debounced save only outside batch (batch does one save at end)
                 let usersSnapshot = self.users
                 debouncedSave(key: "users") {
                     try? JSONEncoder().encode(usersSnapshot)
@@ -116,33 +117,35 @@ public class ViewState: ObservableObject {
     }
     
     var servers: OrderedDictionary<String, Server> {
-        didSet {
+        willSet {
             if _batchDepth == 0 { objectWillChange.send() }
         }
     }
     /// Persisted cache of server ID -> membership for Discover screen. Loaded on launch for instant UI; updated when user joins/leaves (local or via WebSocket).
     @Published var discoverMembershipCache: [String: Bool] = [:]
     var channels: [String: Channel] {
-        didSet {
+        willSet {
             if _batchDepth == 0 { objectWillChange.send() }
         }
     }
     var messages: [String: Message] = [:] {
-        didSet {
+        willSet {
             if _batchDepth == 0 { objectWillChange.send() }
+        }
+        didSet {
             // Loading state check: if messages arrived and we were loading, stop loading.
             // This runs even inside batches since it's lightweight and UI-relevant.
             if isLoadingChannelMessages && !messages.isEmpty {
                 setChannelLoadingState(isLoading: false)
             }
-            // NOTE: enforceMemoryLimits() removed — it was disabled (returns immediately)
         }
     }
     var channelMessages: [String: [String]] {
+        willSet {
+            if _batchDepth == 0 { objectWillChange.send() }
+        }
         didSet {
             if _batchDepth == 0 {
-                objectWillChange.send()
-                // Debounced save only outside batch (batch does one save at end)
                 let channelMessagesSnapshot = self.channelMessages
                 debouncedSave(key: "channelMessages") {
                     try? JSONEncoder().encode(channelMessagesSnapshot)
@@ -161,19 +164,19 @@ public class ViewState: ObservableObject {
     /// Channel ID -> set of message IDs that have been deleted (soft delete); used by WebSocket and cache so deleted IDs are not shown.
     var deletedMessageIds: [String: Set<String>] = [:]
     var members: [String: [String: Member]] {
-        didSet {
+        willSet {
             if _batchDepth == 0 { objectWillChange.send() }
         }
     }
     var dms: [Channel] {
-        didSet {
+        willSet {
             if _batchDepth == 0 { objectWillChange.send() }
         }
     }
     
     // LAZY LOADING: DM Management
     var allDmChannelIds: [String] = [] { // All DM channel IDs in order
-        didSet { if _batchDepth == 0 { objectWillChange.send() } }
+        willSet { if _batchDepth == 0 { objectWillChange.send() } }
     }
     @Published var loadedDmBatches: Set<Int> = [] // Track which batches are loaded
     let dmBatchSize = 15 // Load 15 DMs per batch
@@ -206,7 +209,7 @@ public class ViewState: ObservableObject {
     
     @Published var state: ConnectionState = .connecting
     var queuedMessages: [String: [QueuedMessage]] = [:] {
-        didSet { if _batchDepth == 0 { objectWillChange.send() } }
+        willSet { if _batchDepth == 0 { objectWillChange.send() } }
     }
     /// Per-channel draft text (composer only). Session-bound; loaded in processReadyData, cleared in signOut/destroyCache.
     var channelDrafts: [String: String] = [:]
@@ -261,9 +264,11 @@ public class ViewState: ObservableObject {
     private var _badgeFlushTask: Task<Void, Never>?
 
     var unreads: [String: Unread] = [:] {
+        willSet {
+            if _batchDepth == 0 { objectWillChange.send() }
+        }
         didSet {
             if _batchDepth == 0 {
-                objectWillChange.send()
                 _scheduleBadgeFlush()
             }
         }

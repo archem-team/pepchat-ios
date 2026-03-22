@@ -106,6 +106,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     // Callback for message actions
     var onMessageAction: ((MessageAction, Message) -> Void)?
     var onImageTapped: ((UIImage) -> Void)?
+    /// Called when async content (images, link previews) finishes loading and may have changed cell height.
+    var onAsyncContentLoaded: ((String) -> Void)?
     var onAvatarTap: (() -> Void)?
     var onUsernameTap: (() -> Void)?
     
@@ -237,9 +239,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         bridgeBadgeLabel.isHidden = true
         
         // PERFORMANCE: Reset properties to defaults (avoid retain cycles)
-        // NOTE: Don't reset currentMessage, currentAuthor, currentMember, viewState here 
+        // NOTE: Don't reset currentMessage, currentAuthor, currentMember, viewState here
         // as they might be needed for delayed UI interactions like reaction taps
         // They will be properly set in configure() method
+        onAsyncContentLoaded = nil
         isPendingMessage = false
         
         // PERFORMANCE: Reset swipe state immediately

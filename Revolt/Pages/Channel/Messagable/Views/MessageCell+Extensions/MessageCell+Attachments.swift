@@ -225,10 +225,15 @@ extension MessageCell {
                                 if let currentAttachments = self?.currentMessage?.attachments,
                                    currentAttachments.contains(where: { $0.id == attachmentId }) {
                                     // Success: keep the loaded image
-                                    
+
                                     // Force layout update to ensure proper positioning
                                     self?.contentView.setNeedsLayout()
                                     self?.contentView.layoutIfNeeded()
+
+                                    // Invalidate cached height — async image may have changed cell height
+                                    if let messageId = self?.currentMessage?.id {
+                                        self?.onAsyncContentLoaded?(messageId)
+                                    }
                                 } else {
                                     // Cell has been reused for a different message
                                     imageView.image = nil

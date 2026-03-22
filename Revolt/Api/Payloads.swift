@@ -38,19 +38,18 @@ struct FetchHistory: Decodable {
     }
 
     init(from decoder: Decoder) throws {
-        // When include_users=false the API returns a plain [Message] array
-        // instead of the {"messages":…, "users":…} dictionary.
-        if let singleValue = try? decoder.singleValueContainer(),
-           let msgs = try? singleValue.decode([Message].self) {
-            messages = msgs
-            users = []
-            members = nil
+        // Common path: include_users=true returns {"messages":…, "users":…} dictionary.
+        if let container = try? decoder.container(keyedBy: CodingKeys.self) {
+            messages = try container.decode([Message].self, forKey: .messages)
+            users = try container.decodeIfPresent([User].self, forKey: .users) ?? []
+            members = try container.decodeIfPresent([Member].self, forKey: .members)
             return
         }
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        messages = try container.decode([Message].self, forKey: .messages)
-        users = try container.decodeIfPresent([User].self, forKey: .users) ?? []
-        members = try container.decodeIfPresent([Member].self, forKey: .members)
+        // Rare path: include_users=false returns a plain [Message] array.
+        let singleValue = try decoder.singleValueContainer()
+        messages = try singleValue.decode([Message].self)
+        users = []
+        members = nil
     }
 }
 

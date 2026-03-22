@@ -71,6 +71,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
     // PERF Issue #9: Cache measured cell heights to avoid repeated Auto Layout resolution
     let cellHeightCache = CellHeightCache()
+    /// Memoizes shouldGroupWithPreviousMessage() results to avoid repeated dictionary
+    /// lookups and date arithmetic on the hot heightForRowAt/estimatedHeightForRowAt path.
+    private var continuationCache: [String: Bool] = [:]
     private var lastKnownTableWidth: CGFloat = 0
 
     // CRITICAL: Add flag to protect against scrolling during data source updates
@@ -348,6 +351,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         // PERF Issue #9: Notification only carries channelId, so flush the whole cache.
         // Deletes are infrequent so this is fine.
         cellHeightCache.invalidateAll()
+        continuationCache.removeAll()
         refreshMessagesAfterLocalDelete()
     }
 
@@ -688,6 +692,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         let currentWidth = tableView?.bounds.width ?? 0
         if lastKnownTableWidth > 0 && currentWidth != lastKnownTableWidth {
             cellHeightCache.invalidateAll()
+            continuationCache.removeAll()
         }
         if currentWidth > 0 { lastKnownTableWidth = currentWidth }
 
@@ -1048,6 +1053,21 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                 self.tableView.reloadRows(at: [indexPath], with: .none)
             }
         }
+    }
+
+    /// Invalidate cached height for a message whose async content (image, link preview)
+    /// has finished loading, then ask UIKit to re-query heights without a full reload.
+    func invalidateHeightForMessage(_ messageId: String) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.invalidateHeightForMessage(messageId)
+            }
+            return
+        }
+        cellHeightCache.invalidate(messageId: messageId)
+        continuationCache.removeValue(forKey: messageId)
+        tableView.beginUpdates()
+        tableView.endUpdates()
     }
 
     // SUPER FAST: Simplified message change handler
@@ -1558,6 +1578,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
         let wasNearBottom = isUserNearBottom()
         localMessages = channelMessages
+        continuationCache.removeAll()
 
         // CRITICAL: Mark data source as updating to protect scroll events
         isDataSourceUpdating = true
@@ -2464,8 +2485,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         // Update localMessages to match current viewModel.messages or channelMessages
         if !channelMessages.isEmpty && localMessages != channelMessages {
             localMessages = Array(channelMessages)
+            continuationCache.removeAll()
         } else if !viewModel.messages.isEmpty && localMessages != viewModel.messages {
             localMessages = viewModel.messages
+            continuationCache.removeAll()
         }
 
         // Also ensure viewModel.messages is in sync - but ONLY if they're actually different
@@ -2666,18 +2689,21 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             return false
         }
 
-        // CRITICAL FIX: Ensure we have enough messages in the array
         guard localMessages.count > 1 && indexPath.row > 0 else {
             return false
         }
 
-        // Additional safety check for array bounds
         guard indexPath.row - 1 < localMessages.count else {
             return false
         }
 
-        // Use localMessages instead of viewModel.messages
         let currentMessageId = localMessages[indexPath.row]
+
+        // Return memoized result when available
+        if let cached = continuationCache[currentMessageId] {
+            return cached
+        }
+
         let previousMessageId = localMessages[indexPath.row - 1]
 
         guard let currentMessage = viewModel.viewState.messages[currentMessageId],
@@ -2686,22 +2712,21 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             return false
         }
 
-        // CRITICAL FIX: Messages with attachments should NEVER be grouped to ensure username is always visible
+        // Messages with attachments should NEVER be grouped to ensure username is always visible
         if let attachments = currentMessage.attachments, !attachments.isEmpty {
-            // print("🖼️ Message with attachments at row \(indexPath.row) - NEVER group to ensure username visibility")
+            continuationCache[currentMessageId] = false
             return false
         }
 
         let sameAuthor = currentMessage.author == previousMessage.author
-
         let currentDate = createdAt(id: currentMessage.id)
         let previousDate = createdAt(id: previousMessage.id)
         let timeInterval = currentDate.timeIntervalSince(previousDate)
         let closeEnough = timeInterval < 5 * 60
 
-        let shouldGroup = sameAuthor && closeEnough
-
-        return shouldGroup
+        let result = sameAuthor && closeEnough
+        continuationCache[currentMessageId] = result
+        return result
     }
 
     // Add property to track when we last received messages

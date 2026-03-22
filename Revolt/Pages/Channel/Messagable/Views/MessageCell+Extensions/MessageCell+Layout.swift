@@ -39,10 +39,9 @@ extension MessageCell {
             }
         }
 
-        // Force layout so embed/attachment constraints resolve before first draw.
-        // Without this, link previews can overlap the content label (docs/Fix/LinkPreviewImage.md).
+        // Layout deferred to willDisplay (MessageableChannelViewController+TableView.swift)
+        // to avoid a redundant synchronous layout pass during cellForRowAt.
         setNeedsLayout()
-        layoutIfNeeded()
     }
     
     internal func updatePendingAppearance() {
