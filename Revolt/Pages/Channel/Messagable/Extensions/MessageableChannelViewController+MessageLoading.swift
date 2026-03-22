@@ -81,9 +81,9 @@ extension MessageableChannelViewController {
 
     internal func loadInitialMessages() async {
         let channelId = viewModel.channel.id
-
         // CRITICAL FIX: Reset empty response time when loading initial messages
         lastEmptyResponseTime = nil
+        failedReplyIds.removeAll()
 
         // CRITICAL FIX: Don't reload if user is in target message position
         if isInTargetMessagePosition && targetMessageId == nil {
@@ -812,7 +812,6 @@ extension MessageableChannelViewController {
             }
         } else {
             // No messages in memory, fetch from server
-            // print("🔄 No existing messages, fetching from server")
 
             // Show skeleton only when we have no messages on screen (when force-fetching we already show cache + footer spinner)
             if existingCount == 0 {

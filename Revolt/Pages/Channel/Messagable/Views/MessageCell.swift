@@ -216,8 +216,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         reactionsContainerView.isHidden = true
         clearReactionsContainerConstraints()
         
-        // PERFORMANCE: Clear embeds container
-        if let embedContainer = contentView.viewWithTag(2000) {
+        // PERFORMANCE: Clear embeds container and cancel image downloads in LinkPreviewViews
+        if let embedContainer = contentView.viewWithTag(2000) as? UIStackView {
+            for case let linkPreview as LinkPreviewView in embedContainer.arrangedSubviews {
+                linkPreview.cancelDownloads()
+            }
             embedContainer.removeFromSuperview()
         }
         

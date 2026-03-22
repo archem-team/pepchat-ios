@@ -878,6 +878,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         // Clear local arrays immediately
         localMessages.removeAll()
         recentLogMessages.removeAll()
+        failedReplyIds.removeAll()
 
         // Use Task for actor-isolated properties
         Task { @MainActor [weak viewModel] in
@@ -2038,6 +2039,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
     /// Track ongoing reply fetches to prevent duplicates
     private var ongoingReplyFetches = Set<String>()
+    /// Reply IDs that returned 404 — skip re-fetching them to avoid endless retry loops.
+    internal var failedReplyIds = Set<String>()
 
     /// Fetch reply message content for messages that have replies
     internal func fetchReplyMessagesContent(for messages: [Types.Message]) async {
@@ -2074,8 +2077,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                     // "🔗 DEBUG: Reply \(replyId) - In cache: \(isInCache), Being fetched: \(isBeingFetched)"
                 // )
 
-                // Only fetch if not already in cache and not being fetched
-                if !isInCache && !isBeingFetched {
+                // Only fetch if not already in cache, not being fetched, and not previously failed (404)
+                let hasFailed = failedReplyIds.contains(replyId)
+                if !isInCache && !isBeingFetched && !hasFailed {
                     replyIdsToFetch.insert(replyId)
                     replyChannelMap[replyId] = message.channel
                     ongoingReplyFetches.insert(replyId)  // Mark as being fetched

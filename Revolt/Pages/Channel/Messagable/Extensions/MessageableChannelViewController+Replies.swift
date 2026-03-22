@@ -58,12 +58,14 @@ extension MessageableChannelViewController {
         } catch {
             print("❌ FETCH_REPLY: Failed to fetch message: \(error)")
 
-            // Check if this is a 404 error (message deleted)
+            // Check if this is a 404 error (message deleted) — cache the failure to avoid retries
             if let revoltError = error as? RevoltError,
                 case .HTTPError(_, let statusCode) = revoltError,
                 statusCode == 404
             {
-                // print("🗑️ FETCH_REPLY: Message \(messageId) was deleted (404)")
+                await MainActor.run {
+                    failedReplyIds.insert(messageId)
+                }
             }
 
             return nil
@@ -131,9 +133,9 @@ extension MessageableChannelViewController {
             totalMessagesWithReplies += 1
             totalReplyIds += replies.count
 
-            // Check if any reply content is missing
+            // Check if any reply content is missing (skip already-failed 404 replies)
             let unloadedReplies = replies.filter { replyId in
-                viewModel.viewState.messages[replyId] == nil
+                viewModel.viewState.messages[replyId] == nil && !failedReplyIds.contains(replyId)
             }
 
             if !unloadedReplies.isEmpty {
