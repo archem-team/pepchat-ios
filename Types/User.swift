@@ -155,6 +155,30 @@ public struct User: Identifiable, Codable, Equatable, Hashable {
         return Badges.fromCode(code: badges)
     }
     
+    public func getAllBadgesSortedForDisplay() -> [Badges] {
+        let priority: [Badges] = [
+            .founder,
+            .developer,
+            .moderation,
+            .responsible_disclosure,
+            .translator,
+            .supporter,
+            .active_supporter,
+            .early_adopter,
+            .paw,
+            .amog,
+            .amorbus
+        ]
+        
+        let set = Set(getAllBadges())
+        return priority.filter { set.contains($0) }
+    }
+    
+    public func hasVerifiedBadge() -> Bool {
+        guard let badges else { return false }
+        return (badges & Badges.responsible_disclosure.rawValue) != 0
+    }
+    
     /// Get all badges for this user from the bitfield
     public func getAllBadges() -> [Badges] {
         return Badges.allBadgesFromCode(code: badges)

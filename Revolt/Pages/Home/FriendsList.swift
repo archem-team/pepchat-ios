@@ -323,6 +323,7 @@ struct FriendsList: View {
                                                     PeptideText(text: user.display_name ?? user.username,
                                                                 font: .peptideCallout,
                                                                 textColor: .textDefaultGray01)
+                                                    UserBadgesView(badges: user.getAllBadgesSortedForDisplay(), badgeSize: 12, spacing: 2)
                                                     
                                                     
                                                     let isOnline = user.online == true

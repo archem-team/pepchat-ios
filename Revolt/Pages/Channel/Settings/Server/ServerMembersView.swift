@@ -144,6 +144,8 @@ struct ServerMembersView: View {
                                                     textColor: .textDefaultGray01
                                                 )
                                                 
+                                                UserBadgesView(badges: user.getAllBadgesSortedForDisplay(), badgeSize: 12, spacing: 2)
+                                                
                                                 let isOnline = user.online == true
                                                 PeptideText(
                                                     text: isOnline ? (user.status?.presence?.rawValue ?? Presence.Online.rawValue) : "Offline",

@@ -75,15 +75,24 @@ struct MessageView: View {
             ?? viewModel.author.display_name
             ?? viewModel.author.username
         
-        return Text(verbatim: name)
-            .font(.peptideTitle4Font)
-            .foregroundStyle(.textDefaultGray01)
-            .lineLimit(1)
-            .onTapGesture {
-                if !isStatic || viewModel.message.webhook != nil {
-                    viewState.openUserSheet(withId: viewModel.author.id, server: viewModel.server?.id)
-                }
+        return HStack(spacing: 4) {
+            Text(verbatim: name)
+                .font(.peptideTitle4Font)
+                .foregroundStyle(.textDefaultGray01)
+                .lineLimit(1)
+            
+            if viewModel.author.hasVerifiedBadge() {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.yellow)
             }
+        }
+        .onTapGesture {
+            if !isStatic || viewModel.message.webhook != nil {
+                viewState.openUserSheet(withId: viewModel.author.id, server: viewModel.server?.id)
+            }
+        }
+            
             /*.foregroundStyle(viewModel.member?.displayColour(theme: viewState.theme, server: viewModel.server!) ?? AnyShapeStyle(viewState.theme.foreground.color))*/
     }
     
