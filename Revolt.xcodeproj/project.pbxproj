@@ -328,6 +328,8 @@
 		DAF84FFD2A0EFE1B00B01682 /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = DAF84FFC2A0EFE1B00B01682 /* Starscream */; };
 		F0A1B2C3D4E5F60718293A4C /* MessageCacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F60718293A4B /* MessageCacheManager.swift */; };
 		F0A1B2C4D4E5F60718293A4C /* MessageCacheWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C4D4E5F60718293A4B /* MessageCacheWriter.swift */; };
+		F4B31A8E2F9A11CF00112233 /* AccessibilityID.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B31A8D2F9A11CF00112233 /* AccessibilityID.swift */; };
+		F4B31A902F9A138000112233 /* CellHeightCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B31A8F2F9A138000112233 /* CellHeightCache.swift */; };
 		F545878D2E1504BD00797AC1 /* AttachmentPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F545878C2E1504BB00797AC1 /* AttachmentPreviewView.swift */; };
 		F54587942E152E6300797AC1 /* OggDecoder in Frameworks */ = {isa = PBXBuildFile; productRef = F54587932E152E6300797AC1 /* OggDecoder */; };
 		F54587972E15304600797AC1 /* OggDecoder in Frameworks */ = {isa = PBXBuildFile; productRef = F54587962E15304600797AC1 /* OggDecoder */; };
@@ -701,6 +703,8 @@
 		E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformConfigService.swift; sourceTree = "<group>"; };
 		F0A1B2C3D4E5F60718293A4B /* MessageCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCacheManager.swift; sourceTree = "<group>"; };
 		F0A1B2C4D4E5F60718293A4B /* MessageCacheWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCacheWriter.swift; sourceTree = "<group>"; };
+		F4B31A8D2F9A11CF00112233 /* AccessibilityID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityID.swift; sourceTree = "<group>"; };
+		F4B31A8F2F9A138000112233 /* CellHeightCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellHeightCache.swift; sourceTree = "<group>"; };
 		F545878C2E1504BB00797AC1 /* AttachmentPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentPreviewView.swift; sourceTree = "<group>"; };
 		F57D4C052E27D735004B7EF6 /* ChannelLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelLoadingView.swift; sourceTree = "<group>"; };
 		F57D4C092E2E49BA004B7EF6 /* EmojiParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiParser.swift; sourceTree = "<group>"; };
@@ -866,6 +870,7 @@
 			isa = PBXGroup;
 			children = (
 				055F690F2CE00D89007F475A /* BaseViewModel.swift */,
+				F4B31A8D2F9A11CF00112233 /* AccessibilityID.swift */,
 				055F690A2CE00116007F475A /* Components */,
 			);
 			path = Core;
@@ -926,6 +931,7 @@
 				059B24C52DE5BB2C007ACFFB /* RepliesManager.swift */,
 				059B24C32DE5BB28007ACFFB /* TypingIndicatorManager.swift */,
 				059B24C12DE5BB22007ACFFB /* ScrollPositionManager.swift */,
+				F4B31A8F2F9A138000112233 /* CellHeightCache.swift */,
 				059B24BF2DE5BB1D007ACFFB /* MessageGroupingManager.swift */,
 				059B24BD2DE5BB16007ACFFB /* MessageLoader.swift */,
 			);
@@ -1941,6 +1947,7 @@
 				17F502542B9BFB1000A3022D /* AddFriend.swift in Sources */,
 				17C9A3502B0580D10043A387 /* Welcome.swift in Sources */,
 				059B24C82DE5BB36007ACFFB /* PermissionsManager.swift in Sources */,
+				F4B31A902F9A138000112233 /* CellHeightCache.swift in Sources */,
 				05F285502CF735BB0071746A /* DiscoverItemView.swift in Sources */,
 				05B697102D29728A001DE8CB /* ChannelCategoryCreateView.swift in Sources */,
 				055C33CD2CD279DE00A6DCAE /* ComponentState.swift in Sources */,
@@ -2024,6 +2031,7 @@
 				170C23D92C224BA40057E399 /* View.swift in Sources */,
 				052F64302CF674160035DFFF /* PeptideCheckBox.swift in Sources */,
 				055F69102CE00D92007F475A /* BaseViewModel.swift in Sources */,
+				F4B31A8E2F9A11CF00112233 /* AccessibilityID.swift in Sources */,
 				1750EF6E2B0585B300DD3EB3 /* ResendEmail.swift in Sources */,
 				050E93312D04DA01006B2330 /* MessageOptionSheet.swift in Sources */,
 				05EEF20F2CFCB77E002E5255 /* UIFont.swift in Sources */,
@@ -2539,7 +2547,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				NEW_SETTING = "";
 				NEW_SETTING1 = "";
 				ON_DEMAND_RESOURCES_INITIAL_INSTALL_TAGS = Resources;
@@ -2603,7 +2611,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				NEW_SETTING = "";
 				NEW_SETTING1 = "";
 				ON_DEMAND_RESOURCES_INITIAL_INSTALL_TAGS = Resources;

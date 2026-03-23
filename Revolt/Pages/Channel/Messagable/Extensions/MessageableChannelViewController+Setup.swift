@@ -35,7 +35,7 @@ extension MessageableChannelViewController {
         channelIconView.translatesAutoresizingMaskIntoConstraints = false
         channelIconView.contentMode = .scaleAspectFit
         channelIconView.clipsToBounds = true
-        channelIconView.layer.cornerRadius = 18  // Adjusted for the larger size (36/2)
+        channelIconView.layer.cornerRadius = 12  // Match 18pt icon size
         channelIconView.backgroundColor = UIColor.gray.withAlphaComponent(0.3)
         channelIconView.isUserInteractionEnabled = true
         headerView.addSubview(channelIconView)
@@ -97,7 +97,7 @@ extension MessageableChannelViewController {
                         with: iconUrl,
                         placeholder: UIImage(systemName: "number"),
                         options: [
-                            .processor(DownsamplingImageProcessor(size: CGSize(width: 72, height: 72))),
+                            .processor(DownsamplingImageProcessor(size: CGSize(width: 58, height: 58))),
                             .scaleFactor(UIScreen.main.scale),
                             .transition(.fade(0.2)),
                             .cacheOriginalImage,
@@ -119,7 +119,7 @@ extension MessageableChannelViewController {
                         with: iconUrl,
                         placeholder: UIImage(systemName: "speaker.wave.2.fill"),
                         options: [
-                            .processor(DownsamplingImageProcessor(size: CGSize(width: 72, height: 72))),
+                            .processor(DownsamplingImageProcessor(size: CGSize(width: 58, height: 58))),
                             .scaleFactor(UIScreen.main.scale),
                             .transition(.fade(0.2)),
                             .cacheOriginalImage,
@@ -140,7 +140,7 @@ extension MessageableChannelViewController {
                         with: iconUrl,
                         placeholder: UIImage(systemName: "person.2.circle.fill"),
                         options: [
-                            .processor(DownsamplingImageProcessor(size: CGSize(width: 72, height: 72))),
+                            .processor(DownsamplingImageProcessor(size: CGSize(width: 58, height: 58))),
                             .scaleFactor(UIScreen.main.scale),
                             .transition(.fade(0.2)),
                             .cacheOriginalImage,
@@ -217,8 +217,8 @@ extension MessageableChannelViewController {
 
             // Channel icon - Positioned next to back button
             channelIconView.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
-            channelIconView.widthAnchor.constraint(equalToConstant: 36),  // Increased from 30
-            channelIconView.heightAnchor.constraint(equalToConstant: 36),  // Increased from 30
+            channelIconView.widthAnchor.constraint(equalToConstant: 30),  // Match title text size
+            channelIconView.heightAnchor.constraint(equalToConstant: 30),  // Match title text size
 
             // Search button - Position at the bottom right
             searchButton.trailingAnchor.constraint(
