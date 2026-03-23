@@ -824,7 +824,7 @@ struct MessageableChannelView: View {
                let isReturning = userInfo["isReturning"] as? Bool,
                channelId == viewModel.channel.id && isReturning {
                 
-                print("🔍 SWIFTUI: Received search closing notification, reloading messages")
+                // print("🔍 SWIFTUI: Received search closing notification, reloading messages")
                 
                 // Check if we have messages in ViewState
                 let hasMessages = !(viewModel.viewState.channelMessages[channelId]?.isEmpty ?? true)
@@ -841,7 +841,7 @@ struct MessageableChannelView: View {
                     }
                 } else {
                     // No messages in ViewState, need to reload from API
-                    print("🔍 SWIFTUI: No messages in ViewState, reloading from API")
+                    // print("🔍 SWIFTUI: No messages in ViewState, reloading from API")
                     
                     Task {
                         await loadMoreMessages(before: nil)
@@ -1052,7 +1052,7 @@ struct MessageableChannelView: View {
     func sendAck(for messageId: String) {
         // Check if auto-acknowledgment is temporarily disabled
         if viewState.shouldDisableAutoAck() {
-            print("🚫 SwiftUI: Auto-acknowledgment disabled - skipping sendAck")
+            // print("🚫 SwiftUI: Auto-acknowledgment disabled - skipping sendAck")
             return
         }
         

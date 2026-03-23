@@ -45,17 +45,17 @@ struct MessageableChannelViewControllerRepresentable: UIViewControllerRepresenta
                 if let targetMessage = viewModel.viewState.messages[messageId] {
                     if targetMessage.channel == uiViewController.viewModel.channel.id {
                         // Target message is for this view controller's channel - safe to call
-                        print("🎯 REPRESENTABLE: Target message is for current channel \(uiViewController.viewModel.channel.id), calling refreshWithTargetMessage")
+                        // print("🎯 REPRESENTABLE: Target message is for current channel \(uiViewController.viewModel.channel.id), calling refreshWithTargetMessage")
                         Task {
                             await uiViewController.refreshWithTargetMessage(messageId)
                         }
                     } else {
                         // Target message is for different channel - let the NEW view controller handle it
-                        print("🎯 REPRESENTABLE: Target message is for different channel \(targetMessage.channel), skipping (current: \(uiViewController.viewModel.channel.id))")
+                        // print("🎯 REPRESENTABLE: Target message is for different channel \(targetMessage.channel), skipping (current: \(uiViewController.viewModel.channel.id))")
                     }
                 } else {
                     // Target message not loaded yet - assume it's for different channel during navigation
-                    print("🎯 REPRESENTABLE: Target message not loaded yet, assuming cross-channel navigation - skipping")
+                    // print("🎯 REPRESENTABLE: Target message not loaded yet, assuming cross-channel navigation - skipping")
                 }
             } else {
                 // print("🚫 MessageableChannelViewControllerRepresentable: targetMessageId was cleared")

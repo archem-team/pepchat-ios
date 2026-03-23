@@ -36,7 +36,7 @@ extension MessageableChannelViewController {
         // Hide table view while showing skeleton
         tableView.alpha = 0.0
 
-        print("💀 SKELETON: Showing skeleton loading view")
+        // print("💀 SKELETON: Showing skeleton loading view")
     }
 
     internal func hideSkeletonView() {
@@ -57,6 +57,6 @@ extension MessageableChannelViewController {
             self.tableView.alpha = 1.0
         }
 
-        print("💀 SKELETON: Hiding skeleton loading view")
+        // print("💀 SKELETON: Hiding skeleton loading view")
     }
 }

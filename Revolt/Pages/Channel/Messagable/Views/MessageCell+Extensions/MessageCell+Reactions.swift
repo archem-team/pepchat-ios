@@ -16,9 +16,9 @@ extension MessageCell {
     internal func updateReactions(for message: Message, viewState: ViewState) {
         // CRITICAL FIX: Always get the latest message from ViewState instead of using the passed message
         let latestMessage = viewState.messages[message.id] ?? message
-        print("🔥 updateReactions called for message: \(message.id)")
-        print("🔥 Original message reactions: \(message.reactions?.keys.joined(separator: ", ") ?? "none")")
-        print("🔥 Latest message reactions: \(latestMessage.reactions?.keys.joined(separator: ", ") ?? "none")")
+        // print("🔥 updateReactions called for message: \(message.id)")
+        // print("🔥 Original message reactions: \(message.reactions?.keys.joined(separator: ", ") ?? "none")")
+        // print("🔥 Latest message reactions: \(latestMessage.reactions?.keys.joined(separator: ", ") ?? "none")")
         
         // CRITICAL FIX: Ensure complete cleanup to prevent duplicate reactions
         reactionsContainerView.subviews.forEach { subview in
@@ -33,12 +33,12 @@ extension MessageCell {
         
         // Check if latest message has reactions
         guard let reactions = latestMessage.reactions, !reactions.isEmpty else {
-            print("🔥 No reactions found, hiding container")
+            // print("🔥 No reactions found, hiding container")
             reactionsContainerView.isHidden = true
             return
         }
         
-        print("🔥 Found \(reactions.count) reactions, showing container")
+        // print("🔥 Found \(reactions.count) reactions, showing container")
         reactionsContainerView.isHidden = false
         
         // Position spacer below images/content
@@ -260,7 +260,8 @@ extension MessageCell {
                     case .success(_):
                         break
                     case .failure(let error):
-                        print("Error loading custom emoji in reaction: \(error.localizedDescription)")
+                        // print("Error loading custom emoji in reaction: \(error.localizedDescription)")
+                        break
                     }
                 }
             )

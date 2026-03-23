@@ -16,17 +16,20 @@ struct DiscoverScrollView: View {
     
     @State private var discoverItems: [DiscoverItem] = []
     @State private var isLoading : Bool = false
+    @State private var hasLoadedData: Bool = false
     @State private var inviteCache: [String: String] = [:] // Cache for invite code -> server ID mapping
     @State private var membershipCache: [String: Bool] = [:] // Cache for server ID -> membership status
     @State private var checkingInvites: Set<String> = [] // Track ongoing invite checks
-    
-    
+
+
     var body: some View {
         content
             .background(backgroundView)
             .onAppear {
                 // Sync from persisted cache for instant UI before any async work
                 membershipCache = viewState.discoverMembershipCache
+                guard !hasLoadedData else { return }
+                hasLoadedData = true
                 loadData()
             }
     }
@@ -152,6 +155,11 @@ struct DiscoverScrollView: View {
         )
         .padding(.horizontal, .padding16)
         .padding(.bottom, .padding8)
+        .onAppear {
+            Task {
+                await checkAndCacheMembership(for: item)
+            }
+        }
     }
     
     private func handleItemClick(item: DiscoverItem, isMember: Bool) {
@@ -163,7 +171,7 @@ struct DiscoverScrollView: View {
     }
     
     private func navigateToServer(item: DiscoverItem) {
-        print("✅ [DiscoverScrollView] User is already a member of \(item.title), navigating to server")
+        // print("✅ [DiscoverScrollView] User is already a member of \(item.title), navigating to server")
         
         // First try to find server by cached invite code -> server ID mapping
         if let serverId = inviteCache[item.code] {
@@ -175,7 +183,7 @@ struct DiscoverScrollView: View {
                     viewState.path.removeAll()
                 }
                 
-                print("📋 [DiscoverScrollView] Selected server \(server.name) via invite cache")
+                // print("📋 [DiscoverScrollView] Selected server \(server.name) via invite cache")
                 return
             }
         }
@@ -191,16 +199,16 @@ struct DiscoverScrollView: View {
                 viewState.path.removeAll()
             }
             
-            print("📋 [DiscoverScrollView] Selected server \(matchingServer.name) via name matching")
+            // print("📋 [DiscoverScrollView] Selected server \(matchingServer.name) via name matching")
         } else {
             // Couldn't find server, show invite screen
-            print("⚠️ [DiscoverScrollView] Couldn't find matching server, showing invite screen")
+            // print("⚠️ [DiscoverScrollView] Couldn't find matching server, showing invite screen")
             viewState.path.append(NavigationDestination.invite(item.code))
         }
     }
     
     private func navigateToInvite(item: DiscoverItem) {
-        print("🔗 [DiscoverScrollView] User is not a member of \(item.title), showing invite screen")
+        // print("🔗 [DiscoverScrollView] User is not a member of \(item.title), showing invite screen")
         viewState.path.append(NavigationDestination.invite(item.code))
     }
     
@@ -208,7 +216,7 @@ struct DiscoverScrollView: View {
         // Check if we're on peptide.chat domain before loading
         let baseURL = viewState.baseURL ?? viewState.defaultBaseURL
         if !baseURL.contains("peptide.chat") {
-            print("🌐 [DiscoverScrollView] Not on peptide.chat domain, skipping CSV loading")
+            // print("🌐 [DiscoverScrollView] Not on peptide.chat domain, skipping CSV loading")
             self.isLoading = false
             self.discoverItems = [] // Empty list for non-peptide domains
             return
@@ -227,13 +235,13 @@ struct DiscoverScrollView: View {
                                         color: $0.color) }
                     .sorted(by: { $0.sortOrder < $1.sortOrder })
                 DispatchQueue.main.async {
-                    print("📥 Using cached discover: \(items.count) items, updated \(cached.timestamp)")
+                    // print("📥 Using cached discover: \(items.count) items, updated \(cached.timestamp)")
                     self.discoverItems = items
                 }
             }
         }
-        self.isLoading = true
-        print("🌐 [DiscoverScrollView] Loading server list from CSV...")
+        self.isLoading = discoverItems.isEmpty
+        // print("🌐 [DiscoverScrollView] Loading server list from CSV...")
         
         ServerChatDataFetcher.shared.fetchData { result in
                 DispatchQueue.main.async {
@@ -244,7 +252,7 @@ struct DiscoverScrollView: View {
                     switch result {
                     case .success(let fetchedServerChats):
                     
-                    print("✅ [DiscoverScrollView] Successfully fetched \(fetchedServerChats.count) servers from CSV")
+                    // print("✅ [DiscoverScrollView] Successfully fetched \(fetchedServerChats.count) servers from CSV")
                         
                         self.discoverItems = fetchedServerChats
                             //.filter { !$0.disabled }
@@ -262,179 +270,93 @@ struct DiscoverScrollView: View {
                         let cache = ServerChatCache(timestamp: Date(), items: fetchedServerChats)
                         ServerChatDataFetcher.shared.saveCache(cache)
                     
-                    // Log all discovered servers and their invite codes
-                    print("📋 [DiscoverScrollView] Displaying \(self.discoverItems.count) servers:")
-                    for (index, item) in self.discoverItems.enumerated() {
-                        print("  [\(index + 1)] \(item.title)")
-                        print("      📎 Invite code: \(item.code)")
-                        print("      📝 Description: \(item.description)")
-                        print("      🆕 New: \(item.isNew)")
-                        print("      🔒 Disabled: \(item.disabled)")
-                        print("      🎨 Color: \(item.color ?? "none")")
-                    }
-                    
-                    // Check membership for all items asynchronously
-                    Task {
-                        await self.checkMembershipForAllItems()
-                    }
+                    // Membership checks happen lazily per-row via .onAppear
 
                         
                     case .failure(let error):
-                    print("❌ [DiscoverScrollView] Failed to fetch servers: \(error.localizedDescription)")
+                    // print("❌ [DiscoverScrollView] Failed to fetch servers: \(error.localizedDescription)")
                         debugPrint("error: \(error.localizedDescription)")
                     }
                 }
             }
         }
     
-    // MARK: - Enhanced Membership Checking
-    
-    /// Checks membership for all discover items asynchronously
-    private func checkMembershipForAllItems() async {
-        print("🔍 [DiscoverScrollView] Starting membership check for \(discoverItems.count) servers")
-        
-        // Check membership for each item
-        for item in discoverItems {
-            await checkAndCacheMembership(for: item)
-        }
-        
-        // Trigger UI update
-        await MainActor.run {
-            // Force a UI refresh by updating the state
-            self.discoverItems = self.discoverItems
-        }
-        
-        print("✅ [DiscoverScrollView] Completed membership check for all servers")
-    }
-    
-    /// Checks and caches membership for a specific discover item
+    // MARK: - Lazy Membership Checking
+
+    /// Checks and caches membership for a specific discover item (called per-row on appear)
     private func checkAndCacheMembership(for item: DiscoverItem) async {
-        print("🔍 [checkAndCacheMembership] START - Item: \(item.title), Code: \(item.code)")
-        print("   📊 Current checkingInvites: \(checkingInvites)")
-        print("   📊 Current inviteCache: \(inviteCache)")
-        print("   📊 Current membershipCache: \(membershipCache)")
-        
         // Skip if already checking this invite
-        let isAlreadyChecking = checkingInvites.contains(item.code)
-        print("   🔎 Checking if already in progress: \(isAlreadyChecking)")
-        if isAlreadyChecking {
-            print("   ⏭️ [checkAndCacheMembership] SKIP - Already checking invite: \(item.code)")
+        if checkingInvites.contains(item.code) {
+            print("🔍 [Discover] SKIP (in-flight): \(item.title) [\(item.code)]")
             return
         }
-        
+
         // Skip if we already have membership cached by server ID (from CSV item.id); seed inviteCache so UI uses fast path
         if viewState.discoverMembershipCache[item.id] != nil || membershipCache[item.id] != nil {
+            print("🔍 [Discover] CACHE HIT: \(item.title) [\(item.code)]")
             let cached = viewState.discoverMembershipCache[item.id] ?? membershipCache[item.id]!
             await MainActor.run {
                 inviteCache[item.code] = item.id
                 membershipCache[item.id] = cached
             }
-            print("   ⏭️ [checkAndCacheMembership] SKIP - Already cached for serverId (item.id): \(item.id)")
             return
         }
-        
+
         // Skip if we already have cached membership info (from inviteCache + membershipCache)
-        let cachedServerId = inviteCache[item.code]
-        let cachedMembership = cachedServerId != nil ? membershipCache[cachedServerId!] : nil
-        print("   🔎 Checking cache - ServerId: \(cachedServerId ?? "nil"), CachedMembership: \(cachedMembership?.description ?? "nil")")
-        if let serverId = cachedServerId,
+        if let serverId = inviteCache[item.code],
            membershipCache[serverId] != nil {
-            print("   ⏭️ [checkAndCacheMembership] SKIP - Already cached for serverId: \(serverId)")
+            print("🔍 [Discover] CACHE HIT (invite): \(item.title) [\(item.code)]")
             return
         }
-        
+
         await MainActor.run {
             checkingInvites.insert(item.code)
         }
-        print("   ✅ Added to checkingInvites. Updated set: \(checkingInvites)")
-        
+
+        print("🌐 [Discover] FETCHING: \(item.title) [\(item.code)]")
         do {
-            // Fetch invite information
-            print("   🌐 [checkAndCacheMembership] Fetching invite for code: \(item.code)")
             let inviteResponse = try await viewState.http.fetchInvite(code: item.code).get()
-            print("   ✅ [checkAndCacheMembership] Invite response received")
-            print("   📦 InviteResponse type: \(type(of: inviteResponse))")
-            
             let extractedServerId = inviteResponse.getServerID()
-            print("   🔎 Extracted serverId from invite: \(extractedServerId ?? "nil")")
-            
+
             if let serverId = extractedServerId {
-                // Cache the invite code -> server ID mapping
                 await MainActor.run {
                     inviteCache[item.code] = serverId
                 }
-                print("   💾 [checkAndCacheMembership] Cached invite code -> serverId mapping")
-                print("   📊 Updated inviteCache[\(item.code)] = \(serverId)")
-                print("   📊 Full inviteCache after update: \(inviteCache)")
-                
-                // Check if user is a member of this server
-                let currentUser = viewState.currentUser
-                print("   👤 [checkAndCacheMembership] Current user: \(currentUser?.id ?? "nil")")
-                guard let currentUser = currentUser else {
-                    print("   ⚠️ [checkAndCacheMembership] No current user found, setting membership to false")
+
+                guard let currentUser = viewState.currentUser else {
                     await MainActor.run {
                         membershipCache[serverId] = false
                         checkingInvites.remove(item.code)
                     }
-                    print("   💾 [checkAndCacheMembership] Updated membershipCache[\(serverId)] = false")
-                    print("   📊 Updated membershipCache: \(membershipCache)")
-                    print("   🗑️ Removed from checkingInvites. Updated set: \(checkingInvites)")
                     return
                 }
-                
-                print("   🔍 [checkAndCacheMembership] Checking membership for userId: \(currentUser.id), serverId: \(serverId)")
-                let member = viewState.getMember(byServerId: serverId, userId: currentUser.id)
-                print("   📋 [checkAndCacheMembership] Member lookup result: \(member != nil ? "FOUND" : "NOT FOUND")")
-                if let member = member {
-                    print("   📋 Member details: id.server=\(member.id.server), id.user=\(member.id.user)")
-                }
-                let isMember = member != nil
-                print("   ✅ [checkAndCacheMembership] isMember calculated: \(isMember)")
-                
+
+                let isMember = viewState.getMember(byServerId: serverId, userId: currentUser.id) != nil
+
                 await MainActor.run {
                     membershipCache[serverId] = isMember
                     viewState.updateMembershipCache(serverId: serverId, isMember: isMember, persist: false)
                     checkingInvites.remove(item.code)
                 }
-                print("   💾 [checkAndCacheMembership] Updated membershipCache[\(serverId)] = \(isMember)")
-                print("   📊 Updated membershipCache: \(membershipCache)")
-                print("   🗑️ Removed from checkingInvites. Updated set: \(checkingInvites)")
-                
-                print("✅ [DiscoverScrollView] \(item.title): Member = \(isMember)")
             } else {
-                // Group invite or other type - not a server
-                print("   ⚠️ [checkAndCacheMembership] No serverId found in invite response (group invite or other type)")
                 await MainActor.run {
                     membershipCache[item.code] = false
                     checkingInvites.remove(item.code)
                 }
-                print("   💾 [checkAndCacheMembership] Updated membershipCache[\(item.code)] = false (using invite code as key)")
-                print("   📊 Updated membershipCache: \(membershipCache)")
-                print("   🗑️ Removed from checkingInvites. Updated set: \(checkingInvites)")
             }
         } catch {
-            print("❌ [DiscoverScrollView] Failed to fetch invite \(item.code): \(error)")
-            print("   🔄 [checkAndCacheMembership] Attempting fallback name-based matching")
-            
+            // print("❌ [DiscoverScrollView] Failed to fetch invite \(item.code): \(error)")
+
             // Fallback to name-based matching
             let nameMembership = viewState.servers.values.contains { server in
                 server.name.lowercased() == item.title.lowercased()
             }
-            print("   🔍 [checkAndCacheMembership] Name-based match result: \(nameMembership)")
-            print("   📋 Comparing: '\(item.title.lowercased())' with server names")
-            let matchingServers = viewState.servers.values.filter { $0.name.lowercased() == item.title.lowercased() }
-            print("   📋 Found \(matchingServers.count) matching servers: \(matchingServers.map { $0.name })")
-            
+
             await MainActor.run {
                 membershipCache[item.code] = nameMembership
                 checkingInvites.remove(item.code)
             }
-            print("   💾 [checkAndCacheMembership] Updated membershipCache[\(item.code)] = \(nameMembership) (fallback)")
-            print("   📊 Updated membershipCache: \(membershipCache)")
-            print("   🗑️ Removed from checkingInvites. Updated set: \(checkingInvites)")
         }
-        
-        print("🏁 [checkAndCacheMembership] END - Item: \(item.title), Code: \(item.code)")
     }
         
     // Enhanced membership check: ViewState servers first, then persisted cache, then local/API.
@@ -520,22 +442,21 @@ class ServerChatDataFetcher {
     }
     
     func fetchData(completion: @escaping (Result<[ServerChat], Error>) -> Void) {
-        print("🌐 [ServerChatDataFetcher] Fetching CSV from URL: \(csvUrl)")
+        // print("🌐 [ServerChatDataFetcher] Fetching CSV from URL: \(csvUrl)")
         AF.request(csvUrl).responseString { response in
             switch response.result {
             case .success(let csvString):
-                print("✅ [ServerChatDataFetcher] CSV downloaded successfully")
+                // print("✅ [ServerChatDataFetcher] CSV downloaded successfully")
                 do {
                     let csv = try CSV<Named>(string: csvString)
                     
                     let checkForIDHeader = csv.header.contains("id")
                     
                     if !checkForIDHeader {
-                        print("⚠️ [ServerChatDataFetcher] 'id' header missing, using empty string key")
+                        // print("⚠️ [ServerChatDataFetcher] 'id' header missing, using empty string key")
                     }
                     
-                    print("📊 [ServerChatDataFetcher] Parsing CSV with \(csv.rows.count) rows")
-                    print("📊 This is the CSV data: \(csv)")
+                    // print("📊 [ServerChatDataFetcher] Parsing CSV with \(csv.rows.count) rows")
                     
                     let serverChats = csv.rows.compactMap { row -> ServerChat? in
                         guard let id = row["id"] ?? row[""],
@@ -566,12 +487,12 @@ class ServerChatDataFetcher {
                     self.saveCache(cache)
                     completion(.success(serverChats))
                 } catch {
-                    print("❌ [ServerChatDataFetcher] Failed to parse CSV: \(error.localizedDescription)")
+                    // print("❌ [ServerChatDataFetcher] Failed to parse CSV: \(error.localizedDescription)")
                     completion(.failure(error))
                 }
                 
             case .failure(let error):
-                print("❌ [ServerChatDataFetcher] Failed to download CSV: \(error.localizedDescription)")
+                // print("❌ [ServerChatDataFetcher] Failed to download CSV: \(error.localizedDescription)")
                 completion(.failure(error))
             }
         }

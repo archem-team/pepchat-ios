@@ -73,8 +73,9 @@ struct YouView: View {
                                    height: .size32)
                             .background(Circle().fill(Color.bgPurple13Alpha60))
                         }
+                        .accessibilityID(AccessibilityID.you.settingsButton)
                         .padding(.padding16)
-                        
+
                     }
                     
                     if let currentUser {

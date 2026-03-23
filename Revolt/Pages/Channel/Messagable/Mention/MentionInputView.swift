@@ -862,7 +862,14 @@ class MentionUserCell: UITableViewCell {
         // Set avatar image
         let avatarInfo = viewState.resolveAvatarUrl(user: user, member: member, masquerade: nil)
         if avatarInfo.isAvatarSet {
-            avatarImageView.kf.setImage(with: avatarInfo.url)
+            avatarImageView.kf.setImage(
+                with: avatarInfo.url,
+                options: [
+                    .processor(DownsamplingImageProcessor(size: CGSize(width: 48, height: 48))),
+                    .scaleFactor(UIScreen.main.scale),
+                    .cacheOriginalImage
+                ]
+            )
         } else {
             // Set default avatar if none is available
             avatarImageView.image = UIImage(systemName: "person.circle.fill")

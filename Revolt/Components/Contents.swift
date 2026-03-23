@@ -1210,7 +1210,7 @@ struct InnerContents: UIViewRepresentable {
             }
             }
         } catch {
-            print("Error detecting plain peptide.chat URLs: \(error)")
+            // print("Error detecting plain peptide.chat URLs: \(error)")
         }
     }
     
@@ -1278,7 +1278,7 @@ struct InnerContents: UIViewRepresentable {
         }
         
         // Debug: Check content before processing
-        print("🔍 Before processing - Content: \(attrString.string)")
+        // print("🔍 Before processing - Content: \(attrString.string)")
         
         // Apply styling and process URLs
         fixAttributedStringStyling(for: attrString)
@@ -1290,7 +1290,7 @@ struct InnerContents: UIViewRepresentable {
         processChannelMentions(in: attrString)
         
         // Debug: Check content after processing
-        print("🔍 After processing - Content: \(attrString.string)")
+        // print("🔍 After processing - Content: \(attrString.string)")
         
         // Process emoji syntax: :emoji_id:
         processEmojiCodes(in: attrString, textview: textview)
@@ -1413,7 +1413,7 @@ struct InnerContents: UIViewRepresentable {
                                     // Set the target message ID in ViewState
                                     self.viewState.currentTargetMessageId = messageId
                                     self.viewState.path.append(NavigationDestination.maybeChannelView)
-                                    print("Navigating to message: \(messageId)")
+                                    // print("Navigating to message: \(messageId)")
                                 } else {
                                     self.viewState.currentTargetMessageId = nil
                                     self.viewState.path.append(NavigationDestination.maybeChannelView)
@@ -1482,7 +1482,7 @@ struct InnerContents: UIViewRepresentable {
                                         // Set the target message ID in ViewState
                                         self.viewState.currentTargetMessageId = messageId
                                         self.viewState.path.append(NavigationDestination.maybeChannelView)
-                                        print("Navigating to message: \(messageId)")
+                                        // print("Navigating to message: \(messageId)")
                                     } else {
                                         self.viewState.currentTargetMessageId = nil
                                         self.viewState.path.append(NavigationDestination.maybeChannelView)
@@ -1527,7 +1527,7 @@ struct InnerContents: UIViewRepresentable {
                                         // Set the target message ID in ViewState
                                         self.viewState.currentTargetMessageId = messageId
                                         self.viewState.path.append(NavigationDestination.maybeChannelView)
-                                        print("Navigating to message: \(messageId)")
+                                        // print("Navigating to message: \(messageId)")
                                     } else {
                                         self.viewState.currentTargetMessageId = nil
                                         self.viewState.path.append(NavigationDestination.maybeChannelView)
@@ -1562,7 +1562,7 @@ struct InnerContents: UIViewRepresentable {
                                     // Set the target message ID in ViewState
                                     self.viewState.currentTargetMessageId = messageId
                                     self.viewState.path.append(NavigationDestination.maybeChannelView)
-                                    print("Navigating to message: \(messageId)")
+                                    // print("Navigating to message: \(messageId)")
                                 } else {
                                     self.viewState.currentTargetMessageId = nil
                                     self.viewState.path.append(NavigationDestination.maybeChannelView)
@@ -1642,18 +1642,18 @@ struct InnerContents: UIViewRepresentable {
         let channelMentionMatches = Array(attrString.string.matches(of: /<#([A-Za-z0-9]+)>/))
         
         // Debug: Print found matches
-        print("🔍 Channel mention processing: Found \(channelMentionMatches.count) matches in: \(attrString.string)")
+        // print("🔍 Channel mention processing: Found \(channelMentionMatches.count) matches in: \(attrString.string)")
         if attrString.string.contains("<#") {
-            print("🔍 STRING CONTAINS <# - processing should happen!")
+            // print("🔍 STRING CONTAINS <# - processing should happen!")
         }
         
         for match in channelMentionMatches.reversed() {
             let id = match.output.1
-            print("🔍 Processing channel ID: \(id)")
+            // print("🔍 Processing channel ID: \(id)")
             
             // Try to find channel in both channels and allEventChannels like MessageCell.swift does
             if let channel = viewState.channels[String(id)] ?? viewState.allEventChannels[String(id)] {
-                print("✅ Found channel: \(channel.getName(viewState)) for ID: \(id)")
+                // print("✅ Found channel: \(channel.getName(viewState)) for ID: \(id)")
                 
                 // Safely calculate the offset using NSRange instead of utf16Offset
                 let nsRange = NSRange(match.range, in: attrString.string)
@@ -1672,7 +1672,7 @@ struct InnerContents: UIViewRepresentable {
                 attrString.deleteCharacters(in: nsRange)
                 attrString.insert(NSAttributedString(string: "#\(channelName)", attributes: currentAttrs), at: nsRange.location)
             } else {
-                print("❌ Channel not found for ID: \(id)")
+                // print("❌ Channel not found for ID: \(id)")
                 // If channel not found, replace with #unknown-channel to avoid showing raw ID (like MessageCell.swift)
                 let nsRange = NSRange(match.range, in: attrString.string)
                 guard nsRange.location != NSNotFound && 
@@ -1736,11 +1736,11 @@ struct InnerContents: UIViewRepresentable {
         // FIXED: Collect matches first and process safely
         let namedEmojiMatches = Array(attrString.string.matches(of: /:([a-zA-Z0-9_+-]+):/))
         
-        print("🔍 Found \(namedEmojiMatches.count) emoji matches in text")
+        // print("🔍 Found \(namedEmojiMatches.count) emoji matches in text")
         
         for match in namedEmojiMatches.reversed() {
             let emojiName = String(match.output.1)
-            print("📝 Processing emoji: '\(emojiName)'")
+            // print("📝 Processing emoji: '\(emojiName)'")
             
             // Safely calculate the offset using NSRange instead of utf16Offset
             let nsRange = NSRange(match.range, in: attrString.string)

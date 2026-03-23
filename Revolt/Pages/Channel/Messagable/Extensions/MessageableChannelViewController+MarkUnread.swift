@@ -27,7 +27,7 @@ extension MessageableChannelViewController {
     
     /// Temporarily disable automatic acknowledgment after marking as unread
     func disableAutoAcknowledgment() {
-        print("🚫 Disabling auto-acknowledgment for \(autoAckDisableDuration) seconds")
+        // print("🚫 Disabling auto-acknowledgment for \(autoAckDisableDuration) seconds")
         isAutoAckDisabled = true
         autoAckDisableTime = Date()
     }
@@ -38,11 +38,11 @@ extension MessageableChannelViewController {
         if let disableTime = autoAckDisableTime {
             let now = Date()
             if now.timeIntervalSince(disableTime) < autoAckDisableDuration {
-                print("🚫 Auto-acknowledgment disabled - skipping markLastMessageAsSeen")
+                // print("🚫 Auto-acknowledgment disabled - skipping markLastMessageAsSeen")
                 return
             } else {
                 // Disable period has expired, re-enable auto-ack
-                print("✅ Auto-acknowledgment re-enabled after disable period")
+                // print("✅ Auto-acknowledgment re-enabled after disable period")
                 isAutoAckDisabled = false
                 autoAckDisableTime = nil
             }

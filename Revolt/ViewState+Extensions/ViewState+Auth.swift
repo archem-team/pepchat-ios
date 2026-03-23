@@ -82,9 +82,10 @@ extension ViewState {
                                         let response = await self.http.uploadNotificationToken(token: existingToken)
                                         switch response {
                                             case .success:
-                                                print("✅ LOGIN_SUCCESS: Successfully uploaded existing token")
+                                                // print("✅ LOGIN_SUCCESS: Successfully uploaded existing token")
+                                                break
                                             case .failure(let error):
-                                                print("❌ LOGIN_SUCCESS: Failed to upload existing token: \(error)")
+                                                // print("❌ LOGIN_SUCCESS: Failed to upload existing token: \(error)")
                                                 self.storePendingNotificationToken(existingToken)
                                         }
                                     }
@@ -140,7 +141,7 @@ extension ViewState {
         ViewState.clearServersCacheFile()
         
         // Flush pending cache writes with bounded timeout, then invalidate writer and clear message cache
-        print("📂 [MessageCache] Invalidating writer and clearing cache (sign-out)")
+        // print("📂 [MessageCache] Invalidating writer and clearing cache (sign-out)")
         MessageCacheWriter.shared.invalidate(flushFirst: true)
         // In future this'll need to delete files too
         path = []
@@ -165,7 +166,7 @@ extension ViewState {
         members.removeAll()
         emojis.removeAll()
         dms.removeAll()
-        currentlyTyping.removeAll()
+        clearAllTyping()
         channelMessages.removeAll()
         deletedMessageIds.removeAll()
         preloadedChannels.removeAll()

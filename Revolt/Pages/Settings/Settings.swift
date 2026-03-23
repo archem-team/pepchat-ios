@@ -128,15 +128,16 @@ struct Settings: View {
             Button {
                 presentLogoutDialog = true // Show logout confirmation dialog.
             } label: {
-                
+
                 PeptideActionButton(icon: .peptideSignOutLeave,
                                     iconColor: .iconRed07,
                                     title: "Log Out",
                                     titleColor: .textRed07,
                                     hasArrow: false)
                 .backgroundGray11(verticalPadding: .padding4)
-                
+
             }
+            .accessibilityID(AccessibilityID.settings.logoutButton)
             .padding(.horizontal, .padding16)
             
             

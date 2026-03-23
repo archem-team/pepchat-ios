@@ -14,10 +14,42 @@ import UIKit
 import ULID
 
 extension MessageableChannelViewController {
-    /// Merges two lists of message IDs, dedupes by id, and sorts by canonical order (createdAt). Use for cache+API and cache page+existing.
+    /// Merges two pre-sorted lists of message IDs, dedupes, preserving sort order.
+    /// ULIDs are lexicographically sortable by timestamp, so plain string comparison is correct
+    /// and avoids expensive ULID→Date parsing on every comparison.
+    /// O(n) two-pointer merge instead of O(n log n) re-sort.
     private func mergeAndSortMessageIds(existing: [String], new: [String]) -> [String] {
-        let union = Set(existing).union(new)
-        return union.sorted { createdAt(id: $0) < createdAt(id: $1) }
+        // Fast paths
+        guard !existing.isEmpty else { return new }
+        guard !new.isEmpty else { return existing }
+
+        // Sort inputs to guarantee the two-pointer merge is correct.
+        // Still faster than main's approach: plain string comparison vs ULID→Date parsing.
+        let sortedExisting = existing.sorted()
+        let sortedNew = new.sorted()
+
+        let newSet = Set(sortedNew)
+        // Remove duplicates from existing that also appear in new
+        let dedupedExisting = sortedExisting.filter { !newSet.contains($0) }
+
+        var result: [String] = []
+        result.reserveCapacity(dedupedExisting.count + sortedNew.count)
+
+        var i = dedupedExisting.startIndex
+        var j = sortedNew.startIndex
+        while i < dedupedExisting.endIndex && j < sortedNew.endIndex {
+            if dedupedExisting[i] <= sortedNew[j] {
+                result.append(dedupedExisting[i])
+                i += 1
+            } else {
+                result.append(sortedNew[j])
+                j += 1
+            }
+        }
+        // Append remaining
+        if i < dedupedExisting.endIndex { result.append(contentsOf: dedupedExisting[i...]) }
+        if j < sortedNew.endIndex { result.append(contentsOf: sortedNew[j...]) }
+        return result
     }
 
     /// When loading from cache, prefer ViewState over cached if ViewState has a newer edit (e.g. from a message_update WebSocket event) so edits from other users are not overwritten by stale cache.
@@ -27,19 +59,51 @@ extension MessageableChannelViewController {
         return (existing.edited ?? "") >= (cached.edited ?? "")
     }
 
+    /// Pure function: determines if include_users can be skipped on the API call.
+    /// Returns true when the local user cache is "warm" (has enough known users).
+    static func canSkipIncludeUsers(
+        users: [String: Types.User],
+        allEventUsers: [String: Types.User],
+        warmThreshold: Int = 150
+    ) -> Bool {
+        let knownCount = Set(users.keys).union(allEventUsers.keys).count
+        return knownCount >= warmThreshold
+    }
+
+    /// Pure function: given messages and known user IDs, returns author IDs not in the known set.
+    static func findMissingAuthorIds(
+        messages: [Types.Message],
+        knownUserIds: Set<String>
+    ) -> Set<String> {
+        let authorIds = Set(messages.map { $0.author })
+        return authorIds.subtracting(knownUserIds)
+    }
+
     internal func loadInitialMessages() async {
         let channelId = viewModel.channel.id
-
         // CRITICAL FIX: Reset empty response time when loading initial messages
         lastEmptyResponseTime = nil
-        print("🔄 LOAD_INITIAL: Reset lastEmptyResponseTime for initial load")
+        failedReplyIds.removeAll()
 
         // CRITICAL FIX: Don't reload if user is in target message position
         if isInTargetMessagePosition && targetMessageId == nil {
-            print(
-                "🎯 LOAD_INITIAL: User is in target message position, skipping reload to preserve position"
-            )
+            // print(
+                // "🎯 LOAD_INITIAL: User is in target message position, skipping reload to preserve position"
+            // )
             return
+        }
+
+        // MARK: - Start API fetch concurrently (runs in parallel with cache load below)
+        // Skip include_users when local user cache is warm to reduce server-side latency
+        let skipIncludeUsers = await MainActor.run {
+            Self.canSkipIncludeUsers(
+                users: viewModel.viewState.users,
+                allEventUsers: viewModel.viewState.allEventUsers
+            )
+        }
+        let apiFetchTask = Task { [weak self] () -> FetchHistory? in
+            guard let self else { return nil }
+            return await self.viewModel.loadMoreMessages(before: nil, includeUsers: !skipIncludeUsers)
         }
 
         // MARK: - Cache check first (instant show when we have cache)
@@ -49,7 +113,7 @@ extension MessageableChannelViewController {
         let hasCache: Bool
         if let userId = viewModel.viewState.currentUser?.id, let baseURL = viewModel.viewState.baseURL {
             hasCache = await MessageCacheManager.shared.hasCachedMessages(for: channelId, userId: userId, baseURL: baseURL)
-            print("📂 [MessageCache] hasCachedMessages(\(channelId)) = \(hasCache)")
+            // print("📂 [MessageCache] hasCachedMessages(\(channelId)) = \(hasCache)")
         } else {
             hasCache = false
         }
@@ -64,7 +128,7 @@ extension MessageableChannelViewController {
                 offset: 0
             )
             if !cached.isEmpty {
-                print("📂 [MessageCache] UI: showing first page (\(cached.count) messages) from cache for channel \(channelId)")
+                // print("📂 [MessageCache] UI: showing first page (\(cached.count) messages) from cache for channel \(channelId)")
                 let authorIds = Set(cached.map { $0.author })
                 let cachedUsers = await MessageCacheManager.shared.loadCachedUsers(
                     for: Array(authorIds),
@@ -90,6 +154,7 @@ extension MessageableChannelViewController {
                     }
                     let deleted = viewModel.viewState.deletedMessageIds[channelId] ?? []
                     let ids = cached.map { $0.id }.filter { !deleted.contains($0) }
+
                     viewModel.viewState.channelMessages[channelId] = ids
                     viewModel.messages = ids
                     localMessages = ids
@@ -98,7 +163,7 @@ extension MessageableChannelViewController {
                     tableView.dataSource = dataSource
                     tableView.reloadData()
                     hideSkeletonView()
-                    tableView.alpha = 1.0
+                    positionTableAtBottomBeforeShowing()
                     updateTableViewBouncing()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
                         self?.updateTableViewBouncing()
@@ -110,21 +175,20 @@ extension MessageableChannelViewController {
         // Check if already loading to prevent duplicate calls
         MessageableChannelViewController.loadingMutex.lock()
         if MessageableChannelViewController.loadingChannels.contains(channelId) {
-            print("⚠️ Channel \(channelId) is already being loaded, skipping duplicate request")
+
             MessageableChannelViewController.loadingMutex.unlock()
             return
         } else {
-            print("🚀 LOAD_INITIAL: Starting API call for channel \(channelId)")
             MessageableChannelViewController.loadingChannels.insert(channelId)
             messageLoadingState = .loading
-            print("🎯 Set messageLoadingState to .loading for initial load")
+
             MessageableChannelViewController.loadingMutex.unlock()
         }
 
         // CRITICAL FIX: Hide empty state immediately when loading starts (especially for cross-channel)
         DispatchQueue.main.async {
             self.hideEmptyStateView()
-            print("🚫 LOAD_INITIAL: Hidden empty state at start of loading")
+            // print("🚫 LOAD_INITIAL: Hidden empty state at start of loading")
         }
 
         // Ensure cleanup when done
@@ -135,7 +199,6 @@ extension MessageableChannelViewController {
 
             // CRITICAL FIX: Reset loading state when done
             messageLoadingState = .notLoading
-            print("🎯 Reset messageLoadingState to .notLoading - loadInitialMessages complete")
 
             DispatchQueue.main.async {
                 self.tableView.alpha = 1.0
@@ -194,63 +257,83 @@ extension MessageableChannelViewController {
         // print("📱 Starting initial message load for channel: \(viewModel.channel.id)")
 
         if let targetId = self.targetMessageId {
+            // Cancel the concurrent API fetch — target message uses the nearby API instead
+
+            apiFetchTask.cancel()
+
             // We have a specific target message to load
-            print("📜 Loading channel with target message ID: \(targetId)")
+            // print("📜 Loading channel with target message ID: \(targetId)")
 
             // CRITICAL FIX: Use nearby API directly for target messages
             // This ensures we get the target message and surrounding context immediately
-            print("🎯 Target message specified, using nearby API directly")
+            // print("🎯 Target message specified, using nearby API directly")
 
             // CRITICAL FIX: Set strong protection flag BEFORE API call to prevent any other loading
             messageLoadingState = .loading
             isInTargetMessagePosition = true
             lastTargetMessageHighlightTime = Date()
-            print("🎯 NEARBY_PROTECTION: Set all protection flags BEFORE nearby API call")
+            // print("🎯 NEARBY_PROTECTION: Set all protection flags BEFORE nearby API call")
 
             do {
                 // Use the API to fetch messages near the specified message
-                print(
-                    "🌐 API CALL: fetchHistory (nearby) - Channel: \(viewModel.channel.id), Target: \(targetId), Limit: 100"
-                )
+                // Skip include_users when local user cache is warm
+                let skipNearbyUsers = await MainActor.run {
+                    Self.canSkipIncludeUsers(
+                        users: viewModel.viewState.users,
+                        allEventUsers: viewModel.viewState.allEventUsers
+                    )
+                }
                 let result = try await viewModel.viewState.http.fetchHistory(
                     channel: viewModel.channel.id,
                     limit: 100,  // Get context around the target message
-                    nearby: targetId
+                    nearby: targetId,
+                    include_users: !skipNearbyUsers
                 ).get()
-                print(
-                    "✅ API RESPONSE: fetchHistory (nearby) - Received \(result.messages.count) messages, \(result.users.count) users"
-                )
+                // print(
+                    // "✅ API RESPONSE: fetchHistory (nearby) - Received \(result.messages.count) messages, \(result.users.count) users"
+                // )
 
                 // print("✅ Nearby API Response received with \(result.messages.count) messages")
 
-                // Fetch reply message content for messages that have replies BEFORE MainActor.run
-                print(
-                    "🔗 CALLING fetchReplyMessagesContent (nearby API - first call) with \(result.messages.count) messages"
-                )
-                await self.fetchReplyMessagesContent(for: result.messages)
+                // Fire-and-forget reply fetch — messages display immediately, reply previews backfill async
+                let replyMessages = result.messages
+                Task { [weak self] in
+                    await self?.fetchReplyMessagesContentAndRefreshUI(for: replyMessages)
+                }
+
+                // Process users from the response before UI update, and identify missing authors in one hop
+                let nearbyMissingAuthors: Set<String> = await MainActor.run {
+                    for user in result.users {
+                        viewModel.viewState.users[user.id] = user
+                    }
+                    if let members = result.members {
+                        for member in members {
+                            viewModel.viewState.members[member.id.server, default: [:]][
+                                member.id.user] = member
+                        }
+                    }
+                    for message in result.messages {
+                        viewModel.viewState.messages[message.id] = message
+                    }
+                    return Self.findMissingAuthorIds(
+                        messages: result.messages,
+                        knownUserIds: Set(viewModel.viewState.users.keys)
+                            .union(viewModel.viewState.allEventUsers.keys)
+                    )
+                }
+                if !nearbyMissingAuthors.isEmpty {
+                    await withTaskGroup(of: Void.self) { group in
+                        for userId in nearbyMissingAuthors {
+                            group.addTask { [weak self] in
+                                await self?.fetchUserForMessage(userId: userId)
+                            }
+                        }
+                    }
+                }
 
                 // Process and merge the nearby messages with existing channel history
                 await MainActor.run {
                     if !result.messages.isEmpty {
-                        // print("📊 Processing \(result.messages.count) nearby messages to merge with existing history")
-
-                        // Process users from the response
-                        for user in result.users {
-                            viewModel.viewState.users[user.id] = user
-                        }
-
-                        // Process members if present
-                        if let members = result.members {
-                            for member in members {
-                                viewModel.viewState.members[member.id.server, default: [:]][
-                                    member.id.user] = member
-                            }
-                        }
-
-                        // Process messages - add them to the messages dictionary
-                        for message in result.messages {
-                            viewModel.viewState.messages[message.id] = message
-                        }
 
                         // Get existing channel messages
                         let existingMessages = viewModel.viewState.channelMessages[channelId] ?? []
@@ -323,42 +406,42 @@ extension MessageableChannelViewController {
 
                             // CRITICAL FIX: Keep loading state until target message is scrolled to
                             // This prevents any other loading from interfering
-                            print(
-                                "🎯 NEARBY_SUCCESS: Keeping messageLoadingState = .loading until scroll completes"
-                            )
+                            // print(
+                                // "🎯 NEARBY_SUCCESS: Keeping messageLoadingState = .loading until scroll completes"
+                            // )
 
                             // Instead, trigger scrollToTargetMessage properly
                             if let targetId = self.targetMessageId {
-                                print(
-                                    "🎯 loadInitialMessages: Found target message \(targetId), triggering scroll"
-                                )
+                                // print(
+                                    // "🎯 loadInitialMessages: Found target message \(targetId), triggering scroll"
+                                // )
 
                                 // Check if target message is actually loaded
                                 let targetInLocalMessages = self.localMessages.contains(targetId)
                                 let targetInViewState =
                                     self.viewModel.viewState.messages[targetId] != nil
 
-                                print(
-                                    "🎯 loadInitialMessages: Target message \(targetId) loaded check:"
-                                )
-                                print("   - In localMessages: \(targetInLocalMessages)")
-                                print("   - In viewState: \(targetInViewState)")
+                                // print(
+                                    // "🎯 loadInitialMessages: Target message \(targetId) loaded check:"
+                                // )
+                                // print("   - In localMessages: \(targetInLocalMessages)")
+                                // print("   - In viewState: \(targetInViewState)")
 
                                 if targetInLocalMessages && targetInViewState {
-                                    print("✅ Target message is loaded, scrolling to it")
+                                    // print("✅ Target message is loaded, scrolling to it")
                                     self.scrollToTargetMessage()
 
                                     // CRITICAL FIX: Only reset loading state AFTER successful scroll
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                                         self.messageLoadingState = .notLoading
-                                        print(
-                                            "🎯 NEARBY_COMPLETE: Reset messageLoadingState after scroll completion"
-                                        )
+                                        // print(
+                                            // "🎯 NEARBY_COMPLETE: Reset messageLoadingState after scroll completion"
+                                        // )
                                     }
                                 } else {
-                                    print(
-                                        "❌ Target message NOT loaded, keeping targetMessageId for later"
-                                    )
+                                    // print(
+                                        // "❌ Target message NOT loaded, keeping targetMessageId for later"
+                                    // )
                                     // Reset loading state since we couldn't scroll
                                     self.messageLoadingState = .notLoading
                                 }
@@ -382,9 +465,9 @@ extension MessageableChannelViewController {
                             self.messageLoadingState = .notLoading
                             self.isInTargetMessagePosition = false
                             self.lastTargetMessageHighlightTime = nil
-                            print(
-                                "🎯 NEARBY_EMPTY: Reset protection flags after empty nearby response"
-                            )
+                            // print(
+                                // "🎯 NEARBY_EMPTY: Reset protection flags after empty nearby response"
+                            // )
 
                             // Still try to scroll to target in case it was loaded by regular loading
                             self.scrollToTargetMessage()
@@ -402,7 +485,7 @@ extension MessageableChannelViewController {
                     self.messageLoadingState = .notLoading
                     self.isInTargetMessagePosition = false
                     self.lastTargetMessageHighlightTime = nil
-                    print("🎯 NEARBY_ERROR: Reset protection flags after nearby call error")
+                    // print("🎯 NEARBY_ERROR: Reset protection flags after nearby call error")
 
                     // Clear target message from ViewState if it failed to load
                     self.viewModel.viewState.currentTargetMessageId = nil
@@ -414,20 +497,210 @@ extension MessageableChannelViewController {
                 }
 
                 // Fall back to regular loading
-                print("🔄 FALLBACK: Falling back to regular loading after target message failure")
+                // print("🔄 FALLBACK: Falling back to regular loading after target message failure")
                 await loadRegularMessages()
             }
         } else {
-            // No target message ID, load regular messages (force fetch so cache is refreshed with server messages that arrived while app was closed)
-            await loadRegularMessages(forceFetchFromServer: true)
+            // No target message ID — API fetch was started concurrently with cache load above.
+            // Await the already-running task and merge results.
+
+            await processAPIFetchResult(apiFetchTask, channelId: channelId)
         }
     }
     
+    /// Awaits the result of a concurrent API fetch task and merges it into the current channel state.
+    /// Called from `loadInitialMessages` after cache has been displayed.
+    private func processAPIFetchResult(_ task: Task<FetchHistory?, Never>, channelId: String) async {
+        let fetchResult = await task.value
+
+
+        guard let fetchResult, !fetchResult.messages.isEmpty else {
+
+            // No messages from API — hide skeleton / show empty state if needed
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.hideSkeletonView()
+                self.tableView.tableFooterView = nil
+                self.updateEmptyStateVisibility()
+            }
+            return
+        }
+
+        // Enqueue cache write
+        if let userId = viewModel.viewState.currentUser?.id,
+           let baseURL = viewModel.viewState.baseURL {
+            let lastId = fetchResult.messages.first?.id
+            MessageCacheWriter.shared.enqueueCacheMessagesAndUsers(
+                fetchResult.messages,
+                users: fetchResult.users,
+                channelId: channelId,
+                userId: userId,
+                baseURL: baseURL,
+                lastMessageId: lastId
+            )
+        }
+
+        // Process users from the response
+        for user in fetchResult.users {
+            viewModel.viewState.users[user.id] = user
+        }
+
+        // Process members if present
+        if let members = fetchResult.members {
+            for member in members {
+                viewModel.viewState.members[member.id.server, default: [:]][
+                    member.id.user] = member
+            }
+        }
+
+        // Process messages
+        for message in fetchResult.messages {
+            viewModel.viewState.messages[message.id] = message
+        }
+
+        // Fetch any missing authors (needed when include_users was skipped for warm cache)
+        let missingAuthorIds = await MainActor.run {
+            Self.findMissingAuthorIds(
+                messages: fetchResult.messages,
+                knownUserIds: Set(viewModel.viewState.users.keys)
+                    .union(viewModel.viewState.allEventUsers.keys)
+            )
+        }
+        if !missingAuthorIds.isEmpty {
+            await withTaskGroup(of: Void.self) { group in
+                for userId in missingAuthorIds {
+                    group.addTask { [weak self] in
+                        await self?.fetchUserForMessage(userId: userId)
+                    }
+                }
+            }
+        }
+
+        // Merge with existing (e.g. from cache): union IDs, dedupe, sort by canonical order.
+        let (existingIds, deleted, userId, baseURL) = await MainActor.run {
+            (self.viewModel.viewState.channelMessages[channelId] ?? [],
+             self.viewModel.viewState.deletedMessageIds[channelId] ?? Set<String>(),
+             self.viewModel.viewState.currentUser?.id,
+             self.viewModel.viewState.baseURL)
+        }
+        let apiIds = fetchResult.messages.map { $0.id }
+
+
+        // Reconcile with server: locally-cached messages in the API's time window
+        // that are absent from the response are treated as server-side deletes.
+        let apiIdSet = Set(apiIds)
+        let deletedByServer: [String]
+        if apiIds.count >= 100 {
+            let oldestApiId = apiIds.min() ?? ""
+            deletedByServer = existingIds.filter { $0 >= oldestApiId && !apiIdSet.contains($0) }
+        } else {
+            deletedByServer = []
+        }
+
+        // Sort and filter off main thread
+        let sortedIds = self.mergeAndSortMessageIds(existing: existingIds, new: apiIds)
+        let allDeleted = deleted.union(deletedByServer)
+        let filteredIds = allDeleted.isEmpty ? sortedIds : sortedIds.filter { !allDeleted.contains($0) }
+
+
+        // Write results back on main thread
+        let previousLocalMessages = await MainActor.run { self.localMessages }
+        await MainActor.run {
+            if !deletedByServer.isEmpty, let userId, let baseURL {
+                for id in deletedByServer {
+                    self.viewModel.viewState.deletedMessageIds[channelId, default: Set()].insert(id)
+                    MessageCacheWriter.shared.enqueueDeleteMessage(id: id, channelId: channelId, userId: userId, baseURL: baseURL)
+                }
+            }
+            self.localMessages = filteredIds
+            self.viewModel.viewState.channelMessages[channelId] = filteredIds
+            self.viewModel.messages = filteredIds
+        }
+
+        let idsUnchanged = previousLocalMessages == filteredIds
+
+        // Update UI
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            self.hideSkeletonView()
+            self.tableView.tableFooterView = nil
+
+            // Skip full reload if message IDs haven't changed (cache and API returned same set)
+            if idsUnchanged && self.tableView.alpha >= 1.0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    self.adjustTableInsetsForMessageCount()
+                }
+                return
+            }
+
+            self.isDataSourceUpdating = true
+
+            self.dataSource = LocalMessagesDataSource(
+                viewModel: self.viewModel,
+                viewController: self,
+                localMessages: self.localMessages)
+            self.tableView.dataSource = self.dataSource
+            self.tableView.reloadData()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                self?.isDataSourceUpdating = false
+            }
+
+            let hasManuallyScrolledUp =
+                self.lastManualScrollUpTime != nil
+                && Date().timeIntervalSince(self.lastManualScrollUpTime!) < 10.0
+
+            let tableAlreadyVisible = self.tableView.alpha >= 1.0
+
+            if !hasManuallyScrolledUp {
+                if let highlightTime = self.lastTargetMessageHighlightTime,
+                    Date().timeIntervalSince(highlightTime) < 10.0
+                {
+                    self.tableView.alpha = 1.0
+                } else if tableAlreadyVisible {
+                    // Table already visible from cache — scroll without fade to avoid blip
+                    self.tableView.layoutIfNeeded()
+                    let rowCount = self.tableView.numberOfRows(inSection: 0)
+                    if rowCount > 0 {
+                        self.tableView.scrollToRow(
+                            at: IndexPath(row: rowCount - 1, section: 0),
+                            at: .bottom,
+                            animated: false
+                        )
+                    }
+                } else {
+                    self.positionTableAtBottomBeforeShowing()
+                }
+            } else {
+                if !tableAlreadyVisible {
+                    self.showTableViewWithFade()
+                }
+                self.tableView.alpha = 1.0
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                self.adjustTableInsetsForMessageCount()
+            }
+        }
+
+        // Fetch reply content in background
+        let fetchedMessages = fetchResult.messages
+        Task { [weak self] in
+            guard let self else { return }
+            await self.fetchReplyMessagesContentAndRefreshUI(for: fetchedMessages)
+            let allCurrentMessages = await MainActor.run {
+                self.localMessages.compactMap { self.viewModel.viewState.messages[$0] }
+            }
+            await self.fetchReplyMessagesContentAndRefreshUI(for: allCurrentMessages)
+        }
+    }
+
     /// - Parameter forceFetchFromServer: When true (e.g. initial channel open), always fetch from server and merge with existing (cache). When false, use in-memory messages if present.
     private func loadRegularMessages(forceFetchFromServer: Bool = false) async {
         // COMPREHENSIVE TARGET MESSAGE PROTECTION
         if targetMessageProtectionActive {
-            print("🎯 LOAD_REGULAR: Target message protection active, skipping regular load")
+            // print("🎯 LOAD_REGULAR: Target message protection active, skipping regular load")
             return
         }
 
@@ -435,13 +708,13 @@ extension MessageableChannelViewController {
         messageLoadingState = .loading
         DispatchQueue.main.async {
             self.hideEmptyStateView()
-            print("🚫 LOAD_REGULAR: Hidden empty state for regular loading")
+            // print("🚫 LOAD_REGULAR: Hidden empty state for regular loading")
         }
 
         // Ensure cleanup when done
         defer {
             messageLoadingState = .notLoading
-            print("🎯 LOAD_REGULAR: Reset loading state - complete")
+            // print("🎯 LOAD_REGULAR: Reset loading state - complete")
         }
 
         // print("📜 Loading regular messages")
@@ -539,7 +812,6 @@ extension MessageableChannelViewController {
             }
         } else {
             // No messages in memory, fetch from server
-            // print("🔄 No existing messages, fetching from server")
 
             // Show skeleton only when we have no messages on screen (when force-fetching we already show cache + footer spinner)
             if existingCount == 0 {
@@ -554,24 +826,24 @@ extension MessageableChannelViewController {
 
             do {
                 // Call API with proper error handling
-                print("🌐 API CALL: loadMoreMessages (initial) - Channel: \(viewModel.channel.id)")
+                // print("🌐 API CALL: loadMoreMessages (initial) - Channel: \(viewModel.channel.id)")
                 let result = await viewModel.loadMoreMessages(before: nil)
-                print(
-                    "✅ API RESPONSE: loadMoreMessages (initial) - Result: \(result != nil ? "Success with \(result!.messages.count) messages" : "Nil")"
-                )
+                // print(
+                    // "✅ API RESPONSE: loadMoreMessages (initial) - Result: \(result != nil ? "Success with \(result!.messages.count) messages" : "Nil")"
+                // )
 
                 // DEBUG: Check if any messages have replies
                 if let fetchResult = result {
                     let messagesWithReplies = fetchResult.messages.filter {
                         $0.replies?.isEmpty == false
                     }
-                    print(
-                        "🔗 API_DEBUG: Out of \(fetchResult.messages.count) messages, \(messagesWithReplies.count) have replies"
-                    )
+                    // print(
+                        // "🔗 API_DEBUG: Out of \(fetchResult.messages.count) messages, \(messagesWithReplies.count) have replies"
+                    // )
                     for message in messagesWithReplies {
-                        print(
-                            "🔗 API_DEBUG: Message \(message.id) has replies: \(message.replies ?? [])"
-                        )
+                        // print(
+                            // "🔗 API_DEBUG: Message \(message.id) has replies: \(message.replies ?? [])"
+                        // )
                     }
                 }
 
@@ -611,42 +883,42 @@ extension MessageableChannelViewController {
                         viewModel.viewState.messages[message.id] = message
                     }
 
-                    // Fetch reply message content for messages that have replies
-                    print(
-                        "🔗 CALLING fetchReplyMessagesContentAndRefreshUI with \(fetchResult.messages.count) messages"
-                    )
-                    await fetchReplyMessagesContentAndRefreshUI(for: fetchResult.messages)
-
-                    // CRITICAL FIX: Also check for any preloaded messages that might have replies
-                    let allCurrentMessages = localMessages.compactMap { messageId in
-                        viewModel.viewState.messages[messageId]
+                    // Merge with existing (e.g. from cache): union IDs, dedupe, sort by canonical order.
+                    // Single MainActor.run to read state, then sort/filter off main thread, then one more to write back.
+                    let (existingIds, deleted, userId, baseURL) = await MainActor.run {
+                        (self.viewModel.viewState.channelMessages[channelId] ?? [],
+                         self.viewModel.viewState.deletedMessageIds[channelId] ?? Set<String>(),
+                         self.viewModel.viewState.currentUser?.id,
+                         self.viewModel.viewState.baseURL)
                     }
-                    print(
-                        "🔗 PRELOAD_CHECK: Checking \(allCurrentMessages.count) total messages for missing replies after regular load"
-                    )
-                    await fetchReplyMessagesContentAndRefreshUI(for: allCurrentMessages)
-
-                    // Merge with existing (e.g. from cache): union IDs, dedupe, sort by canonical order
-                    let existingIds = await MainActor.run { self.viewModel.viewState.channelMessages[channelId] ?? [] }
                     let apiIds = fetchResult.messages.map { $0.id }
-                    // Reconcile with server: messages we had locally (e.g. from cache) in the same time window as the API page but not returned by the API are treated as deleted (e.g. another user deleted while app was closed). Update ViewState and cache so they disappear from UI and future cache reads.
-                    let oldestApiTimestamp = apiIds.map { createdAt(id: $0) }.min() ?? .distantPast
+
+                    // Reconcile with server: messages we had locally (e.g. from cache) in the same
+                    // time window as the API page but not returned by the API are treated as deleted.
+                    // Only reconcile when the API returned a full page — a short page means we've
+                    // reached the top of history so "missing" IDs are just older, not deleted.
                     let apiIdSet = Set(apiIds)
-                    let deletedByServer = existingIds.filter { createdAt(id: $0) >= oldestApiTimestamp && !apiIdSet.contains($0) }
-                    if !deletedByServer.isEmpty, let userId = viewModel.viewState.currentUser?.id, let baseURL = viewModel.viewState.baseURL {
-                        await MainActor.run {
+                    let deletedByServer: [String]
+                    if apiIds.count >= 100 {  // fetchHistory limit (see MessageableChannelViewModel)
+                        let oldestApiId = apiIds.min() ?? ""
+                        deletedByServer = existingIds.filter { $0 >= oldestApiId && !apiIdSet.contains($0) }
+                    } else {
+                        deletedByServer = []
+                    }
+
+                    // Sort and filter off main thread
+                    let sortedIds = self.mergeAndSortMessageIds(existing: existingIds, new: apiIds)
+                    let allDeleted = deleted.union(deletedByServer)
+                    let filteredIds = allDeleted.isEmpty ? sortedIds : sortedIds.filter { !allDeleted.contains($0) }
+
+                    // Single MainActor.run to write all results back
+                    await MainActor.run {
+                        if !deletedByServer.isEmpty, let userId, let baseURL {
                             for id in deletedByServer {
                                 self.viewModel.viewState.deletedMessageIds[channelId, default: Set()].insert(id)
                                 MessageCacheWriter.shared.enqueueDeleteMessage(id: id, channelId: channelId, userId: userId, baseURL: baseURL)
                             }
                         }
-                    }
-                    let sortedIds = await MainActor.run { self.mergeAndSortMessageIds(existing: existingIds, new: apiIds) }
-                    let deleted = await MainActor.run { self.viewModel.viewState.deletedMessageIds[channelId] ?? [] }
-                    let filteredIds = sortedIds.filter { !deleted.contains($0) }
-
-                    // CRITICAL: Update our local messages array directly
-                    await MainActor.run {
                         self.localMessages = filteredIds
                         self.viewModel.viewState.channelMessages[channelId] = filteredIds
                         self.viewModel.messages = filteredIds
@@ -674,7 +946,7 @@ extension MessageableChannelViewController {
 
                         // CRITICAL: Mark data source as updating before changes
                         self.isDataSourceUpdating = true
-                        print("📊 DATA_SOURCE: Marking as updating for loadInitialMessages")
+                        // print("📊 DATA_SOURCE: Marking as updating for loadInitialMessages")
 
                         // Create data source with local messages
                         self.dataSource = LocalMessagesDataSource(
@@ -689,7 +961,7 @@ extension MessageableChannelViewController {
                         // CRITICAL: Reset flag after changes complete
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                             self?.isDataSourceUpdating = false
-                            print("📊 DATA_SOURCE: Marking as stable after loadInitialMessages")
+                            // print("📊 DATA_SOURCE: Marking as stable after loadInitialMessages")
                         }
                         // print("📊 TABLE_VIEW reloaded with \(self.localMessages.count) messages")
 
@@ -742,6 +1014,19 @@ extension MessageableChannelViewController {
                         // print("⏱️ TOTAL_LOAD_DURATION: \(String(format: "%.2f", totalDuration)) seconds")
                         // print("⏱️ BREAKDOWN: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s, UI=\(String(format: "%.2f", uiDuration))s")
                     }
+
+                    // Fetch reply content in background — don't block message display.
+                    // fetchReplyMessagesContentAndRefreshUI calls tableView.reloadData() internally
+                    // when replies arrive, so cells will update automatically.
+                    let fetchedMessages = fetchResult.messages
+                    Task { [weak self] in
+                        guard let self else { return }
+                        await self.fetchReplyMessagesContentAndRefreshUI(for: fetchedMessages)
+                        let allCurrentMessages = await MainActor.run {
+                            self.localMessages.compactMap { self.viewModel.viewState.messages[$0] }
+                        }
+                        await self.fetchReplyMessagesContentAndRefreshUI(for: allCurrentMessages)
+                    }
                 } else {
                     // TIMING: Calculate failed API call duration
                     let apiEndTime = Date()
@@ -782,7 +1067,7 @@ extension MessageableChannelViewController {
     
     internal func loadInitialMessagesImmediate() async {
         let channelId = viewModel.channel.id
-        print("⚡ IMMEDIATE_LOAD: Starting FASTEST possible API call for channel \(channelId)")
+        // print("⚡ IMMEDIATE_LOAD: Starting FASTEST possible API call for channel \(channelId)")
 
         // Ensure table is visible at the end
         defer {
@@ -794,7 +1079,7 @@ extension MessageableChannelViewController {
 
         // FASTEST POSSIBLE API CALL - NO CHECKS, NO DELAYS
         let apiStartTime = Date()
-        print("⚡ IMMEDIATE_API_START: \(apiStartTime.timeIntervalSince1970)")
+        // print("⚡ IMMEDIATE_API_START: \(apiStartTime.timeIntervalSince1970)")
 
         do {
             // Get server ID if this is a server channel
@@ -806,9 +1091,9 @@ extension MessageableChannelViewController {
                     && serverId == "01J544PT4T3WQBVBSDK3TBFZW7") ? 10 : 50
 
             // IMMEDIATE API CALL
-            print(
-                "⚡ API CALL: fetchHistory IMMEDIATE - Channel: \(channelId), Limit: \(messageLimit)"
-            )
+            // print(
+                // "⚡ API CALL: fetchHistory IMMEDIATE - Channel: \(channelId), Limit: \(messageLimit)"
+            // )
             let result = try await viewModel.viewState.http.fetchHistory(
                 channel: channelId,
                 limit: messageLimit,
@@ -819,9 +1104,9 @@ extension MessageableChannelViewController {
 
             let apiEndTime = Date()
             let apiDuration = apiEndTime.timeIntervalSince(apiStartTime)
-            print(
-                "⚡ API_RESPONSE_IMMEDIATE: Received \(result.messages.count) messages in \(String(format: "%.2f", apiDuration))s"
-            )
+            // print(
+                // "⚡ API_RESPONSE_IMMEDIATE: Received \(result.messages.count) messages in \(String(format: "%.2f", apiDuration))s"
+            // )
 
             // IMMEDIATE PROCESSING
             let processingStartTime = Date()
@@ -845,9 +1130,9 @@ extension MessageableChannelViewController {
             }
 
             // Fetch reply message content for messages that have replies
-            print(
-                "🔗 CALLING fetchReplyMessagesContentAndRefreshUI (immediate load) with \(result.messages.count) messages"
-            )
+            // print(
+                // "🔗 CALLING fetchReplyMessagesContentAndRefreshUI (immediate load) with \(result.messages.count) messages"
+            // )
             await fetchReplyMessagesContentAndRefreshUI(for: result.messages)
 
             // Sort messages immediately
@@ -859,9 +1144,9 @@ extension MessageableChannelViewController {
 
             let processingEndTime = Date()
             let processingDuration = processingEndTime.timeIntervalSince(processingStartTime)
-            print(
-                "⚡ PROCESSING_IMMEDIATE: Processed \(sortedIds.count) messages in \(String(format: "%.2f", processingDuration))s"
-            )
+            // print(
+                // "⚡ PROCESSING_IMMEDIATE: Processed \(sortedIds.count) messages in \(String(format: "%.2f", processingDuration))s"
+            // )
 
             // IMMEDIATE UI UPDATE
             let uiStartTime = Date()
@@ -892,15 +1177,15 @@ extension MessageableChannelViewController {
                 let uiDuration = uiEndTime.timeIntervalSince(uiStartTime)
                 let totalDuration = uiEndTime.timeIntervalSince(apiStartTime)
 
-                print("⚡ UI_UPDATE_IMMEDIATE: Updated UI in \(String(format: "%.2f", uiDuration))s")
-                print("⚡ TOTAL_IMMEDIATE_DURATION: \(String(format: "%.2f", totalDuration))s")
-                print(
-                    "⚡ BREAKDOWN: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s, UI=\(String(format: "%.2f", uiDuration))s"
-                )
+                // print("⚡ UI_UPDATE_IMMEDIATE: Updated UI in \(String(format: "%.2f", uiDuration))s")
+                // print("⚡ TOTAL_IMMEDIATE_DURATION: \(String(format: "%.2f", totalDuration))s")
+                // print(
+                    // "⚡ BREAKDOWN: API=\(String(format: "%.2f", apiDuration))s, Processing=\(String(format: "%.2f", processingDuration))s, UI=\(String(format: "%.2f", uiDuration))s"
+                // )
             }
 
         } catch {
-            print("❌ IMMEDIATE_LOAD_ERROR: \(error)")
+            // print("❌ IMMEDIATE_LOAD_ERROR: \(error)")
 
             DispatchQueue.main.async {
                 self.hideSkeletonView()
@@ -910,22 +1195,37 @@ extension MessageableChannelViewController {
     }
 
     /// Load one page of older messages from cache if available; merge with localMessages and preserve scroll. Returns true if a page was loaded.
-    private func loadOlderMessagesFromCacheIfAvailable(channelId: String, oldContentOffset: CGPoint, oldContentHeight: CGFloat) async -> Bool {
+    private func loadOlderMessagesFromCacheIfAvailable(channelId: String, oldContentOffset: CGPoint, oldContentHeight: CGFloat, prefetchedTotal: Int? = nil) async -> Bool {
         guard let userId = viewModel.viewState.currentUser?.id,
               let baseURL = viewModel.viewState.baseURL else { return false }
-        let totalCount = await MessageCacheManager.shared.cachedMessageCount(for: channelId, userId: userId, baseURL: baseURL)
-        cachedMessageTotal = totalCount
         let currentOffset = cachedMessageOffset
-        guard totalCount > currentOffset else { return false }
-        let cached = await MessageCacheManager.shared.loadCachedMessages(
-            for: channelId,
-            userId: userId,
-            baseURL: baseURL,
-            limit: cachePageSize,
-            offset: currentOffset
-        )
+        let totalCount: Int
+        let cached: [Message]
+        if let prefetchedTotal {
+            guard prefetchedTotal > currentOffset else { return false }
+            totalCount = prefetchedTotal
+            cached = await MessageCacheManager.shared.loadCachedMessages(
+                for: channelId,
+                userId: userId,
+                baseURL: baseURL,
+                limit: cachePageSize,
+                offset: currentOffset
+            )
+        } else {
+            let result = await MessageCacheManager.shared.loadCachedPageWithCount(
+                for: channelId,
+                userId: userId,
+                baseURL: baseURL,
+                limit: cachePageSize,
+                offset: currentOffset
+            )
+            guard result.totalCount > currentOffset else { return false }
+            totalCount = result.totalCount
+            cached = result.messages
+        }
+        cachedMessageTotal = totalCount
         guard !cached.isEmpty else { return false }
-        print("📂 [MessageCache] UI: loading older page from cache for channel \(channelId) (offset \(currentOffset), \(cached.count) messages)")
+        // print("📂 [MessageCache] UI: loading older page from cache for channel \(channelId) (offset \(currentOffset), \(cached.count) messages)")
         let authorIds = Set(cached.map { $0.author })
         let cachedUsers = await MessageCacheManager.shared.loadCachedUsers(for: Array(authorIds), currentUserId: userId, baseURL: baseURL)
         await MainActor.run {
@@ -984,9 +1284,9 @@ extension MessageableChannelViewController {
                 return
             }
 
-            print(
-                "🌐 API CALL: loadMoreMessages (before) - Channel: \(viewModel.channel.id), Before: \(messageId ?? "nil")"
-            )
+            // print(
+                // "🌐 API CALL: loadMoreMessages (before) - Channel: \(viewModel.channel.id), Before: \(messageId ?? "nil")"
+            // )
 
             // CRITICAL FIX: Set flag to prevent memory cleanup during older message loading
             isLoadingOlderMessages = true
@@ -1029,34 +1329,37 @@ extension MessageableChannelViewController {
             let loadTask = Task<Void, Never>(priority: .userInitiated) {
                 do {
                     var apiMessageId = messageId
-                    var curOffset = oldContentOffset
-                    var curHeight = oldContentHeight
                     let chId = self.viewModel.channel.id
-                    for _ in 0..<50 {
-                        let loaded = await self.loadOlderMessagesFromCacheIfAvailable(channelId: chId, oldContentOffset: curOffset, oldContentHeight: curHeight)
-                        if !loaded { break }
-                        guard let uid = self.viewModel.viewState.currentUser?.id,
-                              let baseURL = self.viewModel.viewState.baseURL else { break }
+
+                    // Load one page from cache (scroll triggers load the next page naturally)
+                    if let uid = self.viewModel.viewState.currentUser?.id,
+                       let baseURL = self.viewModel.viewState.baseURL {
                         let total = await MessageCacheManager.shared.cachedMessageCount(for: chId, userId: uid, baseURL: baseURL)
-                        if await MainActor.run(body: { self.cachedMessageOffset }) >= total { break }
-                        let msgs = await MainActor.run { self.viewModel.messages }
-                        guard let first = msgs.first else { break }
-                        apiMessageId = first
-                        curOffset = await MainActor.run { self.tableView.contentOffset }
-                        curHeight = await MainActor.run { self.tableView.contentSize.height }
+                        let loaded = await self.loadOlderMessagesFromCacheIfAvailable(
+                            channelId: chId,
+                            oldContentOffset: oldContentOffset,
+                            oldContentHeight: oldContentHeight,
+                            prefetchedTotal: total
+                        )
+                        if loaded {
+                            let msgs = await MainActor.run { self.viewModel.messages }
+                            if let first = msgs.first {
+                                apiMessageId = first
+                            }
+                        }
                     }
 
-                    print(
-                        "⏳ BEFORE_CALL: Waiting for API response for messageId=\(apiMessageId ?? "nil"), channelId=\(self.viewModel.channel.id)"
-                    )
-                    print(
-                        "⏳ BEFORE_CALL: Calling viewModel.loadMoreMessages with before=\(apiMessageId ?? "nil")"
-                    )
+                    // print(
+                        // "⏳ BEFORE_CALL: Waiting for API response for messageId=\(apiMessageId ?? "nil"), channelId=\(self.viewModel.channel.id)"
+                    // )
+                    // print(
+                        // "⏳ BEFORE_CALL: Calling viewModel.loadMoreMessages with before=\(apiMessageId ?? "nil")"
+                    // )
                     let loadResult = await self.viewModel.loadMoreMessages(
                         before: apiMessageId
                     )
 
-                    print("✅ BEFORE_CALL: API call completed, result is nil? \(loadResult == nil)")
+                    // print("✅ BEFORE_CALL: API call completed, result is nil? \(loadResult == nil)")
 
                     // If result is not nil, log more details
                     if let result = loadResult {
@@ -1170,7 +1473,7 @@ extension MessageableChannelViewController {
 
                                 // CRITICAL: Mark data source as updating before changes
                                 self.isDataSourceUpdating = true
-                                print("📊 DATA_SOURCE: Marking as updating for loadMoreMessages")
+                                // print("📊 DATA_SOURCE: Marking as updating for loadMoreMessages")
 
                                 // Update data source
                                 self.dataSource = LocalMessagesDataSource(
@@ -1190,7 +1493,7 @@ extension MessageableChannelViewController {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                     [weak self] in
                                     self?.isDataSourceUpdating = false
-                                    print("📊 DATA_SOURCE: Marking as stable after loadMoreMessages")
+                                    // print("📊 DATA_SOURCE: Marking as stable after loadMoreMessages")
                                 }
 
                                 // Multiple attempts to ensure precise scrolling
@@ -1323,7 +1626,7 @@ extension MessageableChannelViewController {
         if let lastEmpty = lastEmptyResponseTime,
             Date().timeIntervalSince(lastEmpty) < 60.0
         {  // Don't retry for 1 minute
-            print("⏹️ LOAD_BLOCKED: Reached beginning of conversation recently, skipping load")
+            // print("⏹️ LOAD_BLOCKED: Reached beginning of conversation recently, skipping load")
             return
         }
 
@@ -1469,8 +1772,8 @@ extension MessageableChannelViewController {
     // Load messages near a specific message ID
     internal func loadMessagesNearby(messageId: String) async -> Bool {
         do {
-            print("🔍 NEARBY_API: Fetching messages nearby \(messageId) using nearby API")
-            print("🌐 NEARBY_API: Channel: \(viewModel.channel.id), Target: \(messageId)")
+            // print("🔍 NEARBY_API: Fetching messages nearby \(messageId) using nearby API")
+            // print("🌐 NEARBY_API: Channel: \(viewModel.channel.id), Target: \(messageId)")
 
             // Use the nearby API to fetch messages around the target message with timeout
             let result = try await withThrowingTaskGroup(of: FetchHistory.self) { group in
@@ -1495,57 +1798,57 @@ extension MessageableChannelViewController {
                 return result
             }
 
-            print(
-                "✅ NEARBY_API: Response received with \(result.messages.count) messages, \(result.users.count) users"
-            )
+            // print(
+                // "✅ NEARBY_API: Response received with \(result.messages.count) messages, \(result.users.count) users"
+            // )
 
             // DEBUG: Check if any messages have replies
             let messagesWithReplies = result.messages.filter { $0.replies?.isEmpty == false }
-            print(
-                "🔗 NEARBY_DEBUG: Out of \(result.messages.count) messages, \(messagesWithReplies.count) have replies"
-            )
+            // print(
+                // "🔗 NEARBY_DEBUG: Out of \(result.messages.count) messages, \(messagesWithReplies.count) have replies"
+            // )
             for message in messagesWithReplies {
-                print("🔗 NEARBY_DEBUG: Message \(message.id) has replies: \(message.replies ?? [])")
+                // print("🔗 NEARBY_DEBUG: Message \(message.id) has replies: \(message.replies ?? [])")
             }
 
             // Check if we got messages and the target message is included
             if !result.messages.isEmpty {
                 let targetFound = result.messages.contains { $0.id == messageId }
-                print(
-                    "🎯 NEARBY_API: Target message \(messageId) found in nearby results: \(targetFound)"
-                )
+                // print(
+                    // "🎯 NEARBY_API: Target message \(messageId) found in nearby results: \(targetFound)"
+                // )
 
                 // Debug: Print all message IDs we got
                 let messageIds = result.messages.map { $0.id }
-                print(
-                    "🔍 NEARBY_API: Returned message IDs: \(messageIds.prefix(5))...\(messageIds.suffix(5))"
-                )
+                // print(
+                    // "🔍 NEARBY_API: Returned message IDs: \(messageIds.prefix(5))...\(messageIds.suffix(5))"
+                // )
 
                 if !targetFound {
-                    print(
-                        "⚠️ NEARBY_API: Target message not found in nearby results, trying direct fetch"
-                    )
+                    // print(
+                        // "⚠️ NEARBY_API: Target message not found in nearby results, trying direct fetch"
+                    // )
                     // Try to fetch the target message directly
                     do {
-                        print("🌐 DIRECT_FETCH: Attempting to fetch target message directly")
+                        // print("🌐 DIRECT_FETCH: Attempting to fetch target message directly")
                         let targetMessage = try await viewModel.viewState.http.fetchMessage(
                             channel: viewModel.channel.id,
                             message: messageId
                         ).get()
 
-                        print(
-                            "✅ DIRECT_FETCH: Successfully fetched target message directly: \(targetMessage.id)"
-                        )
+                        // print(
+                            // "✅ DIRECT_FETCH: Successfully fetched target message directly: \(targetMessage.id)"
+                        // )
                         // Store it in viewState
                         viewModel.viewState.messages[targetMessage.id] = targetMessage
                     } catch {
-                        print("❌ DIRECT_FETCH: Could not fetch target message directly: \(error)")
+                        // print("❌ DIRECT_FETCH: Could not fetch target message directly: \(error)")
                         // Return false since we couldn't get the target message
                         return false
                     }
                 }
             } else {
-                print("❌ NEARBY_API: No messages returned from nearby API")
+                // print("❌ NEARBY_API: No messages returned from nearby API")
                 return false
             }
 
@@ -1688,15 +1991,15 @@ extension MessageableChannelViewController {
                 }
             }
         } catch {
-            print("❌ NEARBY_API: Error loading messages nearby target: \(error)")
+            // print("❌ NEARBY_API: Error loading messages nearby target: \(error)")
 
             // Check if it's a specific error type
             if let revoltError = error as? RevoltError {
-                print("❌ NEARBY_API: Revolt error details: \(revoltError)")
+                // print("❌ NEARBY_API: Revolt error details: \(revoltError)")
             } else if let httpError = error as? HTTPError {
-                print("❌ NEARBY_API: HTTP error details: \(httpError)")
+                // print("❌ NEARBY_API: HTTP error details: \(httpError)")
             } else {
-                print("❌ NEARBY_API: Unknown error type: \(type(of: error))")
+                // print("❌ NEARBY_API: Unknown error type: \(type(of: error))")
             }
 
             // Reset loading states in case of error

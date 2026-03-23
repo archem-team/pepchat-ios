@@ -61,7 +61,7 @@ class AudioSessionManager: NSObject {
         switch type {
         case .began:
             // Audio session was interrupted (phone call, alarm, etc.)
-            print("🔊 Audio session interrupted - pausing playback")
+            // print("🔊 Audio session interrupted - pausing playback")
             audioManager.pause()
             
         case .ended:
@@ -73,10 +73,10 @@ class AudioSessionManager: NSObject {
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
             if options.contains(.shouldResume) {
                 // We can resume playback automatically
-                print("🔊 Audio session interruption ended - can resume")
+                // print("🔊 Audio session interruption ended - can resume")
                 // Don't auto-resume, let user manually resume for better UX
             } else {
-                print("🔊 Audio session interruption ended - manual resume required")
+                // print("🔊 Audio session interruption ended - manual resume required")
             }
             
         @unknown default:
@@ -94,18 +94,20 @@ class AudioSessionManager: NSObject {
         switch reason {
         case .oldDeviceUnavailable:
             // Headphones were unplugged or Bluetooth device disconnected
-            print("🎧 Audio device disconnected - pausing playback")
+            // print("🎧 Audio device disconnected - pausing playback")
             audioManager.pause()
             
         case .newDeviceAvailable:
             // New audio device connected
-            print("🎧 Audio device connected")
+            // print("🎧 Audio device connected")
             // Don't auto-resume, let user choose
             
+            break
         case .routeConfigurationChange:
             // Audio route configuration changed
-            print("🔊 Audio route configuration changed")
+            // print("🔊 Audio route configuration changed")
             
+            break
         default:
             break
         }
@@ -114,7 +116,7 @@ class AudioSessionManager: NSObject {
     @objc private func appDidEnterBackground() {
         // Continue playing in background if audio is playing
         // iOS will automatically handle this for AVPlayer
-        print("📱 App entered background - audio can continue playing")
+        // print("📱 App entered background - audio can continue playing")
     }
     
     @objc private func appWillEnterForeground() {
@@ -123,7 +125,7 @@ class AudioSessionManager: NSObject {
         
         // Check if we have audio currently playing
         guard audioManager.isPlaying else {
-            print("📱 App entering foreground - no audio playing, keeping audio session inactive to avoid interrupting other apps")
+            // print("📱 App entering foreground - no audio playing, keeping audio session inactive to avoid interrupting other apps")
             return
         }
         
@@ -137,9 +139,9 @@ class AudioSessionManager: NSObject {
             // Only activate if not already active
             if !session.isOtherAudioPlaying {
                 try session.setActive(true)
-                print("📱 App entering foreground - audio session reactivated (audio was playing)")
+                // print("📱 App entering foreground - audio session reactivated (audio was playing)")
             } else {
-                print("📱 App entering foreground - other audio is playing, keeping session inactive")
+                // print("📱 App entering foreground - other audio is playing, keeping session inactive")
             }
             
         } catch {

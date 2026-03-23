@@ -74,6 +74,7 @@ struct IntroScreen: View {
                              hasSecureBtn: false,
                              hasClearBtn: false,
                              keyboardType: .URL)
+            .accessibilityID(AccessibilityID.intro.apiUrlField)
             .padding(bottom: .padding32)
             .onChange(of: baseUrl){_,_ in
                 withAnimation{
@@ -93,6 +94,7 @@ struct IntroScreen: View {
                           buttonState: confirmButtonStatus){
                 onClickConfirm()
             }
+                          .accessibilityID(AccessibilityID.intro.confirmButton)
                           .padding(bottom: .size24)
                           .id("confirm-btn")
             

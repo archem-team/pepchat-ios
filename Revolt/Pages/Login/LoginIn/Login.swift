@@ -99,6 +99,7 @@ struct LogIn: View {
             NavigationLink("Register", value: WelcomePath.signup)
                 .font(.peptideButtonFont)
                 .foregroundStyle(.textDefaultGray01)
+                .accessibilityID(AccessibilityID.auth.login.registerLink)
         )
     }
     
@@ -130,14 +131,15 @@ struct LogIn: View {
                                      state: $emailTextFieldStatus,
                                      placeholder: "Email",
                                      keyboardType: .emailAddress){ isFocus in
-                        
+
                         if(!isFocus && email.isNotEmpty){
                             emailTextFieldStatus = email.isValidEmail == false ? .error(message: "Enter valid email.",
                                                                                         icon: .peptideClose) : .default
                         }
-                        
-                        
+
+
                     }
+                    .accessibilityID(AccessibilityID.auth.login.emailField)
                     .padding(.top, .padding32)
                     .onChange(of: email){_,_ in
                         onChangeEmail()
@@ -151,6 +153,7 @@ struct LogIn: View {
                                      hasSecureBtn: true,
                                      hasClearBtn: false
                     )
+                    .accessibilityID(AccessibilityID.auth.login.passwordField)
                     .padding(.top, .padding8)
                     .onChange(of: password){_,_ in
                         onChangePassword()
@@ -219,6 +222,7 @@ struct LogIn: View {
                     NavigationLink("Forgot Password", value: WelcomePath.forgetPassword)
                         .font(.peptideButtonFont)
                         .foregroundStyle(.textYellow07)
+                        .accessibilityID(AccessibilityID.auth.login.forgotPasswordLink)
                         .padding(.top, .padding12)
                     
                     Spacer(minLength: .zero)
@@ -243,6 +247,7 @@ struct LogIn: View {
                               buttonState: loginBtnStatus){
                     Task { await logIn() }
                 }
+                              .accessibilityID(AccessibilityID.auth.login.loginButton)
                               .padding(.top, .padding32)
                 
                 // Navigation links for additional actions.

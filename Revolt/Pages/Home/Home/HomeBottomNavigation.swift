@@ -39,6 +39,7 @@ struct HomeBottomNavigation: View {
                                onClick: {
                     homeTab = .you
                 })
+                .accessibilityID(AccessibilityID.home.youTab)
                 
             }
             .padding(top: .padding8, leading: .padding16, trailing: .padding16)

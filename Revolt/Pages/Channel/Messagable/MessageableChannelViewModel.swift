@@ -20,7 +20,7 @@ extension MessageableChannelViewModel {
     private static let delayAfterNearby: TimeInterval = 10.0
     
     // Combined method to load messages before or after a specific message ID
-    func loadMoreMessages(before: String? = nil, after: String? = nil, sort: String? = nil) async -> FetchHistory? {
+    func loadMoreMessages(before: String? = nil, after: String? = nil, sort: String? = nil, includeUsers: Bool = true) async -> FetchHistory? {
         // Exit early if in preview mode
         if isPreview { return nil }
         
@@ -47,27 +47,20 @@ extension MessageableChannelViewModel {
         // print("   - After: \(after ?? "nil")")
         // print("   - Sort: \(sort ?? "Latest")")
         
-        // CRITICAL: Don't include the 'messages' parameter in the API call
-        // as it's causing a 500 error
-        // Fetch messages from API with reduced limit for faster response
-        let result = try? await viewState.http.fetchHistory(
-            channel: channel.id,
-            limit: 100, // Reduced from 100 to 50 for faster API response
-            before: before,
-            after: after,
-            sort: sort ?? "Latest",
-            server: serverId
-        ).get()
-        
-        // TIMING: Calculate API call duration
-        let apiEndTime = Date()
-        let apiDuration = apiEndTime.timeIntervalSince(apiStartTime)
-        // print("⏱️ API_CALL_END [\(callType)]: \(apiEndTime.timeIntervalSince1970)")
-        // print("⏱️ API_CALL_DURATION [\(callType)]: \(String(format: "%.2f", apiDuration)) seconds")
-        
-        // Early return if we didn't get a result
-        guard let result = result else {
-            // print("❌ VIEW_MODEL: API request failed or returned nil after \(String(format: "%.2f", apiDuration))s")
+        // Fetch messages from API
+        let result: FetchHistory
+        do {
+            result = try await viewState.http.fetchHistory(
+                channel: channel.id,
+                limit: 100,
+                before: before,
+                after: after,
+                sort: sort ?? "Latest",
+                server: serverId,
+                include_users: includeUsers
+            ).get()
+        } catch {
+            print("❌ fetchHistory failed channel=\(channel.id) error=\(error)")
             return nil
         }
         

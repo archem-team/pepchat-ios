@@ -144,7 +144,7 @@ extension MessageCell {
                 }
             }
         } catch {
-            print("Error processing custom emojis with IDs: \(error)")
+            // print("Error processing custom emojis with IDs: \(error)")
         }
         
         // Process named emoji shortcodes like :smile:, :1234:, etc.
@@ -160,7 +160,7 @@ extension MessageCell {
                 if let shortcodeRange = Range(match.range(at: 1), in: text) {
                     let shortcode = String(text[shortcodeRange])
                     let fullMatchRange = match.range
-                    print("🔍 MessageCell: Processing shortcode: '\(shortcode)'")
+                    // print("🔍 MessageCell: Processing shortcode: '\(shortcode)'")
                     
                     // Check if this is an emoji shortcode using EmojiParser
                     if let emoji = EmojiParser.findEmojiByShortcode(shortcode) {
@@ -201,7 +201,7 @@ extension MessageCell {
                 }
             }
         } catch {
-            print("Error processing named emoji shortcodes: \(error)")
+            // print("Error processing named emoji shortcodes: \(error)")
         }
     }
     

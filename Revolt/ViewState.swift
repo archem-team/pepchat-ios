@@ -16,6 +16,37 @@ import Network
 public class ViewState: ObservableObject {
     var cancellables = Set<AnyCancellable>()
     static var shared: ViewState? = nil
+
+    // MARK: - Batch Update Infrastructure
+    // Suppresses per-property objectWillChange notifications during WebSocket event
+    // processing, coalescing them into a single notification. Mirrors the proven
+    // pattern used by currentlyTyping's debounced flush.
+    private var _batchDepth = 0
+
+    /// Execute a block of mutations with a single coalesced `objectWillChange` notification.
+    /// All hot-path property mutations inside the block are suppressed; one notification
+    /// fires before the block runs (matching @Published willSet semantics), and deferred
+    /// side effects (debouncedSave, badge flush) run once after the block completes.
+    func batchUpdate(_ work: () -> Void) {
+        objectWillChange.send()
+        _batchDepth += 1
+        defer {
+            _batchDepth -= 1
+            _runDeferredBatchSideEffects()
+        }
+        work()
+    }
+
+    private func _runDeferredBatchSideEffects() {
+        guard _batchDepth == 0 else { return }
+        // Debounced saves — capture final snapshots once
+        let usersSnapshot = self.users
+        debouncedSave(key: "users") { try? JSONEncoder().encode(usersSnapshot) }
+        let cmSnapshot = self.channelMessages
+        debouncedSave(key: "channelMessages") { try? JSONEncoder().encode(cmSnapshot) }
+        // Badge flush
+        _scheduleBadgeFlush()
+    }
     
 #if os(iOS)
     static var application: UIApplication? = nil
@@ -42,6 +73,10 @@ public class ViewState: ObservableObject {
     }
     
     @Published var wsCurrentState : WsState = .connecting
+    /// Set to `true` once the WebSocket Ready event has been fully processed.
+    /// The deferred cache-loading Task checks this and bails if Ready already
+    /// provided authoritative state, avoiding stale-cache overwrites.
+    var readyHasBeenProcessed = false
     @Published var ws: WebSocketStream? = nil
     
     @Published var apiInfo: ApiInfo? = nil {
@@ -58,17 +93,17 @@ public class ViewState: ObservableObject {
             keychain["sessionToken"] = sessionToken
         }
     }
-    @Published var users: [String: Types.User] {
+    var users: [String: Types.User] {
+        willSet {
+            if _batchDepth == 0 { objectWillChange.send() }
+        }
         didSet {
-            // MEMORY MANAGEMENT: Use debounced save (memory limits disabled for users)
-            // Move JSON encoding off main thread to prevent app hanging
-            // CRITICAL FIX: Capture value directly and perform encoding ONLY in the debounced work item.
-            // This ensures we don't re-encode on every tiny change or for each user removal.
-            let usersSnapshot = self.users
-            debouncedSave(key: "users") {
-                try? JSONEncoder().encode(usersSnapshot)
+            if _batchDepth == 0 {
+                let usersSnapshot = self.users
+                debouncedSave(key: "users") {
+                    try? JSONEncoder().encode(usersSnapshot)
+                }
             }
-//            saveUsersToSharedContainer()
         }
     }
     
@@ -81,68 +116,46 @@ public class ViewState: ObservableObject {
         }
     }
     
-    @Published var servers: OrderedDictionary<String, Server> {
-        didSet {
-            // DISABLED: Don't save servers to UserDefaults to force refresh from backend
-            // let servers = self.servers
-            // Task.detached(priority: .background) { [weak self] in
-            //     guard let self = self else { return }
-            //     if let data = try? JSONEncoder().encode(servers) {
-            //         await MainActor.run {
-            //             self.debouncedSave(key: "servers", data: data)
-            //         }
-            //     }
-            // }
+    var servers: OrderedDictionary<String, Server> {
+        willSet {
+            if _batchDepth == 0 { objectWillChange.send() }
         }
     }
     /// Persisted cache of server ID -> membership for Discover screen. Loaded on launch for instant UI; updated when user joins/leaves (local or via WebSocket).
     @Published var discoverMembershipCache: [String: Bool] = [:]
-    @Published var channels: [String: Channel] {
-        didSet {
-            // DISABLED: Don't save channels to UserDefaults to force refresh from backend
-            // let channels = self.channels
-            // Task.detached(priority: .background) { [weak self] in
-            //     guard let self = self else { return }
-            //     if let data = try? JSONEncoder().encode(channels) {
-            //         await MainActor.run {
-            //             self.debouncedSave(key: "channels", data: data)
-            //         }
-            //     }
-            // }
+    var channels: [String: Channel] {
+        willSet {
+            if _batchDepth == 0 { objectWillChange.send() }
         }
     }
-    @Published var messages: [String: Message] {
+    var messages: [String: Message] = [:] {
+        willSet {
+            if _batchDepth == 0 { objectWillChange.send() }
+        }
         didSet {
-            // MEMORY MANAGEMENT: Don't persist messages to UserDefaults - they're loaded from server
-            // This prevents memory spikes from encoding large dictionaries
-            Task { @MainActor in
-                // If we have messages and loading was active, turn off loading
-                if self.isLoadingChannelMessages && !messages.isEmpty {
-                    self.setChannelLoadingState(isLoading: false)
+            // Loading state check: if messages arrived and we were loading, stop loading.
+            // This runs even inside batches since it's lightweight and UI-relevant.
+            if isLoadingChannelMessages && !messages.isEmpty {
+                setChannelLoadingState(isLoading: false)
+            }
+        }
+    }
+    var channelMessages: [String: [String]] {
+        willSet {
+            if _batchDepth == 0 { objectWillChange.send() }
+        }
+        didSet {
+            if _batchDepth == 0 {
+                let channelMessagesSnapshot = self.channelMessages
+                debouncedSave(key: "channelMessages") {
+                    try? JSONEncoder().encode(channelMessagesSnapshot)
                 }
-                self.enforceMemoryLimits()
             }
-        }
-    }
-    @Published var channelMessages: [String: [String]] {
-        didSet {
-            // MEMORY MANAGEMENT: Use debounced save for channelMessages
-            // Move JSON encoding off main thread to prevent app hanging
-            // CRITICAL FIX: Capture value directly and encode only once per debounce window.
-            let channelMessagesSnapshot = self.channelMessages
-            debouncedSave(key: "channelMessages") {
-                try? JSONEncoder().encode(channelMessagesSnapshot)
-            }
-            
-            // Check if we should turn off loading state
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                if self.isLoadingChannelMessages {
-                    if case .channel(let channelId) = self.currentChannel {
-                        let hasMessages = (self.channelMessages[channelId]?.count ?? 0) > 0
-                        if hasMessages {
-                            self.setChannelLoadingState(isLoading: false)
-                        }
+            // Loading state check (lightweight, runs always)
+            if isLoadingChannelMessages {
+                if case .channel(let channelId) = self.currentChannel {
+                    if (self.channelMessages[channelId]?.count ?? 0) > 0 {
+                        setChannelLoadingState(isLoading: false)
                     }
                 }
             }
@@ -150,37 +163,21 @@ public class ViewState: ObservableObject {
     }
     /// Channel ID -> set of message IDs that have been deleted (soft delete); used by WebSocket and cache so deleted IDs are not shown.
     var deletedMessageIds: [String: Set<String>] = [:]
-    @Published var members: [String: [String: Member]] {
-        didSet {
-            // DISABLED: Don't save members to UserDefaults to force refresh from backend
-            // let members = self.members
-            // Task.detached(priority: .background) { [weak self] in
-            //     guard let self = self else { return }
-            //     if let data = try? JSONEncoder().encode(members) {
-            //         await MainActor.run {
-            //             self.debouncedSave(key: "members", data: data)
-            //         }
-            //     }
-            // }
+    var members: [String: [String: Member]] {
+        willSet {
+            if _batchDepth == 0 { objectWillChange.send() }
         }
     }
-    @Published var dms: [Channel] {
-        didSet {
-            // DISABLED: Don't save DMs to UserDefaults to force refresh from backend
-            // let dms = self.dms
-            // Task.detached(priority: .background) { [weak self] in
-            //     guard let self = self else { return }
-            //     if let data = try? JSONEncoder().encode(dms) {
-            //         await MainActor.run {
-            //             self.debouncedSave(key: "dms", data: data)
-            //         }
-            //     }
-            // }
+    var dms: [Channel] {
+        willSet {
+            if _batchDepth == 0 { objectWillChange.send() }
         }
     }
     
     // LAZY LOADING: DM Management
-    @Published var allDmChannelIds: [String] = [] // All DM channel IDs in order
+    var allDmChannelIds: [String] = [] { // All DM channel IDs in order
+        willSet { if _batchDepth == 0 { objectWillChange.send() } }
+    }
     @Published var loadedDmBatches: Set<Int> = [] // Track which batches are loaded
     let dmBatchSize = 15 // Load 15 DMs per batch
     internal var isLoadingDmBatch = false
@@ -211,18 +208,78 @@ public class ViewState: ObservableObject {
     }
     
     @Published var state: ConnectionState = .connecting
-    @Published var forceMainScreen: Bool = false
-    @Published var queuedMessages: [String: [QueuedMessage]] = [:]
+    var queuedMessages: [String: [QueuedMessage]] = [:] {
+        willSet { if _batchDepth == 0 { objectWillChange.send() } }
+    }
     /// Per-channel draft text (composer only). Session-bound; loaded in processReadyData, cleared in signOut/destroyCache.
     var channelDrafts: [String: String] = [:]
     @Published var loadingMessages: Set<String> = Set()
+
+    // PERFORMANCE: Typing indicators use a non-published backing store with debounced
+    // publishing to avoid re-rendering the entire view tree on every keystroke event.
+    // WebSocket events write to _typingBacking; the published property updates at most
+    // once per 200ms via coalesced flush.
+    private var _typingBacking: [String: OrderedSet<String>] = [:]
     @Published var currentlyTyping: [String: OrderedSet<String>] = [:]
+    private var _typingFlushTask: Task<Void, Never>?
+
+    /// Update typing state without immediately triggering @Published.
+    /// Changes are coalesced and flushed after 200ms of quiet.
+    func updateTyping(channelId: String, userId: String, isTyping: Bool) {
+        if isTyping {
+            _typingBacking[channelId, default: OrderedSet()].append(userId)
+        } else {
+            _typingBacking[channelId]?.removeAll(where: { $0 == userId })
+            if _typingBacking[channelId]?.isEmpty == true {
+                _typingBacking.removeValue(forKey: channelId)
+            }
+        }
+        _scheduleTypingFlush()
+    }
+
+    /// Immediately remove typing state for a single channel without disturbing
+    /// the global flush task (which may carry pending updates for other channels).
+    func clearTyping(forChannel channelId: String) {
+        _typingBacking.removeValue(forKey: channelId)
+        currentlyTyping.removeValue(forKey: channelId)
+    }
+
+    /// Immediately remove all typing state (used on sign-out).
+    func clearAllTyping() {
+        _typingFlushTask?.cancel()
+        _typingFlushTask = nil
+        _typingBacking.removeAll()
+        currentlyTyping.removeAll()
+    }
+
+    private func _scheduleTypingFlush() {
+        _typingFlushTask?.cancel()
+        _typingFlushTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms debounce
+            guard let self, !Task.isCancelled else { return }
+            self.currentlyTyping = self._typingBacking
+        }
+    }
     @Published var isOnboarding: Bool = false
-    @Published var unreads: [String: Unread] = [:] {
+    private var _badgeFlushTask: Task<Void, Never>?
+
+    var unreads: [String: Unread] = [:] {
+        willSet {
+            if _batchDepth == 0 { objectWillChange.send() }
+        }
         didSet {
-            unreadsVersion = UUID()
-            // Update app badge count when unreads change
-            updateAppBadgeCount()
+            if _batchDepth == 0 {
+                _scheduleBadgeFlush()
+            }
+        }
+    }
+
+    @MainActor private func _scheduleBadgeFlush() {
+        _badgeFlushTask?.cancel()
+        _badgeFlushTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms debounce
+            guard let self, !Task.isCancelled else { return }
+            self.updateAppBadgeCount()
         }
     }
     
@@ -234,7 +291,7 @@ public class ViewState: ObservableObject {
     
     /// Temporarily disable automatic acknowledgment after marking as unread
     func disableAutoAcknowledgment() {
-        print("🚫 ViewState: Disabling auto-acknowledgment for \(autoAckDisableDuration) seconds")
+        // print("🚫 ViewState: Disabling auto-acknowledgment for \(autoAckDisableDuration) seconds")
         isAutoAckDisabled = true
         autoAckDisableTime = Date()
     }
@@ -250,7 +307,7 @@ public class ViewState: ObservableObject {
             return true
         } else {
             // Disable period has expired, re-enable auto-ack
-            print("✅ ViewState: Auto-acknowledgment re-enabled after disable period")
+            // print("✅ ViewState: Auto-acknowledgment re-enabled after disable period")
             isAutoAckDisabled = false
             autoAckDisableTime = nil
             return false
@@ -270,8 +327,7 @@ public class ViewState: ObservableObject {
     private let cleanupTriggeredAt = 800 // Start cleanup when 80% full (legacy, not used)
     internal let maxChannelsInMemory = 2000 // Maximum channels to keep in memory (increased to load all servers)
     
-    @Published var unreadsVersion: UUID = UUID()
-    @Published var currentUserSheet: UserMaybeMember? = nil
+        @Published var currentUserSheet: UserMaybeMember? = nil
     @Published var currentUserOptionsSheet: UserMaybeMember? = nil
     @Published var atTopOfChannel: Set<String> = []
     
@@ -411,7 +467,7 @@ public class ViewState: ObservableObject {
         if let data = try? JSONEncoder().encode(users) {
             UserDefaults.standard.set(data, forKey: "users")
             UserDefaults.standard.synchronize() // Force synchronization
-            print("💾 Forced save of users data completed")
+            // print("💾 Forced save of users data completed")
         }
     }
     
@@ -539,120 +595,89 @@ public class ViewState: ObservableObject {
         }
         let decoder = JSONDecoder()
         
-        // Initialize HTTPClient with self reference for immediate state updates
+        // Read token from keychain before any self access
+        let token = Keychain(service: "chat.peptide.app")["sessionToken"]
+
+        // === FAST PATH: Minimum needed for first frame ===
         self.http = HTTPClient(token: nil, baseURL: "https://peptide.chat/api", viewState: nil)
-        
         self.apiInfo = ViewState.decodeUserDefaults(forKey: "apiInfo", withDecoder: decoder, defaultingTo: nil)
         self.baseURL = ViewState.decodeUserDefaults(forKey: "baseURL", withDecoder: decoder, defaultingTo: defaultBaseURL)
-        
-        self.userSettingsStore = UserSettingsData.maybeRead(viewState: nil, isLoginUser: keychain["sessionToken"] != nil)
-        self.sessionToken = keychain["sessionToken"]
-        self.userSettingsStore = UserSettingsData.maybeRead(viewState: nil, isLoginUser: true)
-        
 
-        // CRITICAL DEBUG: Add logging for data loading from UserDefaults
-        // print("📱 INIT: Loading data from UserDefaults...")
-        
-        self.users = ViewState.decodeUserDefaults(forKey: "users", withDecoder: decoder, defaultingTo: [:])
-        // Force refresh servers and channels from backend instead of using cached data
-        /*self.servers = [:]*/ // ViewState.decodeUserDefaults(forKey: "servers", withDecoder: decoder, defaultingTo: [:])
-        let cachedServers = ViewState.loadServersCacheSync()
-        
-        if !cachedServers.isEmpty {
-            self.servers = cachedServers
-        } else {
-            self.servers = [:]
-        }
-        if Keychain(service: "chat.peptide.app")["sessionToken"] != nil {
-            self.discoverMembershipCache = ViewState.loadMembershipCacheSync()
-        } else {
-            self.discoverMembershipCache = [:]
-        }
-
-        self.channels = [:] // ViewState.decodeUserDefaults(forKey: "channels", withDecoder: decoder, defaultingTo: [:])
-        /*self.messages = ViewState.decodeUserDefaults(forKey: "messages", withDecoder: decoder, defaultingTo: [:])
-         self.channelMessages = ViewState.decodeUserDefaults(forKey: "channelMessages", withDecoder: decoder, defaultingTo: [:])*/
+        // Lightweight defaults — no disk I/O
+        self.users = [:]
+        self.servers = [:]
+        self.channels = [:]
         self.messages = [:]
         self.channelMessages = [:]
-        // Force refresh members from backend
-        self.members = [:] // ViewState.decodeUserDefaults(forKey: "members", withDecoder: decoder, defaultingTo: [:])
-        // Force refresh DMs from backend
-        self.dms = [] // ViewState.decodeUserDefaults(forKey: "dms", withDecoder: decoder, defaultingTo: [])
-        self.emojis = ViewState.decodeUserDefaults(forKey: "emojis", withDecoder: decoder, defaultingTo: [:])
-        
-        //self.currentSelection = ViewState.decodeUserDefaults(forKey: "currentSelection", withDecoder: decoder, defaultingTo: .dms)
-        //self.currentChannel = ViewState.decodeUserDefaults(forKey: "currentChannel", withDecoder: decoder, defaultingTo: .home)
-        
+        self.members = [:]
+        self.dms = []
+        self.emojis = [:]
+        self.discoverMembershipCache = [:]
         self.currentSelection = .discover
         self.currentChannel = .home
-        
         self.currentLocale = ViewState.decodeUserDefaults(forKey: "locale", withDecoder: decoder, defaultingTo: nil)
-        
         self.currentSessionId = UserDefaults.standard.string(forKey: "currentSessionId")
-        
         self.theme = ViewState.decodeUserDefaults(forKey: "theme", withDecoder: decoder, defaultingTo: .dark)
-        
         self.currentUser = ViewState.decodeUserDefaults(forKey: "currentUser", withDecoder: decoder, defaultingTo: nil)
-        
-        /*if let value = UserDefaults.standard.data(forKey: "path"), let path = try? decoder.decode(NavigationPath.CodableRepresentation.self, from: value) {
-         self.path = NavigationPath(path)
-         } else {
-         self.path = NavigationPath()
-         }*/
-        
         self.path = []
-        if self.currentUser != nil, self.apiInfo != nil {
-            self.forceMainScreen = true
-        }
+        self.userSettingsStore = UserSettingsData.maybeRead(viewState: nil, isLoginUser: token != nil)
 
+        // Now safe to use self — all stored properties initialized
+        self.sessionToken = token
+        self.http.token = token
         self.users["00000000000000000000000000"] = User(id: "00000000000000000000000000", username: "Revolt", discriminator: "0000")
-        
-        self.http.token = self.sessionToken
-        
-       
-        // Set viewState reference after initialization
         self.http.viewState = self
-        
-        self.userSettingsStore.viewState = self // this is a cursed workaround
+        self.userSettingsStore.viewState = self
         ViewState.shared = self
-        
-        // Apply server ordering after all properties are initialized
-        if !self.servers.isEmpty && !self.userSettingsStore.cache.orderSettings.servers.isEmpty {
-            self.applyServerOrdering()
-        }
-        
-        // Load channel cache at launch so cached server channels show before Ready (and when offline). Filter by current servers (§0.6); Ready will replace authoritatively.
-        if let userId = self.currentUser?.id, let base = self.baseURL, !self.servers.isEmpty {
-            let cached = ViewState.loadChannelCacheSync(userId: userId, baseURL: base)
-            for (serverId, channelList) in cached {
-                guard self.servers[serverId] != nil else { continue }
-                let allowedIds = Set(self.servers[serverId]?.channels ?? [])
-                for ch in channelList where allowedIds.contains(ch.id) {
-                    self.allEventChannels[ch.id] = ch
+
+        // === DEFERRED: Heavy disk I/O after first frame renders ===
+        Task { @MainActor [weak self] in
+            // Yield to let SwiftUI render the first frame before doing heavy work
+            await Task.yield()
+            guard let self else { return }
+
+            // These must run regardless of whether Ready beat us
+            self.loadPendingNotificationToken()
+            self.startPeriodicMemoryCleanup()
+            self.cleanupStaleUnreads()
+
+            // If Ready already provided authoritative state, skip stale cache
+            guard !self.readyHasBeenProcessed else { return }
+
+            let decoder = JSONDecoder()
+            self.users = ViewState.decodeUserDefaults(forKey: "users", withDecoder: decoder, defaultingTo: [:])
+            self.users["00000000000000000000000000"] = User(id: "00000000000000000000000000", username: "Revolt", discriminator: "0000")
+
+            let cachedServers = ViewState.loadServersCacheSync()
+            if !cachedServers.isEmpty {
+                self.servers = cachedServers
+            }
+
+            if self.sessionToken != nil {
+                self.discoverMembershipCache = ViewState.loadMembershipCacheSync()
+            }
+
+            self.emojis = ViewState.decodeUserDefaults(forKey: "emojis", withDecoder: decoder, defaultingTo: [:])
+
+            if !self.servers.isEmpty && !self.userSettingsStore.cache.orderSettings.servers.isEmpty {
+                self.applyServerOrdering()
+            }
+
+            if let userId = self.currentUser?.id, let base = self.baseURL, !self.servers.isEmpty {
+                let cached = ViewState.loadChannelCacheSync(userId: userId, baseURL: base)
+                for (serverId, channelList) in cached {
+                    guard self.servers[serverId] != nil else { continue }
+                    let allowedIds = Set(self.servers[serverId]?.channels ?? [])
+                    for ch in channelList where allowedIds.contains(ch.id) {
+                        self.allEventChannels[ch.id] = ch
+                    }
                 }
             }
+
+            self.baseEmojis = loadEmojis()
         }
-        
-        self.baseEmojis = loadEmojis()
-        
-        // Load any pending notification token
-        self.loadPendingNotificationToken()
-        
-        // MEMORY MANAGEMENT: Start periodic memory cleanup
-        startPeriodicMemoryCleanup()
-        
-        // Log loaded data counts after all initialization is complete
-        // print("📱 INIT: Loaded \(users.count) users from UserDefaults")
-        // print("📱 INIT: Loaded \(servers.count) servers from UserDefaults")
-        // print("📱 INIT: Loaded \(channels.count) channels from UserDefaults")
-        // print("📱 INIT: ViewState initialization completed")
-        
-        // PRELOAD: Start preloading important channels after initialization
-        Task {
-            await preloadImportantChannels()
-        }
-        
-        // PRELOAD: Listen for WebSocket reconnection to trigger preload
+
+        // Listen for WebSocket reconnection to trigger preload
         NotificationCenter.default.addObserver(
             forName: NSNotification.Name("WebSocketReconnected"),
             object: nil,
@@ -662,14 +687,7 @@ public class ViewState: ObservableObject {
                 await self?.preloadImportantChannels()
             }
         }
-        
-        // CLEANUP: Clean up stale unreads on startup
-        // This ensures badge count is accurate even if channels were deleted while app was closed
-        Task {
-            await MainActor.run { [weak self] in
-                self?.cleanupStaleUnreads()
-            }
-        }
+
         self.setupInternetObservation()
     }
     
@@ -699,24 +717,24 @@ public class ViewState: ObservableObject {
     internal func preloadChannel(channelId: String) async {
         // Check if channel has already been preloaded
         if preloadedChannels.contains(channelId) {
-            print("🚀 PRELOAD: Channel \(channelId) has already been preloaded, skipping")
+            // print("🚀 PRELOAD: Channel \(channelId) has already been preloaded, skipping")
             return
         }
         
         // Check if channel exists in our channels dictionary
         guard let channel = channels[channelId] else {
-            print("🚀 PRELOAD: Channel \(channelId) not found in channels dictionary")
+            // print("🚀 PRELOAD: Channel \(channelId) not found in channels dictionary")
             return
         }
         
         // Check if we already have messages for this channel
         if let existingMessages = channelMessages[channelId], !existingMessages.isEmpty {
-            print("🚀 PRELOAD: Channel \(channelId) already has \(existingMessages.count) messages, skipping preload")
+            // print("🚀 PRELOAD: Channel \(channelId) already has \(existingMessages.count) messages, skipping preload")
             preloadedChannels.insert(channelId) // Mark as preloaded since it has messages
             return
         }
         
-        print("🚀 PRELOAD: Loading messages for channel: \(channelId)")
+        // print("🚀 PRELOAD: Loading messages for channel: \(channelId)")
         
         do {
             // Get server ID if this is a server channel
@@ -734,7 +752,7 @@ public class ViewState: ObservableObject {
                 include_users: true
             ).get()
             
-            print("🚀 PRELOAD: Successfully loaded \(result.messages.count) messages for channel \(channelId)")
+            // print("🚀 PRELOAD: Successfully loaded \(result.messages.count) messages for channel \(channelId)")
             
             // Process users from the response
             for user in result.users {
@@ -765,13 +783,13 @@ public class ViewState: ObservableObject {
             // Store sorted message IDs in channelMessages
             channelMessages[channelId] = sortedIds
             
-            print("🚀 PRELOAD: Successfully stored \(sortedIds.count) messages for channel \(channelId) in memory")
+            // print("🚀 PRELOAD: Successfully stored \(sortedIds.count) messages for channel \(channelId) in memory")
             
             // Mark channel as preloaded
             preloadedChannels.insert(channelId)
             
         } catch {
-            print("🚀 PRELOAD: Failed to load messages for channel \(channelId): \(error)")
+            // print("🚀 PRELOAD: Failed to load messages for channel \(channelId): \(error)")
         }
     }
     
@@ -951,7 +969,7 @@ public class ViewState: ObservableObject {
         let endTime = CFAbsoluteTimeGetCurrent()
         let duration = (endTime - startTime) * 1000
 
-        print("⚡ USER_INSTANT_CLEANUP: Removed \(usersToRemove.count) users in \(String(format: "%.2f", duration))ms (\(initialUserCount) -> \(finalUserCount))")
+        // print("⚡ USER_INSTANT_CLEANUP: Removed \(usersToRemove.count) users in \(String(format: "%.2f", duration))ms (\(initialUserCount) -> \(finalUserCount))")
     }
     
     
@@ -1105,42 +1123,62 @@ public class ViewState: ObservableObject {
             ws?.stop()
             ws = nil
         }
-        
+
         guard let token = sessionToken else {
             state = .signedOut
             return
         }
-        
+
         let fetchApiInfoSpan = launchTransaction?.startChild(operation: "fetchApiInfo")
-        
-        do {
-            let apiInfo = try await self.http.fetchApiInfo().get()
-            self.http.apiInfo = apiInfo
-            self.apiInfo = apiInfo
-        } catch {
-            // DISABLED: SentrySDK.capture(error: error) - was causing timeout errors
-            // print("Error fetching API info: \(error)")
-            state = .connecting
+
+        let wsUrl: String
+        if let cachedWsUrl = self.apiInfo?.ws {
+            // Use cached WS URL immediately, fetch fresh apiInfo in background
+            wsUrl = cachedWsUrl
+            Task {
+                if let freshApiInfo = try? await self.http.fetchApiInfo().get() {
+                    await MainActor.run {
+                        self.http.apiInfo = freshApiInfo
+                        self.apiInfo = freshApiInfo
+                    }
+                }
+            }
             fetchApiInfoSpan?.finish()
-            return
+        } else {
+            // No cached URL — must fetch first
+            do {
+                let freshApiInfo = try await self.http.fetchApiInfo().get()
+                self.http.apiInfo = freshApiInfo
+                self.apiInfo = freshApiInfo
+                wsUrl = freshApiInfo.ws
+            } catch {
+                state = .connecting
+                fetchApiInfoSpan?.finish()
+                return
+            }
+            fetchApiInfoSpan?.finish()
         }
-        
-        fetchApiInfoSpan?.finish()
-        
-        let ws = WebSocketStream(url: apiInfo!.ws,
+
+        createWebSocket(url: wsUrl, token: token)
+    }
+
+    private func createWebSocket(url: String, token: String) {
+        // Stop existing WebSocket if any
+        ws?.stop()
+
+        let ws = WebSocketStream(url: url,
                                  token: token,
                                  onChangeCurrentState: { [weak self] state in
             Task {@MainActor in
                 self?.wsCurrentState = state
-                
-                // CRITICAL FIX: If disconnected while in DM list, try to reconnect
+
                 if state == .disconnected && self?.currentSelection == .dms {
-                    // print("🔌 WebSocket disconnected while in DM list - will reconnect")
+                    // WebSocket disconnected while in DM list - will reconnect
                 }
             }
         },
-                                 onEvent: { [weak self] event in
-            await self?.onEvent(event)
+                                 onEvent: { [weak self] events in
+            await self?.onEvents(events)
         })
         self.ws = ws
     }
@@ -1182,30 +1220,31 @@ public class ViewState: ObservableObject {
         )
     }
     
-    func onEvent(_ event: WsMessage) async {
-        // print("🔄 VIEWSTATE: Processing WebSocket event: \(String(describing: event).prefix(50))...")
-        
-        // CRITICAL FIX: Always process events regardless of current view
-        // This ensures messages are updated even when in DM list
-        await processEvent(event)
-        
-        // Post notification for UI updates when in DM list
-        if case .message(let msg) = event {
-            // Check if this message is for a DM channel
-            if let channel = channels[msg.channel] {
-                switch channel {
-                case .dm_channel(_), .group_dm_channel(_):
-                    // This is a DM message - notify DM list to update
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(
-                            name: NSNotification.Name("DMListNeedsUpdate"),
-                            object: ["channelId": msg.channel, "messageId": msg.id]
-                        )
-                    }
-                default:
-                    break
-                }
+    func onEvents(_ events: [WsMessage]) async {
+        // Process all events in a single MainActor block so SwiftUI coalesces
+        // objectWillChange sends into one re-render pass instead of N passes.
+        for event in events {
+            await processEvent(event)
+        }
+
+        // Coalesced DM notification — one post per batch instead of per-message
+        var hasDmUpdate = false
+        for event in events {
+            guard case .message(let msg) = event,
+                  let channel = channels[msg.channel] else { continue }
+            switch channel {
+            case .dm_channel, .group_dm_channel:
+                hasDmUpdate = true
+            default:
+                break
             }
+            if hasDmUpdate { break }
+        }
+        if hasDmUpdate {
+            NotificationCenter.default.post(
+                name: NSNotification.Name("DMListNeedsUpdate"),
+                object: nil
+            )
         }
     }
     
@@ -1927,7 +1966,7 @@ public class ViewState: ObservableObject {
                 }
             case .failure(let error):
                 // Log and show a safe error to the user instead of crashing
-                print("⚠️ openDm failed for user \(user): \(error)")
+                // print("⚠️ openDm failed for user \(user): \(error)")
                 await MainActor.run {
                     showAlert(message: "Failed to open DM.", icon: .peptideWarningCircle)
                 }
@@ -2156,12 +2195,13 @@ public class ViewState: ObservableObject {
     
     @MainActor
     func loadEmojis() -> [EmojiGroup] {
+        return ViewState.loadEmojisStatic()
+    }
+
+    static func loadEmojisStatic() -> [EmojiGroup] {
         let file = Bundle.main.url(forResource: "emoji_15_1_ordering.json", withExtension: nil)!
         let data = try! Data(contentsOf: file)
-        
-        let baseEmojis = try! JSONDecoder().decode([EmojiGroup].self, from: data)
-        
-        return baseEmojis
+        return try! JSONDecoder().decode([EmojiGroup].self, from: data)
     }
     
     
@@ -2356,8 +2396,8 @@ public class ViewState: ObservableObject {
     
     /// Debug badge count and print detailed analysis to console
     func debugBadgeCount() {
-        print("🔍 === BADGE COUNT DEBUG ===")
-        print("📊 Total unreads entries: \(unreads.count)")
+        // print("🔍 === BADGE COUNT DEBUG ===")
+        // print("📊 Total unreads entries: \(unreads.count)")
         
         var totalCount = 0
         var mutedCount = 0
@@ -2373,23 +2413,23 @@ public class ViewState: ObservableObject {
             let serverIdForChannel = channel?.server
             let isServerMuted = serverIdForChannel != nil ? userSettingsStore.cache.notificationSettings.server[serverIdForChannel!] == .muted : false
             
-            print("  📌 Channel: \(channelName) (\(channelId))")
-            print("     - Channel exists: \(channelExists)")
-            print("     - Last read ID: \(unread.last_id ?? "nil")")
-            print("     - Last message ID: \(channel?.last_message_id ?? "nil")")
+            // print("  📌 Channel: \(channelName) (\(channelId))")
+            // print("     - Channel exists: \(channelExists)")
+            // print("     - Last read ID: \(unread.last_id ?? "nil")")
+            // print("     - Last message ID: \(channel?.last_message_id ?? "nil")")
             
             // Check if has unread
             var hasUnread = false
             if let lastUnreadId = unread.last_id, let lastMessageId = channel?.last_message_id {
                 hasUnread = lastUnreadId < lastMessageId
-                print("     - Has unread: \(hasUnread) (\(lastUnreadId) < \(lastMessageId))")
+                // print("     - Has unread: \(hasUnread) (\(lastUnreadId) < \(lastMessageId))")
             }
             
             if let mentions = unread.mentions {
-                print("     - Mentions: \(mentions.count) - \(mentions)")
+                // print("     - Mentions: \(mentions.count) - \(mentions)")
             }
-            print("     - Channel Muted: \(isChannelMuted)")
-            print("     - Server Muted: \(isServerMuted)")
+            // print("     - Channel Muted: \(isChannelMuted)")
+            // print("     - Server Muted: \(isServerMuted)")
             
             totalCount += 1
             if !channelExists {
@@ -2404,16 +2444,16 @@ public class ViewState: ObservableObject {
             }
         }
         
-        print("\n📊 Summary:")
-        print("  - Total unread entries: \(totalCount)")
-        print("  - Missing channels: \(missingChannels)")
-        print("  - Muted channels: \(mutedCount)")
-        print("  - Valid (unmuted) channels: \(validCount)")
-        print("  - Channels with actual unread: \(channelsWithUnread)")
-        print("  - Current app badge: \(ViewState.application?.applicationIconBadgeNumber ?? -1)")
-        print("  - Total channels loaded: \(channels.count)")
-        print("  - Total channels stored: \(allEventChannels.count)")
-        print("🔍 === END DEBUG ===\n")
+        // print("\n📊 Summary:")
+        // print("  - Total unread entries: \(totalCount)")
+        // print("  - Missing channels: \(missingChannels)")
+        // print("  - Muted channels: \(mutedCount)")
+        // print("  - Valid (unmuted) channels: \(validCount)")
+        // print("  - Channels with actual unread: \(channelsWithUnread)")
+        // print("  - Current app badge: \(ViewState.application?.applicationIconBadgeNumber ?? -1)")
+        // print("  - Total channels loaded: \(channels.count)")
+        // print("  - Total channels stored: \(allEventChannels.count)")
+        // print("🔍 === END DEBUG ===\n")
     }
     // MARK: - Message queue processing state
     internal var isProcessingQueue: [String: Bool] = [:] // Prevent concurrent processing per channel
@@ -2423,7 +2463,7 @@ public class ViewState: ObservableObject {
         InternetMonitor.shared.$isConnected
             .sink { isConnected in
                 if isConnected {
-                    print("🌐 Internet restored → trying to flush queue")
+                    // print("🌐 Internet restored → trying to flush queue")
                     self.trySendingQueuedMessages()
                 }
             }

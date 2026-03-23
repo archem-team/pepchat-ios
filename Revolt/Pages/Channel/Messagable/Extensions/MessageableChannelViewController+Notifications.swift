@@ -16,9 +16,19 @@ import ULID
 extension MessageableChannelViewController {
     // Update handleNewMessages to only scroll if user is near bottom
     @objc internal func handleNewMessages(_ notification: Notification) {
+        let notifChannel = notification.userInfo?["channelId"] as? String
+        // CRITICAL FIX: Don't handle new messages during nearby loading
+        if messageLoadingState == .loading {
+            return
+        }
+
+        // CRITICAL FIX: Don't handle if target message protection is active
+        if targetMessageProtectionActive {
+            return
+        }
+
         // If notification includes channelId, only refresh when the new message is for this channel (e.g. message from another device).
-        let channelId = notification.userInfo?["channelId"] as? String
-        if let channelId = channelId, channelId != viewModel.channel.id {
+        if let notifChannel = notifChannel, notifChannel != viewModel.channel.id {
             return
         }
 
@@ -174,7 +184,7 @@ extension MessageableChannelViewController {
 
         // Check if this notification is for our channel
         if channelId == viewModel.channel.id && isReturning {
-            print("🔍 SEARCH_CLOSING: User is returning from search to channel \(channelId)")
+            // print("🔍 SEARCH_CLOSING: User is returning from search to channel \(channelId)")
             isReturningFromSearch = true
 
             // Don't clear the flag here - let viewDidAppear handle it

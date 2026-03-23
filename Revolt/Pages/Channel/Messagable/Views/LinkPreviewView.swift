@@ -163,11 +163,21 @@ class LinkPreviewView: UIView {
         isHidden = !hasContent
     }
     
+    /// Cancel all in-flight Kingfisher downloads. Called from MessageCell.prepareForReuse.
+    func cancelDownloads() {
+        previewImageView.kf.cancelDownloadTask()
+        iconImageView.kf.cancelDownloadTask()
+    }
+
     private func clearContent() {
+        // Cancel any in-flight Kingfisher downloads to prevent stale images appearing on reuse
+        cancelDownloads()
+
         contentStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         headerStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         previewImageView.image = nil
         previewImageView.isHidden = true
+        iconImageView.image = nil
         webView?.removeFromSuperview()
         webView = nil
         isHidden = false

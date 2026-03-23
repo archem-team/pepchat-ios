@@ -53,7 +53,7 @@ class ScrollPositionManager {
         
         // IMPROVED: Check full target message protection instead of just highlight time
         if viewController.targetMessageProtectionActive {
-            print("🎯 ScrollPositionManager: Target message protection active, skipping auto-scroll")
+            // print("🎯 ScrollPositionManager: Target message protection active, skipping auto-scroll")
             return
         }
         

@@ -141,7 +141,7 @@ struct DMScrollView: View {
                     do {
                         // Open the direct message channel for the current user
                         guard let currentUser = viewState.currentUser else {
-                            print("Error: currentUser is nil")
+                            // print("Error: currentUser is nil")
                             return
                         }
                         let channel = try await viewState.http.openDm(user: currentUser.id).get()
@@ -153,7 +153,7 @@ struct DMScrollView: View {
                         viewState.path.append(NavigationDestination.maybeChannelView)
                     } catch let error {
                         // Handle error here
-                        print("error \(error)")
+                        // print("error \(error)")
                     }
                 }
             } label: {
@@ -223,7 +223,7 @@ struct DMScrollView: View {
                                 toggleSidebar()
                                 // CRITICAL FIX: Clear channel messages before navigating to ensure full message history is loaded
                                 // This prevents the issue where only new WebSocket messages are shown
-                                print("🔄 DMScrollView: Clearing channel messages for DM \(channel.id) to ensure full history loads")
+                                // print("🔄 DMScrollView: Clearing channel messages for DM \(channel.id) to ensure full history loads")
                                 viewState.channelMessages[channel.id] = []
                                 viewState.preloadedChannels.remove(channel.id)
                                 viewState.selectDm(withId: channel.id)
@@ -244,7 +244,7 @@ struct DMScrollView: View {
                                             toggleSidebar()
                                             // CRITICAL FIX: Clear channel messages before navigating to ensure full message history is loaded
                                             // This prevents the issue where only new WebSocket messages are shown
-                                            print("🔄 DMScrollView: Clearing channel messages for DM \(channel.id) to ensure full history loads")
+                                            // print("🔄 DMScrollView: Clearing channel messages for DM \(channel.id) to ensure full history loads")
                                             viewState.channelMessages[channel.id] = []
                                             viewState.preloadedChannels.remove(channel.id)
                                             viewState.selectDm(withId: channel.id)
@@ -331,17 +331,9 @@ struct DMScrollView: View {
                 self.checkAndFixMissingDMs()
             }
         }
-        // CRITICAL FIX: Listen for DM updates from WebSocket
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DMListNeedsUpdate"))) { notification in
-            // print("📱 DMScrollView: Received WebSocket update notification")
-            // The view will automatically update due to @EnvironmentObject viewState
-            // But we'll ensure the DM list is refreshed
-            if let userInfo = notification.userInfo as? [String: Any],
-               let channelId = userInfo["channelId"] as? String {
-                // print("📱 DMScrollView: New message in channel \(channelId)")
-                // Force a UI refresh by triggering viewState update
-                viewState.objectWillChange.send()
-            }
+        // CRITICAL FIX: Listen for DM updates from WebSocket (batched — one notification per event batch)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DMListNeedsUpdate"))) { _ in
+            viewState.objectWillChange.send()
         }
         .sheet(isPresented: $isPresentedChannelOption){
             
@@ -382,8 +374,9 @@ struct DMScrollView: View {
                     case .groupSetting(let channelId) :
                         self.viewState.path.append(NavigationDestination.channel_settings(channelId))
                     default:
-                        print("---")
+                        // print("---")
                     
+                        break
                    }
                 
                 }

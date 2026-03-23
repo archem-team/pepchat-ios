@@ -40,9 +40,9 @@ extension ViewState {
             Task {
                 await preloadImportantChannels()
             }
-            print("🚀 PRELOAD_ENABLED: Started automatic preloading for server \(id)")
+            // print("🚀 PRELOAD_ENABLED: Started automatic preloading for server \(id)")
         } else {
-            print("📵 PRELOAD_DISABLED: Skipped automatic preloading for server \(id) channels")
+            // print("📵 PRELOAD_DISABLED: Skipped automatic preloading for server \(id) channels")
         }
         
         if let last = userSettingsStore.store.lastOpenChannels[id] {
@@ -74,13 +74,13 @@ extension ViewState {
         if let targetId = currentTargetMessageId {
             // If target message is for current channel, keep it; otherwise clear it
             if let targetMessage = messages[targetId], targetMessage.channel != id {
-                print("🎯 SELECT_CHANNEL: Clearing currentTargetMessageId - target is for different channel")
+                // print("🎯 SELECT_CHANNEL: Clearing currentTargetMessageId - target is for different channel")
                 currentTargetMessageId = nil
             } else if messages[targetId] == nil {
                 // Target message not loaded yet, assume it might be for this channel - keep it
-                print("🎯 SELECT_CHANNEL: Keeping currentTargetMessageId for channel \(id) - target message not loaded yet")
+                // print("🎯 SELECT_CHANNEL: Keeping currentTargetMessageId for channel \(id) - target message not loaded yet")
             } else {
-                print("🎯 SELECT_CHANNEL: Keeping currentTargetMessageId for target channel \(id)")
+                // print("🎯 SELECT_CHANNEL: Keeping currentTargetMessageId for target channel \(id)")
             }
         }
         
@@ -93,9 +93,9 @@ extension ViewState {
             Task {
                 await preloadSpecificChannel(channelId: id)
             }
-            print("🚀 PRELOAD_ENABLED: Started automatic preloading for selected channel \(id)")
+            // print("🚀 PRELOAD_ENABLED: Started automatic preloading for selected channel \(id)")
         } else {
-            print("📵 PRELOAD_DISABLED: Skipped automatic preloading for selected channel \(id)")
+            // print("📵 PRELOAD_DISABLED: Skipped automatic preloading for selected channel \(id)")
         }
         
         // CRITICAL FIX: Load users for visible messages when entering channel
@@ -157,13 +157,13 @@ extension ViewState {
         if let targetId = currentTargetMessageId {
             // If target message is for current channel, keep it; otherwise clear it
             if let targetMessage = messages[targetId], targetMessage.channel != id {
-                print("🎯 SELECT_DM: Clearing currentTargetMessageId - target is for different channel")
+                // print("🎯 SELECT_DM: Clearing currentTargetMessageId - target is for different channel")
                 currentTargetMessageId = nil
             } else if messages[targetId] == nil {
                 // Target message not loaded yet, assume it might be for this channel - keep it
-                print("🎯 SELECT_DM: Keeping currentTargetMessageId for DM \(id) - target message not loaded yet")
+                // print("🎯 SELECT_DM: Keeping currentTargetMessageId for DM \(id) - target message not loaded yet")
             } else {
-                print("🎯 SELECT_DM: Keeping currentTargetMessageId for target DM \(id)")
+                // print("🎯 SELECT_DM: Keeping currentTargetMessageId for target DM \(id)")
             }
         }
         
@@ -184,9 +184,9 @@ extension ViewState {
             Task {
                 await preloadSpecificChannel(channelId: id)
             }
-            print("🚀 PRELOAD_ENABLED: Started automatic preloading for selected DM \(id)")
+            // print("🚀 PRELOAD_ENABLED: Started automatic preloading for selected DM \(id)")
         } else {
-            print("📵 PRELOAD_DISABLED: Skipped automatic preloading for selected DM \(id)")
+            // print("📵 PRELOAD_DISABLED: Skipped automatic preloading for selected DM \(id)")
         }
         
         // CRITICAL FIX: Load users for visible messages when entering DM
@@ -218,7 +218,7 @@ extension ViewState {
             clearChannelMessages(channelId: actualPreviousChannelId)
             
             // CRITICAL: Clear target message ID when switching channels to prevent re-targeting
-            print("🎯 CHANNEL_CHANGE: Clearing currentTargetMessageId when switching channels")
+            // print("🎯 CHANNEL_CHANGE: Clearing currentTargetMessageId when switching channels")
             currentTargetMessageId = nil
         }
         

@@ -106,7 +106,7 @@ struct ViewInvite: View {
                 
                 // Pre-flight checks
                 guard !code.isEmpty else {
-                    print("❌ Empty invite code")
+                    // print("❌ Empty invite code")
                     await MainActor.run {
                         self.viewState.showAlert(message: "not valid invite code", icon: .peptideInfo)
                         isProcessingInvite = false
@@ -144,24 +144,24 @@ struct ViewInvite: View {
                 await MainActor.run {
                     isProcessingInvite = false
                     
-                    print("🎫 INVITE_ACCEPT: Before path change - path count: \(viewState.path.count)")
-                    print("🎫 INVITE_ACCEPT: Before path change - path: \(viewState.path)")
+                    // print("🎫 INVITE_ACCEPT: Before path change - path count: \(viewState.path.count)")
+                    // print("🎫 INVITE_ACCEPT: Before path change - path: \(viewState.path)")
                     
                     // CRITICAL: Clear entire navigation path and rebuild for server context
                     // This ensures back navigation goes to server channel list, not previous screen
                     viewState.path.removeAll()
                     
-                    print("🎫 INVITE_ACCEPT: After removeAll - path count: \(viewState.path.count)")
+                    // print("🎫 INVITE_ACCEPT: After removeAll - path count: \(viewState.path.count)")
                     
                     // Navigate to the channel with clean navigation stack
                     viewState.path.append(NavigationDestination.maybeChannelView)
                     
-                    print("🎫 INVITE_ACCEPT: After adding maybeChannelView - path count: \(viewState.path.count)")
-                    print("🎫 INVITE_ACCEPT: Final path: \(viewState.path)")
+                    // print("🎫 INVITE_ACCEPT: After adding maybeChannelView - path count: \(viewState.path.count)")
+                    // print("🎫 INVITE_ACCEPT: Final path: \(viewState.path)")
                 }
                 
             } catch {
-                print("❌ Critical error in accept invite: \(error)")
+                // print("❌ Critical error in accept invite: \(error)")
                 await MainActor.run {
                     self.viewState.showAlert(message: "error accepting invite", icon: .peptideInfo)
                     isProcessingInvite = false
@@ -253,7 +253,7 @@ struct ViewInvite: View {
     private func processServerMembers(response: MembersWithUsers, serverId: String, serverInfo: ServerInfoResponse) async {
         // Validate response
         guard response.members.count >= 0, response.users.count >= 0 else {
-            print("❌ Invalid response structure")
+            // print("❌ Invalid response structure")
             await MainActor.run {
                 self.viewState.selectServer(withId: serverId)
             }
@@ -263,7 +263,7 @@ struct ViewInvite: View {
         await MainActor.run {
             // Process members efficiently
             let memberCount = response.members.count
-            print("🔄 Processing \(memberCount) members")
+            // print("🔄 Processing \(memberCount) members")
             
             // Initialize server members dictionary
             if self.viewState.members[serverId] == nil {
@@ -282,7 +282,7 @@ struct ViewInvite: View {
                 processed += 1
             }
             
-            print("✅ Immediately processed \(processed) members")
+            // print("✅ Immediately processed \(processed) members")
         }
         
         // Process remaining members in background
@@ -302,7 +302,7 @@ struct ViewInvite: View {
                         await Task.yield()
                     }
                 }
-                print("✅ Background processed \(backgroundProcessed) members")
+                // print("✅ Background processed \(backgroundProcessed) members")
             }
         }
         
@@ -312,21 +312,21 @@ struct ViewInvite: View {
         await MainActor.run {
             // CRITICAL FIX: Clear channel messages before navigating to ensure full message history is loaded
             // This prevents the issue where only new WebSocket messages are shown
-            print("🔄 ViewInvite: Clearing channel messages for invite channel \(serverInfo.channel_id) to ensure full history loads")
+            // print("🔄 ViewInvite: Clearing channel messages for invite channel \(serverInfo.channel_id) to ensure full history loads")
             viewState.channelMessages[serverInfo.channel_id] = []
             viewState.preloadedChannels.remove(serverInfo.channel_id)
             
             viewState.selectChannel(inServer: serverId, withId: serverInfo.channel_id)
             
             // IMPORTANT: For invite navigation, store server context for proper back behavior
-            print("🎫 INVITE_ACCEPT: Setting lastInviteServerContext to \(serverId)")
+            // print("🎫 INVITE_ACCEPT: Setting lastInviteServerContext to \(serverId)")
             viewState.lastInviteServerContext = serverId
         }
     }
     
     private func processUsers(_ users: [User]) async {
         let userCount = users.count
-        print("🔄 Processing \(userCount) users from server response")
+        // print("🔄 Processing \(userCount) users from server response")
         
         await MainActor.run {
             // Process first 50 users immediately
@@ -341,7 +341,7 @@ struct ViewInvite: View {
                 processed += 1
             }
             
-            print("✅ Immediately processed \(processed) users")
+            // print("✅ Immediately processed \(processed) users")
         }
         
         // Process remaining users in background
@@ -359,10 +359,10 @@ struct ViewInvite: View {
                     
                     if backgroundProcessed % 100 == 0 {
                         await Task.yield()
-                        print("📊 Background processed: \((backgroundProcessed + 50))/\(userCount)")
+                        // print("📊 Background processed: \((backgroundProcessed + 50))/\(userCount)")
                     }
                 }
-                print("✅ Background processing completed. Total: \(backgroundProcessed + 50) users")
+                // print("✅ Background processing completed. Total: \(backgroundProcessed + 50) users")
             }
         }
     }

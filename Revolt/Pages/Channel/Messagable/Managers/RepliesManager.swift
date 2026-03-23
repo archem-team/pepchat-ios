@@ -124,7 +124,7 @@ class RepliesManager: NSObject {
                     viewController.scrollToBottom(animated: false)
                 }
             } else if viewController.targetMessageProtectionActive {
-                print("🛡️ RepliesManager: Target protection active, skipping auto-scroll")
+                // print("🛡️ RepliesManager: Target protection active, skipping auto-scroll")
             }
         }
     }
@@ -155,7 +155,7 @@ class RepliesManager: NSObject {
                     viewController.scrollToBottom(animated: false)
                 }
             } else if viewController.targetMessageProtectionActive {
-                print("🛡️ RepliesManager: Target protection active, skipping auto-scroll (2)")
+                // print("🛡️ RepliesManager: Target protection active, skipping auto-scroll (2)")
             }
         }
     }
@@ -207,12 +207,12 @@ class RepliesManager: NSObject {
             if repliesHeight > 0 {
                 // Only add contentInset if we actually have replies with height
                 viewController.tableView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: repliesHeight, right: 0)
-                print("📏 Set table inset to \(repliesHeight) for replies view")
+                // print("📏 Set table inset to \(repliesHeight) for replies view")
             }
         } else {
             // Remove contentInset completely when no replies
             if viewController.tableView.contentInset.bottom > 0 {
-                print("📏 Removing table inset (was \(viewController.tableView.contentInset.bottom))")
+                // print("📏 Removing table inset (was \(viewController.tableView.contentInset.bottom))")
                 viewController.tableView.contentInset = .zero
             }
         }
@@ -299,7 +299,7 @@ class RepliesManager: NSObject {
         switch action {
         case .edit:
             // Implement editing message functionality
-            print("Edit message: \(message.id)")
+            // print("Edit message: \(message.id)")
             
             // Set the message being edited
             Task {
@@ -354,21 +354,21 @@ class RepliesManager: NSObject {
             }
         case .delete:
             // Handle deleting message
-            print("🗑️ Delete message action triggered for: \(message.id)")
+            // print("🗑️ Delete message action triggered for: \(message.id)")
             Task {
                 // Capture values at the beginning to avoid async issues
                 let channelId = await viewModel.channel.id
                 let viewState = await viewModel.viewState
                 self.cachedViewState = viewState
                 
-                print("🗑️ Starting delete operation for message: \(message.id) in channel: \(channelId)")
+                // print("🗑️ Starting delete operation for message: \(message.id) in channel: \(channelId)")
                 
                 let result = await viewState.http.deleteMessage(channel: channelId, message: message.id)
                 
                 await MainActor.run {
                     switch result {
                     case .success:
-                        print("✅ Message deleted successfully: \(message.id)")
+                        // print("✅ Message deleted successfully: \(message.id)")
                         viewState.deletedMessageIds[channelId, default: Set()].insert(message.id)
                         if let userId = viewState.currentUser?.id, let baseURL = viewState.baseURL {
                             MessageCacheWriter.shared.enqueueDeleteMessage(id: message.id, channelId: channelId, userId: userId, baseURL: baseURL)
@@ -379,18 +379,20 @@ class RepliesManager: NSObject {
                             viewState.channelMessages[channelId] = channelMessages
                         }
                         viewController.refreshMessagesAfterLocalDelete()
-                        print("Deleted")
-                        print("✅ Local state updated after delete")
+                        // print("Deleted")
+                        // print("✅ Local state updated after delete")
 //                        
                     case .failure(let error):
-                        print("❌ Failed to delete message: \(error)")
-                        print("NOT Deleted")
+                        // print("❌ Failed to delete message: \(error)")
+                        // print("NOT Deleted")
+                        break
                     }
                 }
             }
         case .report:
             // Handle reporting message
-            print("Report message: \(message.id)")
+            // print("Report message: \(message.id)")
+            break
         case .copy:
             // Copy message content to clipboard
             if let content = message.content {
@@ -403,10 +405,11 @@ class RepliesManager: NSObject {
             startReply(to: message)
         case .mention:
             // Handle mentioning user
-            print("Mention user from message: \(message.id)")
+            // print("Mention user from message: \(message.id)")
+            break
         case .markUnread:
             // Handle marking as unread
-            print("🔄 Mark unread from message: \(message.id)")
+            // print("🔄 Mark unread from message: \(message.id)")
             Task {
                 // Capture values at the beginning to avoid async issues
                 let channelId = await viewModel.channel.id
@@ -422,7 +425,7 @@ class RepliesManager: NSObject {
                         // There's a previous message - mark it as the last read message
                         let previousMessageId = channelMessages[currentIndex - 1]
                         
-                        print("🔄 Setting last read message to: \(previousMessageId)")
+                        // print("🔄 Setting last read message to: \(previousMessageId)")
                         
                         // Call the API to acknowledge the previous message
                         let result = await viewState.http.ackMessage(channel: channelId, message: previousMessageId)
@@ -430,7 +433,7 @@ class RepliesManager: NSObject {
                         await MainActor.run {
                             switch result {
                             case .success:
-                                print("✅ Successfully marked as unread from message: \(message.id)")
+                                // print("✅ Successfully marked as unread from message: \(message.id)")
                                 
                                 // Update local unread state
                                 Task {
@@ -456,14 +459,14 @@ class RepliesManager: NSObject {
                                 // viewController.showErrorAlert(message: "Marked as unread")
                                 
                             case .failure(let error):
-                                print("❌ Failed to mark as unread: \(error)")
+                                // print("❌ Failed to mark as unread: \(error)")
                                 viewController.showErrorAlert(message: "Failed to mark as unread")
                             }
                         }
                     } else {
                         // This is the first message in the channel
                         // Remove the unread entry entirely to make all messages unread
-                        print("🔄 Marking entire channel as unread (removing unread state)")
+                        // print("🔄 Marking entire channel as unread (removing unread state)")
                         
                         await MainActor.run {
                             Task {
@@ -483,7 +486,7 @@ class RepliesManager: NSObject {
                         }
                     }
                 } else {
-                    print("❌ Could not find message in channel messages list")
+                    // print("❌ Could not find message in channel messages list")
                     await MainActor.run {
                         viewController.showErrorAlert(message: "Could not mark as unread")
                     }
@@ -530,8 +533,8 @@ class RepliesManager: NSObject {
                     
                     let userAlreadyReacted = message.reactions?[emoji]?.contains(currentUserId) ?? false
                     
-                    print("React with \(emoji) to message: \(message.id)")
-                    print("User already reacted: \(userAlreadyReacted)")
+                    // print("React with \(emoji) to message: \(message.id)")
+                    // print("User already reacted: \(userAlreadyReacted)")
                     
                     if userAlreadyReacted {
                         // Remove reaction (unreact)
@@ -540,7 +543,7 @@ class RepliesManager: NSObject {
                             message: message.id, 
                             emoji: emoji
                         )
-                        print("🔥 REMOVE REACTION API RESULT: \(result)")
+                        // print("🔥 REMOVE REACTION API RESULT: \(result)")
                     } else {
                         // Add reaction
                         let result = await viewState.http.reactMessage(
@@ -548,7 +551,7 @@ class RepliesManager: NSObject {
                             message: message.id, 
                             emoji: emoji
                         )
-                        print("🔥 ADD REACTION API RESULT: \(result)")
+                        // print("🔥 ADD REACTION API RESULT: \(result)")
                     }
                 }
             }
@@ -570,7 +573,7 @@ class RepliesManager: NSObject {
                         viewState.showAlert(message: "Message pinned", icon: .peptidePin)
                         viewController.refreshMessages()
                     case .failure(let error):
-                        print("❌ Failed to pin message: \(error)")
+                        // print("❌ Failed to pin message: \(error)")
                         viewController.showErrorAlert(message: "Failed to pin message")
                     }
                 }
@@ -593,7 +596,7 @@ class RepliesManager: NSObject {
                         viewState.showAlert(message: "Message unpinned", icon: .peptidePin)
                         viewController.refreshMessages()
                     case .failure(let error):
-                        print("❌ Failed to unpin message: \(error)")
+                        // print("❌ Failed to unpin message: \(error)")
                         viewController.showErrorAlert(message: "Failed to unpin message")
                     }
                 }
@@ -635,8 +638,8 @@ class RepliesManager: NSObject {
                         let currentUserId = await viewState.currentUser?.id ?? ""
                         let userAlreadyReacted = message.reactions?[emojiToSend]?.contains(currentUserId) ?? false
                         
-                        print("Custom emoji react with \(emojiToSend) to message: \(messageId)")
-                        print("User already reacted: \(userAlreadyReacted)")
+                        // print("Custom emoji react with \(emojiToSend) to message: \(messageId)")
+                        // print("User already reacted: \(userAlreadyReacted)")
                         
                         if userAlreadyReacted {
                             // Remove reaction (unreact)
@@ -708,7 +711,7 @@ extension RepliesManager: RepliesContainerViewDelegate {
 extension RepliesManager {
     func replyItemViewDidPressReply(messageId: String, channelId: String) {
         // Handle the reply click by delegating to handleReplyClick
-        print("🔗 RepliesManager: Reply click received for messageId: \(messageId), channelId: \(channelId)")
+        // print("🔗 RepliesManager: Reply click received for messageId: \(messageId), channelId: \(channelId)")
         handleReplyClick(messageId: messageId, channelId: channelId)
     }
 }

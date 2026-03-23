@@ -61,7 +61,7 @@ struct ChannelListItem: View {
             
             // CRITICAL FIX: Clear channel messages before navigating to ensure full message history is loaded
             // This prevents the issue where only new WebSocket messages are shown
-            print("🔄 ServerChannelScrollView: Clearing channel messages for channel \(channel.id) to ensure full history loads")
+            // print("🔄 ServerChannelScrollView: Clearing channel messages for channel \(channel.id) to ensure full history loads")
             viewState.channelMessages[channel.id] = []
             viewState.preloadedChannels.remove(channel.id)
             

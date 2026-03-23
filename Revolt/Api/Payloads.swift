@@ -23,9 +23,34 @@ struct EmptyResponse {
 
 /// Payload structure for fetching message history.
 struct FetchHistory: Decodable {
-    var messages: [Message]  // Array of messages in the history
-    var users: [User]        // Array of users involved in the messages
-    var members: [Member]?    // Optional array of channel members
+    var messages: [Message]
+    var users: [User]
+    var members: [Member]?
+
+    init(messages: [Message] = [], users: [User] = [], members: [Member]? = nil) {
+        self.messages = messages
+        self.users = users
+        self.members = members
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case messages, users, members
+    }
+
+    init(from decoder: Decoder) throws {
+        // Common path: include_users=true returns {"messages":…, "users":…} dictionary.
+        if let container = try? decoder.container(keyedBy: CodingKeys.self) {
+            messages = try container.decode([Message].self, forKey: .messages)
+            users = try container.decodeIfPresent([User].self, forKey: .users) ?? []
+            members = try container.decodeIfPresent([Member].self, forKey: .members)
+            return
+        }
+        // Rare path: include_users=false returns a plain [Message] array.
+        let singleValue = try decoder.singleValueContainer()
+        messages = try singleValue.decode([Message].self)
+        users = []
+        members = nil
+    }
 }
 
 /// Payload structure for replying to a message.

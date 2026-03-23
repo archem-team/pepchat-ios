@@ -63,7 +63,7 @@ extension ViewState {
                 let data = try encoder.encode(serversSnapshot)
                 if let url = await ViewState.serversCacheURL() {
                     try data.write(to: url, options: .atomic)
-                    print("✅ Saved servers cache to \(url.path)")
+                    // print("✅ Saved servers cache to \(url.path)")
                 }
             } catch {
                 print("❌ Failed to write servers cache:", error)

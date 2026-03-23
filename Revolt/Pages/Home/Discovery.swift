@@ -50,21 +50,21 @@ fileprivate struct WebView: NSViewRepresentable {
         
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if let url = navigationAction.request.url {
-                print("🌐 [Discovery macOS] Navigation to URL: \(url.absoluteString)")
-                print("🌐 [Discovery macOS] Navigation type: \(navigationAction.navigationType)")
+                // print("🌐 [Discovery macOS] Navigation to URL: \(url.absoluteString)")
+                // print("🌐 [Discovery macOS] Navigation type: \(navigationAction.navigationType)")
             }
             decisionHandler(.allow)
         }
         
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             if let url = webView.url {
-                print("🌐 [Discovery macOS] Started loading: \(url.absoluteString)")
+                // print("🌐 [Discovery macOS] Started loading: \(url.absoluteString)")
             }
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             if let url = webView.url {
-                print("✅ [Discovery macOS] Finished loading: \(url.absoluteString)")
+                // print("✅ [Discovery macOS] Finished loading: \(url.absoluteString)")
             }
         }
     }
@@ -142,12 +142,12 @@ fileprivate struct WebView: UIViewRepresentable {
         
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if let url = navigationAction.request.url {
-                print("🌐 [Discovery iOS] Navigation to URL: \(url.absoluteString)")
-                print("🌐 [Discovery iOS] Navigation type: \(navigationAction.navigationType)")
+                // print("🌐 [Discovery iOS] Navigation to URL: \(url.absoluteString)")
+                // print("🌐 [Discovery iOS] Navigation type: \(navigationAction.navigationType)")
                 
                 // Log additional details about links
                 if navigationAction.navigationType == .linkActivated {
-                    print("🔗 [Discovery iOS] Link clicked: \(url.absoluteString)")
+                    // print("🔗 [Discovery iOS] Link clicked: \(url.absoluteString)")
                 }
             }
             decisionHandler(.allow)
@@ -155,13 +155,13 @@ fileprivate struct WebView: UIViewRepresentable {
         
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             if let url = webView.url {
-                print("🌐 [Discovery iOS] Started loading: \(url.absoluteString)")
+                // print("🌐 [Discovery iOS] Started loading: \(url.absoluteString)")
             }
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             if let url = webView.url {
-                print("✅ [Discovery iOS] Finished loading: \(url.absoluteString)")
+                // print("✅ [Discovery iOS] Finished loading: \(url.absoluteString)")
                 
                 // Log all links found on the page
                 webView.evaluateJavaScript("""
@@ -175,9 +175,9 @@ fileprivate struct WebView: UIViewRepresentable {
                     linkUrls;
                 """) { result, error in
                     if let links = result as? [String] {
-                        print("📋 [Discovery iOS] Found \(links.count) links on page:")
+                        // print("📋 [Discovery iOS] Found \(links.count) links on page:")
                         for (index, link) in links.enumerated() {
-                            print("  [\(index + 1)] \(link)")
+                            // print("  [\(index + 1)] \(link)")
                         }
                     }
                 }
