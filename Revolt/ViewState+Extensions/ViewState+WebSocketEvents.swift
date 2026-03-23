@@ -48,8 +48,13 @@ extension ViewState {
             // MEMORY FIX: Extract only needed data and process immediately
             // This allows the large event object to be released from memory
             let neededData = extractNeededDataFromReadyEvent(event)
-            
-            // Process the extracted data
+
+            // PERF: Start unreads fetch in parallel (only needs auth token, not processed data)
+            let unreadsTask = Task { () -> [Unread]? in
+                try? await self.http.fetchUnreads().get()
+            }
+
+            // Process the extracted data (runs concurrently with unreads fetch)
             await processReadyData(neededData)
             
             // CRITICAL FIX: Restore saved state after ready event processing
@@ -83,9 +88,9 @@ extension ViewState {
                 Task {
                     await self.preloadImportantChannels()
                 }
-                print("🚀 PRELOAD_ENABLED: Started automatic preloading after Ready event")
+                // print("🚀 PRELOAD_ENABLED: Started automatic preloading after Ready event")
             } else {
-                print("📵 PRELOAD_DISABLED: Skipped automatic preloading after Ready event")
+                // print("📵 PRELOAD_DISABLED: Skipped automatic preloading after Ready event")
             }
             
             // CLEANUP: Clean up stale unreads after Ready event
@@ -93,14 +98,26 @@ extension ViewState {
             Task {
                 await MainActor.run {
                     self.cleanupStaleUnreads()
-                    print("🧹 Cleaned up stale unreads after Ready event")
+                    // print("🧹 Cleaned up stale unreads after Ready event")
+                }
+            }
+
+            // PERF: Apply unreads from parallel fetch (likely already finished by now)
+            Task {
+                if let remoteUnreads = await unreadsTask.value {
+                    await MainActor.run {
+                        let newUnreads = Dictionary(
+                            remoteUnreads.map { ($0.id.channel, $0) },
+                            uniquingKeysWith: { _, latest in latest }
+                        )
+                        self.unreads.merge(newUnreads) { _, remote in remote }
+                    }
                 }
             }
 
         case .message(let m):
-            // print("📥 VIEWSTATE: Processing new message - id: \(m.id), channel: \(m.channel)")
-            // print("📥 VIEWSTATE: Current messages count BEFORE: \(messages.count)")
-            
+          batchUpdate {
+
             if let user = m.user {
                 // CRITICAL FIX: Always add/update message authors to prevent black messages
                 users[user.id] = user
@@ -184,7 +201,7 @@ extension ViewState {
                 if let queuedIndex = queuedIndex {
                     matchedQueuedMessage = true
                     let queuedMessage = channelQueuedMessages[queuedIndex]
-                    print("📥 VIEWSTATE: Found matching queued message, cleaning up nonce: \(queuedMessage.nonce)")
+                    // print("📥 VIEWSTATE: Found matching queued message, cleaning up nonce: \(queuedMessage.nonce)")
                     
                     // Remove the temporary message from messages dictionary (if it exists)
                     messages.removeValue(forKey: queuedMessage.nonce)
@@ -194,14 +211,14 @@ extension ViewState {
                     if let nonceMsgIndex = channelMessages[m.channel]?.firstIndex(of: queuedMessage.nonce) {
                         // This was an optimistic message (no attachments), replace it
                         channelMessages[m.channel]?[nonceMsgIndex] = m.id
-                        print("📥 VIEWSTATE: Replaced optimistic nonce \(queuedMessage.nonce) with real ID \(m.id)")
+                        // print("📥 VIEWSTATE: Replaced optimistic nonce \(queuedMessage.nonce) with real ID \(m.id)")
                     } else if queuedMessage.hasAttachments {
                         // This was an attachment message (not shown optimistically), add it now
                         if channelMessages[m.channel] == nil {
                             channelMessages[m.channel] = []
                         }
                         channelMessages[m.channel]?.append(m.id)
-                        print("📥 VIEWSTATE: Added attachment message \(m.id) to channel messages for first time")
+                        // print("📥 VIEWSTATE: Added attachment message \(m.id) to channel messages for first time")
                     }
                     
                     // Remove from queued messages for this channel
@@ -209,7 +226,7 @@ extension ViewState {
                     if queuedMessages[m.channel]?.isEmpty == true {
                         queuedMessages.removeValue(forKey: m.channel)
                     }
-                    print("📥 VIEWSTATE: Removed queued message from channel \(m.channel)")
+                    // print("📥 VIEWSTATE: Removed queued message from channel \(m.channel)")
                 }
             }
             if !matchedQueuedMessage {
@@ -311,11 +328,15 @@ extension ViewState {
                     saveChannelCacheAsync()
                 }
             }
-            
-            
+          } // end batchUpdate for .message
+
+
         case .message_update(let event):
+            // Invalidate cached attributed string so the cell re-renders with new content
+            MessageCell.attributedStringCache.removeObject(forKey: event.id as NSString)
+
             let message = messages[event.id]
-            
+
             if var message = message {
                 message.edited = event.data.edited
                 if let content = event.data.content {
@@ -338,8 +359,9 @@ extension ViewState {
             }
             
         case .authenticated:
-            print("authenticated")
+            // print("authenticated")
             
+            break
         case .invalid_session:
             Task {
                 await self.signOut()
@@ -350,13 +372,10 @@ extension ViewState {
                 await self.signOut(afterRemoveSession: true)
             }
         case .channel_start_typing(let e):
-            var typing = currentlyTyping[e.id] ?? []
-            typing.append(e.user)
-            
-            currentlyTyping[e.id] = typing
-            
+            updateTyping(channelId: e.id, userId: e.user, isTyping: true)
+
         case .channel_stop_typing(let e):
-            currentlyTyping[e.id]?.removeAll(where: { $0 == e.user })
+            updateTyping(channelId: e.id, userId: e.user, isTyping: false)
             
         case .message_delete(let e):
             deletedMessageIds[e.channel, default: Set()].insert(e.id)
@@ -444,6 +463,7 @@ extension ViewState {
         case .user_update(let e):
             updateUser(with: e)
         case .server_create(let e):
+          batchUpdate {
             for channel in e.channels {
                 self.allEventChannels[channel.id] = channel
                 self.channels[channel.id] = channel
@@ -459,8 +479,10 @@ extension ViewState {
             self.updateMembershipCache(serverId: e.id, isMember: true)
             self.saveChannelCacheAsync()
             self.saveServersCacheAsync()
-            
+          }
+
         case .server_delete(let e):
+          batchUpdate {
             if let server = self.servers[e.id] {
                 for channelId in server.channels {
                     self.channels.removeValue(forKey: channelId)
@@ -483,6 +505,7 @@ extension ViewState {
                 self.path = .init()
                 self.selectDms()
             }
+          }
             
             
         case .server_update(let e):
@@ -558,9 +581,10 @@ extension ViewState {
             }
             
         case .channel_create(let channel):
+          batchUpdate {
             // Store the channel in our event channels for lazy loading
             allEventChannels[channel.id] = channel
-            
+
             // Handle different channel types
             switch channel {
             case .dm_channel(_):
@@ -568,34 +592,29 @@ extension ViewState {
                 self.channels[channel.id] = channel
                 self.channelMessages[channel.id] = []
                 self.dms.insert(channel, at: 0)
-                // print("📥 VIEWSTATE: Added new DM channel \(channel.id) immediately")
-                
+
             case .group_dm_channel(_):
                 // Group DMs are always loaded immediately
                 self.channels[channel.id] = channel
                 self.channelMessages[channel.id] = []
                 self.dms.insert(channel, at: 0)
-                // print("📥 VIEWSTATE: Added new Group DM channel \(channel.id) immediately")
-                
+
             case .text_channel(let textChannel):
                 // Server channels: only load if server is currently active
                 if case .server(let currentServerId) = currentSelection,
                    currentServerId == textChannel.server {
-                    // Load immediately if this server is active
                     self.channels[channel.id] = channel
                     self.channelMessages[channel.id] = []
-                    // print("📥 VIEWSTATE: Added new text channel \(channel.id) immediately (server active)")
                 } else {
                     // Just store for lazy loading later
-                    // print("🔄 LAZY_CHANNEL: Stored new text channel \(channel.id) for lazy loading")
                 }
-                
+
                 // Update server's channel list (duplicate guard §0.37)
                 if let serverId = channel.server, var server = self.servers[serverId], !server.channels.contains(channel.id) {
                     server.channels.append(channel.id)
                     self.servers[serverId] = server
                 }
-                
+
             case .voice_channel(let voiceChannel):
                 // Voice channels: only load if server is currently active
                 if case .server(let currentServerId) = currentSelection,
@@ -606,11 +625,12 @@ extension ViewState {
                     server.channels.append(channel.id)
                     self.servers[serverId] = server
                 }
-                
+
             default:
                 break
             }
-            
+          }
+
             if channel.server != nil {
                 self.saveChannelCacheAsync()
                 self.saveServersCacheAsync()
@@ -618,119 +638,45 @@ extension ViewState {
             updateAppBadgeCount()
             
         case .channel_update(let e):
-            
+          batchUpdate {
             if let index = self.dms.firstIndex(where: { $0.id == e.id }),
                case .group_dm_channel(var groupDMChannel) = self.dms[index] {
-                
-                
-                if let name = e.data?.name {
-                    groupDMChannel.name = name
-                }
-                
-                if let icon = e.data?.icon {
-                    groupDMChannel.icon = icon
-                }
-                
-                if let description = e.data?.description {
-                    groupDMChannel.description = description
-                }
-                
-                if let nsfw = e.data?.nsfw {
-                    groupDMChannel.nsfw = nsfw
-                }
-                
-                if let permission = e.data?.permissions {
-                    groupDMChannel.permissions = permission
-                }
-                
-                if let owner = e.data?.owner {
-                    groupDMChannel.owner = owner
-                }
-                
-                if e.clear?.contains(.icon) == true {
-                    groupDMChannel.icon = nil
-                }
-                
-                if e.clear?.contains(.description) == true {
-                    groupDMChannel.description = nil
-                }
-                
-                
-                
+
+                if let name = e.data?.name { groupDMChannel.name = name }
+                if let icon = e.data?.icon { groupDMChannel.icon = icon }
+                if let description = e.data?.description { groupDMChannel.description = description }
+                if let nsfw = e.data?.nsfw { groupDMChannel.nsfw = nsfw }
+                if let permission = e.data?.permissions { groupDMChannel.permissions = permission }
+                if let owner = e.data?.owner { groupDMChannel.owner = owner }
+                if e.clear?.contains(.icon) == true { groupDMChannel.icon = nil }
+                if e.clear?.contains(.description) == true { groupDMChannel.description = nil }
+
                 self.dms[index] = .group_dm_channel(groupDMChannel)
-                
+
             } else if let index = self.dms.firstIndex(where: { $0.id == e.id }),
                       case .dm_channel(let dmChannel) = self.dms[index] {
-                
                 //TODO
-                
                 self.dms[index] = .dm_channel(dmChannel)
-                
             }
-            
+
             if let channel = self.channels[e.id] {
-                
-                
                 if case .group_dm_channel(var t) = channel {
-                    if let name = e.data?.name {
-                        t.name = name
-                    }
-                    
-                    if let icon = e.data?.icon {
-                        t.icon = icon
-                    }
-                    
-                    
-                    if let description = e.data?.description {
-                        t.description = description
-                    }
-                    
-                    if let nsfw = e.data?.nsfw {
-                        t.nsfw = nsfw
-                    }
-                    
-                    if let permission = e.data?.permissions {
-                        t.permissions = permission
-                    }
-                    
-                    if let owner = e.data?.owner {
-                        t.owner = owner
-                    }
-                    
-                    
-                    if e.clear?.contains(.icon) == true {
-                        t.icon = nil
-                    }
-                    
-                    if e.clear?.contains(.description) == true {
-                        t.description = nil
-                    }
-                    
-                    
+                    if let name = e.data?.name { t.name = name }
+                    if let icon = e.data?.icon { t.icon = icon }
+                    if let description = e.data?.description { t.description = description }
+                    if let nsfw = e.data?.nsfw { t.nsfw = nsfw }
+                    if let permission = e.data?.permissions { t.permissions = permission }
+                    if let owner = e.data?.owner { t.owner = owner }
+                    if e.clear?.contains(.icon) == true { t.icon = nil }
+                    if e.clear?.contains(.description) == true { t.description = nil }
                     self.channels[e.id] = .group_dm_channel(t)
-                    
-                    
+
                 } else if case .text_channel(var t) = channel {
-                    if let name = e.data?.name {
-                        t.name = name
-                    }
-                    
-                    if let icon = e.data?.icon {
-                        t.icon = icon
-                    }
-                    
-                    if let description = e.data?.description {
-                        t.description = description
-                    }
-                    
-                    if let nsfw = e.data?.nsfw {
-                        t.nsfw = nsfw
-                    }
-                    
-                    if let default_permissions = e.data?.default_permissions {
-                        t.default_permissions = default_permissions
-                    }
-                    
+                    if let name = e.data?.name { t.name = name }
+                    if let icon = e.data?.icon { t.icon = icon }
+                    if let description = e.data?.description { t.description = description }
+                    if let nsfw = e.data?.nsfw { t.nsfw = nsfw }
+                    if let default_permissions = e.data?.default_permissions { t.default_permissions = default_permissions }
                     if let newRolePermissions = e.data?.role_permissions {
                         if t.role_permissions == nil {
                             t.role_permissions = newRolePermissions
@@ -740,17 +686,10 @@ extension ViewState {
                             }
                         }
                     }
-                    
-                    if e.clear?.contains(.icon) == true {
-                        t.icon = nil
-                    }
-                    
-                    if e.clear?.contains(.description) == true {
-                        t.description = nil
-                    }
-                    
+                    if e.clear?.contains(.icon) == true { t.icon = nil }
+                    if e.clear?.contains(.description) == true { t.description = nil }
                     self.channels[e.id] = .text_channel(t)
-                    
+
                 } else if case .voice_channel(var v) = channel {
                     if let name = e.data?.name { v.name = name }
                     if let icon = e.data?.icon { v.icon = icon }
@@ -759,6 +698,7 @@ extension ViewState {
                     self.channels[e.id] = .voice_channel(v)
                 }
             }
+          }
             if let ch = self.channels[e.id], ch.server != nil {
                 self.allEventChannels[e.id] = ch
             }
@@ -774,47 +714,45 @@ extension ViewState {
             if e.user == currentUser?.id {
                 deleteChannel(channelId: e.id)
             } else {
-                
-                if case .group_dm_channel(var channel) = self.channels[e.id] {
-                    channel.recipients.removeAll { $0 == e.user }
-                    self.channels[e.id] = .group_dm_channel(channel)
-                    if let index = dms.firstIndex(where: { $0.id == e.id }) {
-                        dms[index] = .group_dm_channel(channel)
+                batchUpdate {
+                    if case .group_dm_channel(var channel) = self.channels[e.id] {
+                        channel.recipients.removeAll { $0 == e.user }
+                        self.channels[e.id] = .group_dm_channel(channel)
+                        if let index = self.dms.firstIndex(where: { $0.id == e.id }) {
+                            self.dms[index] = .group_dm_channel(channel)
+                        }
                     }
-                } else {
-                    //Todo
                 }
-                
             }
             
         case .channel_group_join(let e):
+          batchUpdate {
             if case .group_dm_channel(var channel) = self.channels[e.id] {
                 channel.recipients.append(e.user)
                 self.channels[e.id] = .group_dm_channel(channel)
-                if let index = dms.firstIndex(where: { $0.id == e.id }) {
-                    dms[index] = .group_dm_channel(channel)
+                if let index = self.dms.firstIndex(where: { $0.id == e.id }) {
+                    self.dms[index] = .group_dm_channel(channel)
                 }
-                
-                //TOOD
-                //fetch user
-                let response = await self.http.fetchUser(user: e.user)
-                switch response {
-                    case .success(let user):
-                        // MEMORY FIX: Only add users if we have space
-                        if self.users.count < self.maxUsersInMemory {
-                            self.users[user.id] = user
-                            // print("📥 VIEWSTATE: Added user \(user.id) during channel_group_join")
-                        }
-                        self.checkAndCleanupIfNeeded()
-                        
-                    case .failure(let error):
-                        print(error)
-                }
-                
-            } else {
-                //Todo other types channel
             }
-            
+          }
+
+            // Fetch user in background — don't block event processing
+            if case .group_dm_channel(_) = self.channels[e.id] {
+                Task { [weak self] in
+                    guard let self else { return }
+                    let response = await self.http.fetchUser(user: e.user)
+                    switch response {
+                        case .success(let user):
+                            if self.users.count < self.maxUsersInMemory {
+                                self.users[user.id] = user
+                            }
+                            self.checkAndCleanupIfNeeded()
+                        case .failure(let error):
+                            print(error)
+                    }
+                }
+            }
+
             // MEMORY MANAGEMENT: Cleanup after new user
             checkAndCleanupIfNeeded()
             
@@ -886,7 +824,8 @@ extension ViewState {
                         }
                         self.checkAndCleanupIfNeeded()
                     case .failure(_):
-                         print("error fetching user")
+                         // print("error fetching user")
+                        break
                 }
                 
                 switch memberResult {
@@ -895,7 +834,8 @@ extension ViewState {
                         serverMembers[e.user] = member
                         self.members[e.id] = serverMembers
                     case .failure(_):
-                         print("error fetching member")
+                         // print("error fetching member")
+                        break
                 }
 
             }

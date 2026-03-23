@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Sentry
 import UserNotificationsUI
+import Kingfisher
 
 #if os(macOS)
 import AppKit
@@ -62,6 +63,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Register the notification categories, including actions like "Reply".
         declareNotificationCategoryTypes()
         
+        // Configure Kingfisher image cache limits
+        let imageCache = ImageCache.default
+        imageCache.memoryStorage.config.totalCostLimit = 50 * 1024 * 1024  // 50 MB memory
+        imageCache.memoryStorage.config.countLimit = 200
+        imageCache.diskStorage.config.sizeLimit = 100 * 1024 * 1024  // 100 MB disk
+        imageCache.diskStorage.config.expiration = .days(7)
+
         // Initialize audio session manager for proper audio handling
         _ = AudioSessionManager.shared
         
@@ -147,14 +155,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             if SentrySDK.isEnabled {
                 SentrySDK.capture(message: "Received notification token without available session token")
             }
-            print("Received notification token without available session token")
+            // print("Received notification token without available session token")
             fatalError("Received notification token without available session token")
         }
     }
     
     // CRITICAL: Handle app going to background - ensure data is saved
     func applicationDidEnterBackground(_ application: UIApplication) {
-        print("📱 APP: Entering background - ensuring data persistence")
+        // print("📱 APP: Entering background - ensuring data persistence")
         
         // Get the current ViewState
         if let state = ViewState.shared {
@@ -170,7 +178,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             //     UserDefaults.standard.set(channelsData, forKey: "channels")
             // }
             
-            print("💾 BACKGROUND: Saving users (\(state.users.count)) to UserDefaults")
+            // print("💾 BACKGROUND: Saving users (\(state.users.count)) to UserDefaults")
             if let usersData = try? JSONEncoder().encode(state.users) {
                 UserDefaults.standard.set(usersData, forKey: "users")
             }
@@ -189,34 +197,34 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             
             // Force synchronize UserDefaults
             UserDefaults.standard.synchronize()
-            print("✅ BACKGROUND: All data saved to UserDefaults")
+            // print("✅ BACKGROUND: All data saved to UserDefaults")
         }
     }
     
     // Handle app returning from background
     func applicationWillEnterForeground(_ application: UIApplication) {
-        print("📱 APP: Returning from background")
+        // print("📱 APP: Returning from background")
         
         // Ensure ViewState is properly initialized
         if ViewState.shared == nil {
-            print("⚠️ FOREGROUND: ViewState was nil, creating new instance")
+            // print("⚠️ FOREGROUND: ViewState was nil, creating new instance")
             let _ = ViewState()
         } else {
-            print("✅ FOREGROUND: ViewState still exists")
+            // print("✅ FOREGROUND: ViewState still exists")
         }
     }
     
     // Handle app becoming active
     func applicationDidBecomeActive(_ application: UIApplication) {
-        print("📱 APP: Became active")
+        // print("📱 APP: Became active")
         
         // Log current data state
         if let state = ViewState.shared {
-            print("📊 ACTIVE: Current data state:")
-            print("   - Servers: \(state.servers.count)")
-            print("   - Channels: \(state.channels.count)")
-            print("   - Users: \(state.users.count)")
-            print("   - DMs: \(state.dms.count)")
+            // print("📊 ACTIVE: Current data state:")
+            // print("   - Servers: \(state.servers.count)")
+            // print("   - Channels: \(state.channels.count)")
+            // print("   - Users: \(state.users.count)")
+            // print("   - DMs: \(state.dms.count)")
             
             // Update app badge count to sync with internal state
             state.updateAppBadgeCount()
@@ -225,7 +233,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     
     // Handle app termination
     func applicationWillTerminate(_ application: UIApplication) {
-        print("📱 APP: Will terminate - final save")
+        // print("📱 APP: Will terminate - final save")
         
         // Force save users data immediately before termination
         if let state = ViewState.shared {
@@ -282,12 +290,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let response = await state.http.uploadNotificationToken(token: token)
                 switch response {
                     case .success:
-                        print("✅ Uploading notification token")
+                        // print("✅ Uploading notification token")
                         // Clear any pending token on success
                         state.pendingNotificationToken = nil
                         UserDefaults.standard.removeObject(forKey: "pendingNotificationToken")
                     case .failure(let error):
-                        print("❌ Failure uploading notification token: \(error)")
+                        // print("❌ Failure uploading notification token: \(error)")
                         // Store token for later retry
                         state.storePendingNotificationToken(token)
                 }
@@ -297,7 +305,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if SentrySDK.isEnabled {
                 SentrySDK.capture(message: "Received notification token without available session token")
             }
-            print("Received notification token without available session token")
+            // print("Received notification token without available session token")
             // Store token for later instead of fatal error
             state.storePendingNotificationToken(token)
         }
@@ -437,7 +445,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     ///   - center: The `UNUserNotificationCenter` managing the notifications.
     ///   - notification: The notification for which the settings were requested (if available).
     func userNotificationCenter(_ center: UNUserNotificationCenter, openSettingsFor notification: UNNotification?) {
-        print("notification settings")
+        // print("notification settings")
         guard let notification = notification else { return }
         
         let state = ViewState.shared ?? ViewState()

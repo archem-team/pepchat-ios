@@ -48,11 +48,6 @@ extension ViewState {
         do {
             let data = try Data(contentsOf: url)
             let decoded = try JSONDecoder().decode([String: Bool].self, from: data)
-            // Debug: print membership cache JSON (serverId -> isMember for Discover green tick)
-            if let prettyData = try? JSONSerialization.data(withJSONObject: decoded, options: .prettyPrinted),
-               let jsonString = String(data: prettyData, encoding: .utf8) {
-                print("📋 [MembershipCache] Discover membership cache JSON:\n\(jsonString)")
-            }
             return decoded
         } catch {
             print("❌ [MembershipCache] Failed to load:", error)

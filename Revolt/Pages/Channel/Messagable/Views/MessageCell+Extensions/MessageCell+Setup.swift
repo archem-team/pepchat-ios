@@ -83,6 +83,15 @@ extension MessageCell {
         usernameLabel.addGestureRecognizer(usernameTapGesture)
         contentView.addSubview(usernameLabel)
         
+        usernameVerifiedBadgeImageView.translatesAutoresizingMaskIntoConstraints = false
+        usernameVerifiedBadgeImageView.contentMode = .scaleAspectFit
+        usernameVerifiedBadgeImageView.clipsToBounds = true
+        usernameVerifiedBadgeImageView.tintColor = UIColor.systemYellow
+        usernameVerifiedBadgeImageView.isHidden = true
+        contentView.addSubview(usernameVerifiedBadgeImageView)
+        usernameVerifiedBadgeWidthConstraint = usernameVerifiedBadgeImageView.widthAnchor.constraint(equalToConstant: 0)
+        usernameVerifiedBadgeWidthConstraint?.isActive = true
+        
         // Time label
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
         timeLabel.font = UIFont.systemFont(ofSize: 12)
@@ -184,8 +193,12 @@ extension MessageCell {
             usernameLabel.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 10),
             // Note: Top constraint for username will be set dynamically in updateAppearanceForContinuation
             
+            usernameVerifiedBadgeImageView.leadingAnchor.constraint(equalTo: usernameLabel.trailingAnchor, constant: 6),
+            usernameVerifiedBadgeImageView.centerYAnchor.constraint(equalTo: usernameLabel.centerYAnchor),
+            usernameVerifiedBadgeImageView.heightAnchor.constraint(equalToConstant: 14),
+            
             // Time
-            timeLabel.leadingAnchor.constraint(equalTo: usernameLabel.trailingAnchor, constant: 8),
+            timeLabel.leadingAnchor.constraint(equalTo: usernameVerifiedBadgeImageView.trailingAnchor, constant: 8),
             timeLabel.centerYAnchor.constraint(equalTo: usernameLabel.centerYAnchor),
             
             // Bridge badge
@@ -195,12 +208,41 @@ extension MessageCell {
             bridgeBadgeLabel.heightAnchor.constraint(equalToConstant: 16),
             bridgeBadgeLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -16),
             
-            // Content - adjusted for larger avatar
-            contentLabel.leadingAnchor.constraint(equalTo: usernameLabel.leadingAnchor),
-            contentLabel.topAnchor.constraint(equalTo: usernameLabel.bottomAnchor, constant: 4),
+            // Content trailing — always active regardless of continuation state
             contentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
         ])
-        
+
+        // PERF Issue #9: Pre-build four constraint variants for continuation/reply combinations.
+        // These are toggled via isActive in updateAppearanceForContinuation() instead of
+        // scanning and removing/recreating constraints on every cell reuse.
+        continuationNoReplyConstraints = [
+            contentLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            contentLabel.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 10)
+        ]
+        continuationWithReplyConstraints = [
+            contentLabel.topAnchor.constraint(equalTo: replyView.bottomAnchor, constant: 8),
+            contentLabel.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 10)
+        ]
+        let ncNoReplyUsernameHeight = usernameLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 19)
+        ncNoReplyUsernameHeight.priority = .defaultHigh
+        nonContinuationNoReplyConstraints = [
+            usernameLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            ncNoReplyUsernameHeight,
+            contentLabel.topAnchor.constraint(equalTo: usernameLabel.bottomAnchor, constant: 4),
+            contentLabel.leadingAnchor.constraint(equalTo: usernameLabel.leadingAnchor)
+        ]
+        let ncWithReplyUsernameHeight = usernameLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 19)
+        ncWithReplyUsernameHeight.priority = .defaultHigh
+        nonContinuationWithReplyConstraints = [
+            usernameLabel.topAnchor.constraint(equalTo: replyView.bottomAnchor, constant: 8),
+            ncWithReplyUsernameHeight,
+            contentLabel.topAnchor.constraint(equalTo: usernameLabel.bottomAnchor, constant: 4),
+            contentLabel.leadingAnchor.constraint(equalTo: usernameLabel.leadingAnchor)
+        ]
+
+        // Activate the default (non-continuation, no reply) set
+        NSLayoutConstraint.activate(nonContinuationNoReplyConstraints)
+
         // Note: Reactions container constraints are set dynamically in setupReactionsContainerConstraints()
         // when reactions are actually present to ensure proper positioning relative to content
     }

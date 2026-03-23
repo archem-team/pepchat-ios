@@ -27,6 +27,7 @@ extension MessageableChannelViewController {
         backButton.tintColor = .textDefaultGray01
         backButton.translatesAutoresizingMaskIntoConstraints = false
         backButton.addTarget(self, action: #selector(backButtonTapped), for: .touchUpInside)
+        backButton.accessibilityIdentifier = AccessibilityID.channel.backButton
         headerView.addSubview(backButton)
 
         // Channel icon (next to back button)
@@ -55,6 +56,15 @@ extension MessageableChannelViewController {
         channelNameLabel.lineBreakMode = .byTruncatingTail
         channelNameLabel.isUserInteractionEnabled = true
         headerView.addSubview(channelNameLabel)
+        
+        // Centered title group (icon + name) while respecting side buttons
+        let channelTitleStack = UIStackView(arrangedSubviews: [channelIconView, channelNameLabel])
+        channelTitleStack.axis = .horizontal
+        channelTitleStack.alignment = .center
+        channelTitleStack.distribution = .fill
+        channelTitleStack.spacing = 10
+        channelTitleStack.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(channelTitleStack)
 
         // Add tap gesture to channel name
         let nameTapGesture = UITapGestureRecognizer(
@@ -87,6 +97,8 @@ extension MessageableChannelViewController {
                         with: iconUrl,
                         placeholder: UIImage(systemName: "number"),
                         options: [
+                            .processor(DownsamplingImageProcessor(size: CGSize(width: 72, height: 72))),
+                            .scaleFactor(UIScreen.main.scale),
                             .transition(.fade(0.2)),
                             .cacheOriginalImage,
                         ]
@@ -107,6 +119,8 @@ extension MessageableChannelViewController {
                         with: iconUrl,
                         placeholder: UIImage(systemName: "speaker.wave.2.fill"),
                         options: [
+                            .processor(DownsamplingImageProcessor(size: CGSize(width: 72, height: 72))),
+                            .scaleFactor(UIScreen.main.scale),
                             .transition(.fade(0.2)),
                             .cacheOriginalImage,
                         ]
@@ -126,6 +140,8 @@ extension MessageableChannelViewController {
                         with: iconUrl,
                         placeholder: UIImage(systemName: "person.2.circle.fill"),
                         options: [
+                            .processor(DownsamplingImageProcessor(size: CGSize(width: 72, height: 72))),
+                            .scaleFactor(UIScreen.main.scale),
                             .transition(.fade(0.2)),
                             .cacheOriginalImage,
                         ]
@@ -200,8 +216,6 @@ extension MessageableChannelViewController {
             backButton.heightAnchor.constraint(equalToConstant: 28),
 
             // Channel icon - Positioned next to back button
-            channelIconView.leadingAnchor.constraint(
-                equalTo: backButton.trailingAnchor, constant: 10),
             channelIconView.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
             channelIconView.widthAnchor.constraint(equalToConstant: 36),  // Increased from 30
             channelIconView.heightAnchor.constraint(equalToConstant: 36),  // Increased from 30
@@ -219,12 +233,18 @@ extension MessageableChannelViewController {
             pinnedMessageButton.widthAnchor.constraint(equalToConstant: 28),
             pinnedMessageButton.heightAnchor.constraint(equalToConstant: 28),
             
-            // Channel name - Between icon and pin button; truncate with "..." when too long
-            channelNameLabel.leadingAnchor.constraint(
-                equalTo: channelIconView.trailingAnchor, constant: 10),
+            // Channel title stack - horizontally centered between left/right controls
+            channelTitleStack.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
+            channelTitleStack.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            channelTitleStack.leadingAnchor.constraint(
+                greaterThanOrEqualTo: backButton.trailingAnchor, constant: 10),
+            channelTitleStack.trailingAnchor.constraint(
+                lessThanOrEqualTo: pinnedMessageButton.leadingAnchor, constant: -10),
+
+            // Channel name inside centered stack
             channelNameLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
             channelNameLabel.trailingAnchor.constraint(
-                lessThanOrEqualTo: pinnedMessageButton.leadingAnchor, constant: -10),
+                lessThanOrEqualTo: channelTitleStack.trailingAnchor),
 
             // Separator at the bottom
             separator.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),

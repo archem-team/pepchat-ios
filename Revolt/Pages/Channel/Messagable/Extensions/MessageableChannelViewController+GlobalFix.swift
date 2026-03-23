@@ -20,7 +20,7 @@ extension MessageableChannelViewController {
 
         // CRITICAL FIX: Don't apply global fix if target message protection is active
         if targetMessageProtectionActive {
-            print("🔧 [FIX] BLOCKED: Global fix blocked - target message protection active")
+            // print("🔧 [FIX] BLOCKED: Global fix blocked - target message protection active")
             return
         }
 
@@ -65,9 +65,7 @@ extension MessageableChannelViewController {
 
         // Remove any excess contentInset
         if self.tableView.contentInset != .zero {
-            UIView.animate(withDuration: 0.2) {
-                self.tableView.contentInset = .zero
-            }
+            self.tableView.contentInset = .zero
             // print("📏 [FIX] Reset content insets to zero")
         }
 
@@ -81,6 +79,8 @@ extension MessageableChannelViewController {
 
         // Reload and position properly
         DispatchQueue.main.async {
+            // Skip if loading started (loadInitialMessages is handling display)
+            if self.messageLoadingState == .loading { return }
             // Reload table
             self.tableView.reloadData()
             // print("🔄 [FIX] Reloaded tableView")
@@ -90,7 +90,7 @@ extension MessageableChannelViewController {
 
             // COMPREHENSIVE TARGET MESSAGE PROTECTION
             if self.targetMessageProtectionActive {
-                print("🎯 [FIX] Target message protection active, maintaining current position")
+                // print("🎯 [FIX] Target message protection active, maintaining current position")
                 self.tableView.contentOffset = CGPoint(x: 0, y: currentOffset)
                 return
             }
@@ -98,7 +98,16 @@ extension MessageableChannelViewController {
             // ONLY scroll to bottom if user was near bottom OR if table was empty before
             if wasNearBottom || currentOffset <= 0 {
                 // print("🔽 [FIX] User was near bottom or at top, positioning at bottom")
-                self.positionTableAtBottomBeforeShowing()
+                let rowCount = self.tableView.numberOfRows(inSection: 0)
+                if self.tableView.alpha >= 1.0 && rowCount > 0 {
+                    self.tableView.scrollToRow(
+                        at: IndexPath(row: rowCount - 1, section: 0),
+                        at: .bottom,
+                        animated: false
+                    )
+                } else {
+                    self.positionTableAtBottomBeforeShowing()
+                }
             } else {
                 // Try to maintain scroll position if user was somewhere in the middle
                 // print("📏 [FIX] User was not near bottom, attempting to maintain scroll position")

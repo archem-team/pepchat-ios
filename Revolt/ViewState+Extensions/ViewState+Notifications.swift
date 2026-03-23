@@ -32,8 +32,9 @@ extension ViewState {
                 pendingNotificationToken = nil // Clear pending token after success
                 UserDefaults.standard.removeObject(forKey: "pendingNotificationToken")
             case .failure(let error):
-                print("❌ RETRY_NOTIFICATION_TOKEN: Failed again: \(error)")
+                // print("❌ RETRY_NOTIFICATION_TOKEN: Failed again: \(error)")
                 // Keep the pending token for next retry
+                break
         }
     }
     
@@ -94,7 +95,7 @@ extension ViewState {
                     
                     // Debug log for group DMs
                     if case .group_dm_channel(let groupDM) = channel {
-                        print("🔔 Badge: Counting group DM '\(groupDM.name)' as unread")
+                        // print("🔔 Badge: Counting group DM '\(groupDM.name)' as unread")
                     }
                 }
             }
@@ -106,8 +107,9 @@ extension ViewState {
         // Update app badge count
         DispatchQueue.main.async {
             let currentBadge = application.applicationIconBadgeNumber
+            guard currentBadge != finalBadgeCount else { return }
             application.applicationIconBadgeNumber = finalBadgeCount
-            print("🔔 Badge: \(currentBadge) -> \(finalBadgeCount) (unreads: \(totalUnreadCount))")
+            // print("🔔 Badge: \(currentBadge) -> \(finalBadgeCount) (unreads: \(totalUnreadCount))")
         }
     }
     
@@ -117,13 +119,13 @@ extension ViewState {
         
         DispatchQueue.main.async {
             application.applicationIconBadgeNumber = 0
-            print("🔔 Cleared app badge count")
+            // print("🔔 Cleared app badge count")
         }
     }
     
     /// Manually refreshes the app badge count - useful for debugging or when the count seems incorrect
     func refreshAppBadge() {
-        print("🔔 Manually refreshing app badge count...")
+        // print("🔔 Manually refreshing app badge count...")
         updateAppBadgeCount()
     }
     

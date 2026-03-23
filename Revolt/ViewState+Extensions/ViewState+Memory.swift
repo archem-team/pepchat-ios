@@ -313,12 +313,15 @@ extension ViewState {
     /// Preloads messages for important channels when the app starts or WebSocket reconnects
     @MainActor
     internal func preloadImportantChannels() async {
-        // Wait a bit for the WebSocket to fully authenticate
-        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+        // Wait for connected state (up to 5 seconds) instead of fixed 2-second sleep
+        let deadline = Date().addingTimeInterval(5.0)
+        while state != .connected && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 200_000_000) // Poll every 200ms
+        }
         
         // Only preload if user is authenticated and WebSocket is connected
         guard sessionToken != nil, currentUser != nil, state == .connected else {
-            print("🚀 PRELOAD: Skipping preload - user not authenticated or not connected (state: \(state))")
+            // print("🚀 PRELOAD: Skipping preload - user not authenticated or not connected (state: \(state))")
             return
         }
         
@@ -337,7 +340,7 @@ extension ViewState {
             }.prefix(3) // Preload first 3 text channels
             
             channelsToPreload.append(contentsOf: textChannels)
-            print("🚀 PRELOAD: Added \(textChannels.count) channels from current server \(serverId)")
+            // print("🚀 PRELOAD: Added \(textChannels.count) channels from current server \(serverId)")
         }
         
         // Add active DM channels
@@ -353,16 +356,16 @@ extension ViewState {
         }.prefix(5) // Preload first 5 DMs
         
         channelsToPreload.append(contentsOf: activeDMs)
-        print("🚀 PRELOAD: Added \(activeDMs.count) DM channels")
+        // print("🚀 PRELOAD: Added \(activeDMs.count) DM channels")
         
         // Always include the specific channel mentioned by user
         let specificChannelId = "01J7QTT66242A7Q26A2FH5TD48"
         if !channelsToPreload.contains(specificChannelId) {
             channelsToPreload.append(specificChannelId)
-            print("🚀 PRELOAD: Added specific channel \(specificChannelId)")
+            // print("🚀 PRELOAD: Added specific channel \(specificChannelId)")
         }
         
-        print("🚀 PRELOAD: Starting preload for \(channelsToPreload.count) channels")
+        // print("🚀 PRELOAD: Starting preload for \(channelsToPreload.count) channels")
         
         // Preload channels in parallel for better performance
         await withTaskGroup(of: Void.self) { group in
@@ -373,7 +376,7 @@ extension ViewState {
             }
         }
         
-        print("🚀 PRELOAD: Completed preloading \(channelsToPreload.count) channels")
+        // print("🚀 PRELOAD: Completed preloading \(channelsToPreload.count) channels")
     }
     
     /// Public method to preload a specific channel by ID
@@ -402,7 +405,7 @@ extension ViewState {
     @MainActor
     func cleanupChannelFromMemory(channelId: String, preserveForNavigation: Bool = false) {
         let startTime = CFAbsoluteTimeGetCurrent()
-        print("⚡ VIEWSTATE_INSTANT_CLEANUP: Starting IMMEDIATE cleanup for channel \(channelId)")
+        // print("⚡ VIEWSTATE_INSTANT_CLEANUP: Starting IMMEDIATE cleanup for channel \(channelId)")
 
         let initialMessageCount = messages.count
         let initialUserCount = users.count
@@ -418,7 +421,7 @@ extension ViewState {
         }
 
         // 3. IMMEDIATE: Clear all related data
-        currentlyTyping.removeValue(forKey: channelId)
+        clearTyping(forChannel: channelId)
         preloadedChannels.remove(channelId)
         atTopOfChannel.remove(channelId)
 
@@ -436,14 +439,14 @@ extension ViewState {
         let endTime = CFAbsoluteTimeGetCurrent()
         let duration = (endTime - startTime) * 1000
         
-        print("⚡ VIEWSTATE_INSTANT_CLEANUP: Completed in \(String(format: "%.2f", duration))ms")
-        print("⚡ FREED: \(initialMessageCount - finalMessageCount) messages, \(initialUserCount - finalUserCount) users, \(channelMessageCount) channel messages")
+        // print("⚡ VIEWSTATE_INSTANT_CLEANUP: Completed in \(String(format: "%.2f", duration))ms")
+        // print("⚡ FREED: \(initialMessageCount - finalMessageCount) messages, \(initialUserCount - finalUserCount) users, \(channelMessageCount) channel messages")
     }
     
     /// Clean up users that are no longer needed after leaving a channel
     @MainActor
     private func cleanupUnusedUsers(excludingChannelId: String) {
-        print("👥 USER_CLEANUP: Starting cleanup of unused users")
+        // print("👥 USER_CLEANUP: Starting cleanup of unused users")
         
         var usersToKeep = Set<String>()
         
@@ -501,14 +504,14 @@ extension ViewState {
         }
         
         let finalUserCount = users.count
-        print("👥 USER_CLEANUP: Removed \(usersToRemove.count) unused users (\(initialUserCount) -> \(finalUserCount))")
+        // print("👥 USER_CLEANUP: Removed \(usersToRemove.count) unused users (\(initialUserCount) -> \(finalUserCount))")
     }
     
     /// INSTANT force memory cleanup - IMMEDIATE execution
     @MainActor
     func forceMemoryCleanup() {
         let startTime = CFAbsoluteTimeGetCurrent()
-        print("⚡ FORCE_INSTANT_CLEANUP: Starting IMMEDIATE memory cleanup")
+        // print("⚡ FORCE_INSTANT_CLEANUP: Starting IMMEDIATE memory cleanup")
         
         let initialStats = (
             messages: messages.count,
@@ -562,10 +565,10 @@ extension ViewState {
         let endTime = CFAbsoluteTimeGetCurrent()
         let duration = (endTime - startTime) * 1000
         
-        print("⚡ FORCE_INSTANT_CLEANUP: Completed in \(String(format: "%.2f", duration))ms")
-        print("   Messages: \(initialStats.messages) -> \(finalStats.messages)")
-        print("   Users: \(initialStats.users) -> \(finalStats.users)")
-        print("   Channels: \(initialStats.channels) -> \(finalStats.channels)")
+        // print("⚡ FORCE_INSTANT_CLEANUP: Completed in \(String(format: "%.2f", duration))ms")
+        // print("   Messages: \(initialStats.messages) -> \(finalStats.messages)")
+        // print("   Users: \(initialStats.users) -> \(finalStats.users)")
+        // print("   Channels: \(initialStats.channels) -> \(finalStats.channels)")
     }
     
 }

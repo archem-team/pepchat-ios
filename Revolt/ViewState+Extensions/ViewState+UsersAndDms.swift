@@ -59,17 +59,33 @@ extension ViewState {
                 break
             }
             
-            if user.relationship == .Friend {
+            guard let relationship = user.relationship else { continue }
+            
+            switch relationship {
+            case .Friend, .Incoming, .Outgoing, .Blocked, .BlockedOther:
                 if users[user.id] == nil {
                     users[user.id] = user
                     addedCount += 1
-                    // print("🚀 VIEWSTATE: Added friend: \(user.id)")
                 } else {
                     users[user.id] = user
                     updatedCount += 1
-                    // print("🚀 VIEWSTATE: Updated friend: \(user.id)")
                 }
+                
+            default:
+                continue
             }
+            
+//            if user.relationship == .Friend {
+//                if users[user.id] == nil {
+//                    users[user.id] = user
+//                    addedCount += 1
+//                    // print("🚀 VIEWSTATE: Added friend: \(user.id)")
+//                } else {
+//                    users[user.id] = user
+//                    updatedCount += 1
+//                    // print("🚀 VIEWSTATE: Updated friend: \(user.id)")
+//                }
+//            }
         }
         
         // 3. Add users needed for visible DMs only (lazy approach)

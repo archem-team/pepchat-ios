@@ -175,7 +175,7 @@ extension ViewState {
     
     /// Clean up stale unread entries for channels that no longer exist
     func cleanupStaleUnreads() {
-        print("🧹 Cleaning up stale unreads...")
+        // print("🧹 Cleaning up stale unreads...")
         var removedCount = 0
         var staleChannels: [String] = []
         
@@ -190,10 +190,10 @@ extension ViewState {
         // Remove stale entries
         for channelId in staleChannels {
             unreads.removeValue(forKey: channelId)
-            print("  ❌ Removed stale unread for channel: \(channelId)")
+            // print("  ❌ Removed stale unread for channel: \(channelId)")
         }
         
-        print("🧹 Cleanup complete. Removed \(removedCount) stale entries.")
+        // print("🧹 Cleanup complete. Removed \(removedCount) stale entries.")
         
         // Update badge count after cleanup
         updateAppBadgeCount()
@@ -201,7 +201,7 @@ extension ViewState {
     
     /// Force mark all channels as read and clear the app badge
     func forceMarkAllAsRead() {
-        print("📖 Force marking all channels as read...")
+        // print("📖 Force marking all channels as read...")
         let channelCount = unreads.count
         
         // Clear all unreads
@@ -210,12 +210,12 @@ extension ViewState {
         // Clear the app badge
         clearAppBadge()
         
-        print("📖 Marked \(channelCount) channels as read and cleared badge")
+        // print("📖 Marked \(channelCount) channels as read and cleared badge")
     }
     
     /// Show detailed unread message counts for each channel
     func showUnreadCounts() {
-        print("\n📊 === UNREAD MESSAGE COUNTS ===")
+        // print("\n📊 === UNREAD MESSAGE COUNTS ===")
         
         var totalUnreadMessages = 0
         var totalMentions = 0
@@ -227,7 +227,7 @@ extension ViewState {
             
             // Skip if channel doesn't exist
             guard let channel = channel else {
-                print("❌ Channel \(channelId) not found - skipping")
+                // print("❌ Channel \(channelId) not found - skipping")
                 continue
             }
             
@@ -280,22 +280,22 @@ extension ViewState {
         
         // Print results
         if channelsWithUnread.isEmpty {
-            print("✅ No channels with unread messages!")
+            // print("✅ No channels with unread messages!")
         } else {
-            print("\n📌 Channels with unread messages:")
+            // print("\n📌 Channels with unread messages:")
             for channel in channelsWithUnread {
                 let unreadText = channel.unreadCount == -1 ? "Has unread" : "\(channel.unreadCount) unread"
                 let mentionText = channel.mentionCount > 0 ? ", \(channel.mentionCount) mention(s)" : ""
-                print("  • \(channel.name): \(unreadText)\(mentionText)")
+                // print("  • \(channel.name): \(unreadText)\(mentionText)")
             }
         }
         
-        print("\n📊 Summary:")
-        print("  - Total channels with unread: \(channelsWithUnread.count)")
-        print("  - Total unread channels (unmuted): \(totalUnreadMessages)")
-        print("  - Total mentions (unmuted): \(totalMentions)")
-        print("  - Current badge count: \(ViewState.application?.applicationIconBadgeNumber ?? 0)")
-        print("📊 === END UNREAD COUNTS ===\n")
+        // print("\n📊 Summary:")
+        // print("  - Total channels with unread: \(channelsWithUnread.count)")
+        // print("  - Total unread channels (unmuted): \(totalUnreadMessages)")
+        // print("  - Total mentions (unmuted): \(totalMentions)")
+        // print("  - Current badge count: \(ViewState.application?.applicationIconBadgeNumber ?? 0)")
+        // print("📊 === END UNREAD COUNTS ===\n")
     }
     
     /// Get unread counts as a formatted string for UI display

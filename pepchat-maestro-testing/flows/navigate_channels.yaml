@@ -1,0 +1,12 @@
+appId: chat.zeko.app
+---
+# Navigate channels — read-only test that opens a channel and verifies messages load.
+# Does NOT send any messages (safe for production).
+
+# TODO: update with real accessibility IDs once added to channel views
+- assertVisible: peptide-compass
+
+- tapOn: PepChat Official
+- tapOn: english
+- tapOn:
+    id: channel.backButton

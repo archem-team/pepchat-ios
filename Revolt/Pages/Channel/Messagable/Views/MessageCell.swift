@@ -10,6 +10,14 @@ import AVKit
 
 // MARK: - MessageCell
 class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDelegate {
+    // PERFORMANCE: Cache pre-emoji NSAttributedString by message ID.
+    // NSCache auto-evicts under memory pressure. Invalidated on message edit.
+    static let attributedStringCache: NSCache<NSString, NSAttributedString> = {
+        let cache = NSCache<NSString, NSAttributedString>()
+        cache.countLimit = 300
+        return cache
+    }()
+
     private let messageContentView = UIView()
     internal let avatarImageView = UIImageView()
     internal let usernameLabel = UILabel()
@@ -21,7 +29,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     internal var fileAttachmentsContainer: UIView?
     internal var fileAttachmentViews: [UIView] = []
     internal var viewState: ViewState?
-    
+    internal let usernameVerifiedBadgeImageView = UIImageView()
+    internal var usernameVerifiedBadgeWidthConstraint: NSLayoutConstraint?
 
     
     // Reply components
@@ -75,12 +84,18 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     public var isTargetMessageHighlighted: Bool = false
     public var originalBackgroundColorForHighlight: UIColor?
     
-    // Additional property to determine if this is a continuation message
-    var isContinuation: Bool = false {
-        didSet {
-            updateAppearanceForContinuation()
-        }
-    }
+    // PERF Issue #9: Pre-built constraint sets — toggled via isActive instead of remove/recreate
+    internal var continuationNoReplyConstraints: [NSLayoutConstraint] = []
+    internal var continuationWithReplyConstraints: [NSLayoutConstraint] = []
+    internal var nonContinuationNoReplyConstraints: [NSLayoutConstraint] = []
+    internal var nonContinuationWithReplyConstraints: [NSLayoutConstraint] = []
+    internal var contentLabelBottomToContentViewConstraint: NSLayoutConstraint?
+
+    // Additional property to determine if this is a continuation message.
+    // Note: updateAppearanceForContinuation() is called explicitly at the end of configure(),
+    // after content and embeds are set up. No didSet trigger — the old didSet caused a premature
+    // layoutIfNeeded() with empty content, making embeds anchor to a stale contentLabel.bottom.
+    var isContinuation: Bool = false
     
     // Property to track if this message is pending (optimistic update)
     var isPendingMessage: Bool = false {
@@ -92,6 +107,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     // Callback for message actions
     var onMessageAction: ((MessageAction, Message) -> Void)?
     var onImageTapped: ((UIImage) -> Void)?
+    /// Called when async content (images, link previews) finishes loading and may have changed cell height.
+    var onAsyncContentLoaded: ((String) -> Void)?
     var onAvatarTap: (() -> Void)?
     var onUsernameTap: (() -> Void)?
     
@@ -202,14 +219,17 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         reactionsContainerView.isHidden = true
         clearReactionsContainerConstraints()
         
-        // PERFORMANCE: Clear embeds container
-        if let embedContainer = contentView.viewWithTag(2000) {
+        // PERFORMANCE: Clear embeds container and cancel image downloads in LinkPreviewViews
+        if let embedContainer = contentView.viewWithTag(2000) as? UIStackView {
+            for case let linkPreview as LinkPreviewView in embedContainer.arrangedSubviews {
+                linkPreview.cancelDownloads()
+            }
             embedContainer.removeFromSuperview()
         }
         
         // PERFORMANCE: Clear content label bottom constraints for clean reuse
         clearContentLabelBottomConstraints()
-        
+
         // PERFORMANCE: Clear ALL dynamic constraints that might cause layout conflicts
         clearDynamicConstraints()
         
@@ -220,9 +240,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         bridgeBadgeLabel.isHidden = true
         
         // PERFORMANCE: Reset properties to defaults (avoid retain cycles)
-        // NOTE: Don't reset currentMessage, currentAuthor, currentMember, viewState here 
+        // NOTE: Don't reset currentMessage, currentAuthor, currentMember, viewState here
         // as they might be needed for delayed UI interactions like reaction taps
         // They will be properly set in configure() method
+        onAsyncContentLoaded = nil
         isPendingMessage = false
         
         // PERFORMANCE: Reset swipe state immediately
@@ -241,6 +262,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         
         // PERFORMANCE: Clean up any temp video files immediately
         cleanupTempVideos()
+        
+        usernameVerifiedBadgeImageView.image = nil
+        usernameVerifiedBadgeImageView.isHidden = true
         
         // PERFORMANCE: Clean up video window if cell is reused
         if MessageCell.videoWindow != nil {
@@ -398,6 +422,12 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         let displayName = message.masquerade?.name ?? member?.nickname ?? author.display_name ?? author.username
         usernameLabel.text = displayName
         usernameLabel.font = UIFont.boldSystemFont(ofSize: 16)
+        
+        let showVerified = author.hasVerifiedBadge()
+        usernameLabel.textColor = showVerified ? .systemYellow : .white
+        usernameVerifiedBadgeImageView.image = UIImage(systemName: "checkmark.seal.fill")
+        usernameVerifiedBadgeImageView.isHidden = !showVerified
+        usernameVerifiedBadgeWidthConstraint?.constant = showVerified ? 14 : 0
         
         // Show bridge badge if message has masquerade (indicating it's bridged)
         bridgeBadgeLabel.isHidden = message.masquerade == nil
@@ -574,7 +604,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             let channelMatches = channelRegex.matches(in: text, range: range)
             
             // Debug: Print found matches
-            print("🔍 MessageCell Channel mention processing: Found \(channelMatches.count) matches in: \(text)")
+            // print("🔍 MessageCell Channel mention processing: Found \(channelMatches.count) matches in: \(text)")
             
             // Process matches in reverse to avoid index issues when replacing
             for match in channelMatches.reversed() {
@@ -582,9 +612,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     let channelId = String(text[channelIdRange])
                     
                     // Try to find channel in viewState
-                    print("🔍 MessageCell Processing channel ID: \(channelId)")
+                    // print("🔍 MessageCell Processing channel ID: \(channelId)")
                     if let channel = viewState.channels[channelId] ?? viewState.allEventChannels[channelId] {
-                        print("✅ MessageCell Found channel: \(channel.getName(viewState)) for ID: \(channelId)")
+                        // print("✅ MessageCell Found channel: \(channel.getName(viewState)) for ID: \(channelId)")
                         // Get the mention range in the original text
                         let mentionRange = match.range
                         
@@ -640,7 +670,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                             // print("DEBUG: Error adding attributes to channel mention: \(error)")
                         }
                     } else {
-                        print("❌ MessageCell Channel not found for ID: \(channelId)")
+                        // print("❌ MessageCell Channel not found for ID: \(channelId)")
                         // Channel not found - replace with #unknown-channel
                         let mentionRange = match.range
                         guard mentionRange.location >= 0,
@@ -1152,7 +1182,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         Task { @MainActor in
                             let currentViewState = self.viewState
                             if currentViewState?.messages[firstReplyId] == nil {
-                                print("⏰ REPLY_TIMEOUT: Stopping loading indicator for reply \(firstReplyId) - likely deleted")
+                                // print("⏰ REPLY_TIMEOUT: Stopping loading indicator for reply \(firstReplyId) - likely deleted")
                                 self.replyLoadingIndicator.stopAnimating()
                                 
                                 // Show "message deleted" placeholder
@@ -1236,7 +1266,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 
                 // Set up automatic timeout to dismiss the alert after 8 seconds (reduced for better UX)
                 self.loadingAlertTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: false) { [weak self] _ in
-                    print("⏰ LOADING_ALERT_TIMEOUT: Auto-dismissing 'Finding message...' alert after 8 seconds")
+                    // print("⏰ LOADING_ALERT_TIMEOUT: Auto-dismissing 'Finding message...' alert after 8 seconds")
                     self?.hideReplyLoadingIndicator()
                     
                     // Show the standard "message not found" alert
@@ -1343,7 +1373,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     DispatchQueue.main.async {
                         // CRITICAL FIX: Set target message BEFORE navigation
                         viewState.currentTargetMessageId = replyMessage.id
-                        print("🎯 MessageCell: Setting target message ID BEFORE cross-channel navigation: \(replyMessage.id)")
+                        // print("🎯 MessageCell: Setting target message ID BEFORE cross-channel navigation: \(replyMessage.id)")
                         
                         if let serverId = channel.server {
                             // Server channel
@@ -1356,7 +1386,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                         
                         viewState.path.append(NavigationDestination.maybeChannelView)
                         
-                        print("🎯 MessageCell: Cross-channel Navigation completed - new view controller will handle target message")
+                        // print("🎯 MessageCell: Cross-channel Navigation completed - new view controller will handle target message")
                     }
                 }
             }
@@ -1425,8 +1455,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             // Load the custom emoji using Kingfisher with weak self to prevent retain cycles
             emojiImageView.kf.setImage(
                 with: emojiURL,
-                placeholder: UIImage(systemName: "face.smiling"), // Placeholder while loading
+                placeholder: UIImage(systemName: "face.smiling"),
                 options: [
+                    .processor(DownsamplingImageProcessor(size: CGSize(width: 40, height: 40))),
+                    .scaleFactor(UIScreen.main.scale),
                     .transition(.fade(0.2)),
                     .cacheOriginalImage
                 ],
@@ -1521,10 +1553,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     }
     
     @objc internal func reactionButtonTapped(_ gesture: UITapGestureRecognizer) {
-        print("🔥 REACTION BUTTON TAPPED!")
+        // print("🔥 REACTION BUTTON TAPPED!")
         guard let containerView = gesture.view,
               let emoji = containerView.accessibilityLabel else { 
-            print("🔥 ERROR: Missing containerView or emoji")
+            // print("🔥 ERROR: Missing containerView or emoji")
             return 
         }
         
@@ -1532,11 +1564,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         guard let messageId = containerView.restorationIdentifier,
               let viewState = self.viewState,
               let message = viewState.messages[messageId] else {
-            print("🔥 ERROR: Cannot find message for reaction - messageId: \(containerView.restorationIdentifier ?? "nil")")
+            // print("🔥 ERROR: Cannot find message for reaction - messageId: \(containerView.restorationIdentifier ?? "nil")")
             return
         }
         
-        print("🔥 Reaction tap: emoji=\(emoji), message=\(message.id)")
+        // print("🔥 Reaction tap: emoji=\(emoji), message=\(message.id)")
         
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -1552,7 +1584,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         }
         
         // Call the message action handler with the reaction
-        print("🔥 CALLBACK CHECK: onMessageAction is \(onMessageAction == nil ? "NIL" : "SET")")
+        // print("🔥 CALLBACK CHECK: onMessageAction is \(onMessageAction == nil ? "NIL" : "SET")")
         onMessageAction?(.react(emoji), message)
     }
     
@@ -1850,32 +1882,42 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
 
     
     private func configureMessageContent(message: Message, viewState: ViewState) {
-        if let content = message.content, !content.isEmpty {
-            // Process content for display
-            let processedContent = removeEmptyMarkdownLinks(from: content)
-            
-            // Check if content contains mentions
-            let hasMentions = processedContent.contains("<@") || processedContent.contains("<#")
-            
-            if hasMentions {
-                // Use clickable mentions
-                let mutableAttributedText = NSMutableAttributedString(attributedString: createAttributedTextWithClickableMentions(from: processedContent, viewState: viewState))
-                // Process custom emojis
-                processCustomEmojis(in: mutableAttributedText, textView: contentLabel)
-                contentLabel.attributedText = mutableAttributedText
-                contentLabel.isSelectable = true
-            } else {
-                // Use markdown processing
-                let mutableAttributedText = NSMutableAttributedString(attributedString: processMarkdownOptimized(processedContent))
-                // Process custom emojis
-                processCustomEmojis(in: mutableAttributedText, textView: contentLabel)
-                contentLabel.attributedText = mutableAttributedText
-                contentLabel.isSelectable = false
-            }
-        } else {
+        guard let content = message.content, !content.isEmpty else {
             contentLabel.text = ""
             contentLabel.isSelectable = false
+            return
         }
+
+        let cacheKey = message.id as NSString
+        let hasMentions = content.contains("<@") || content.contains("<#")
+
+        // Check message-level cache for the pre-emoji attributed string
+        if let cached = MessageCell.attributedStringCache.object(forKey: cacheKey) {
+            let mutableCopy = NSMutableAttributedString(attributedString: cached)
+            processCustomEmojis(in: mutableCopy, textView: contentLabel)
+            contentLabel.attributedText = mutableCopy
+            contentLabel.isSelectable = hasMentions
+            return
+        }
+
+        // Cache miss — do full processing
+        let processedContent = removeEmptyMarkdownLinks(from: content)
+        let baseAttributedString: NSAttributedString
+
+        if hasMentions {
+            baseAttributedString = createAttributedTextWithClickableMentions(from: processedContent, viewState: viewState)
+        } else {
+            baseAttributedString = processMarkdownOptimized(processedContent)
+        }
+
+        // Cache the pre-emoji result (immutable copy)
+        MessageCell.attributedStringCache.setObject(baseAttributedString, forKey: cacheKey)
+
+        // Apply emoji processing on a mutable copy
+        let mutableAttributedText = NSMutableAttributedString(attributedString: baseAttributedString)
+        processCustomEmojis(in: mutableAttributedText, textView: contentLabel)
+        contentLabel.attributedText = mutableAttributedText
+        contentLabel.isSelectable = hasMentions
     }
     
     private func configureAvatar(author: User, member: Member?, message: Message, viewState: ViewState) {
@@ -1885,6 +1927,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             with: avatarInfo.url,
             placeholder: UIImage(systemName: "person.circle.fill"),
             options: [
+                .processor(DownsamplingImageProcessor(size: CGSize(width: 80, height: 80))),
+                .scaleFactor(UIScreen.main.scale),
                 .transition(.fade(0.2)),
                 .cacheOriginalImage
             ]
@@ -1960,6 +2004,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 let bottomConstraint = contentLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -16)
                 bottomConstraint.priority = UILayoutPriority.defaultHigh
                 bottomConstraint.isActive = true
+                // PERF Issue #9: Track for efficient deactivation in clearContentLabelBottomConstraints()
+                contentLabelBottomToContentViewConstraint = bottomConstraint
             }
         }
         

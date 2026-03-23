@@ -18,7 +18,7 @@ extension MessageCell {
             return true
         }
         
-        print("🔗 MessageCell: URL tapped: \(URL.absoluteString)")
+        // print("🔗 MessageCell: URL tapped: \(URL.absoluteString)")
         
         // Check if this is a mention URL
         if URL.scheme == "mention", let userId = URL.host {
@@ -130,7 +130,7 @@ extension MessageCell {
            URL.absoluteString.hasPrefix("https://app.revolt.chat/channel/") ||
            URL.absoluteString.hasPrefix("https://app.revolt.chat/invite/") {
             
-            print("🔗 MessageCell: Handling internal peptide.chat link")
+            // print("🔗 MessageCell: Handling internal peptide.chat link")
             
             // Find the view controller to handle the URL
             if let viewController = findParentViewController() {
@@ -159,25 +159,25 @@ extension MessageCell {
     
     internal func handleInternalURL(_ url: URL, from viewController: UIViewController) {
         guard let viewState = self.viewState else {
-            print("❌ MessageCell: ViewState is nil")
+            // print("❌ MessageCell: ViewState is nil")
             return
         }
         
-        print("🔗 MessageCell: Handling URL: \(url.absoluteString)")
+        // print("🔗 MessageCell: Handling URL: \(url.absoluteString)")
         
         if url.absoluteString.hasPrefix("https://peptide.chat/server/") ||
            url.absoluteString.hasPrefix("https://app.revolt.chat/server/") {
             let components = url.pathComponents
-            print("🔗 MessageCell: URL components: \(components)")
+            // print("🔗 MessageCell: URL components: \(components)")
             
             if components.count >= 6 {
                 let serverId = components[2]
                 let channelId = components[4]
                 let messageId = components.count >= 6 ? components[5] : nil
                 
-                print("🔗 MessageCell: Parsed - Server: \(serverId), Channel: \(channelId), Message: \(messageId ?? "nil")")
-                print("🔗 MessageCell: Server exists: \(viewState.servers[serverId] != nil)")
-                print("🔗 MessageCell: Channel exists: \(viewState.channels[channelId] != nil)")
+                // print("🔗 MessageCell: Parsed - Server: \(serverId), Channel: \(channelId), Message: \(messageId ?? "nil")")
+                // print("🔗 MessageCell: Server exists: \(viewState.servers[serverId] != nil)")
+                // print("🔗 MessageCell: Channel exists: \(viewState.channels[channelId] != nil)")
                 
                 // Check if server and channel exist
                 if viewState.servers[serverId] != nil && (viewState.channels[channelId] != nil || viewState.allEventChannels[channelId] != nil) {
@@ -191,21 +191,21 @@ extension MessageCell {
                     
                     if userMember != nil {
                         // User is a member - navigate to the channel
-                        print("✅ MessageCell: User is member, navigating to channel")
+                        // print("✅ MessageCell: User is member, navigating to channel")
                         
                         DispatchQueue.main.async {
                             // CRITICAL FIX: Set target message BEFORE navigation
                             // This ensures the new view controller will pick it up correctly
                             if let messageId = messageId {
                                 viewState.currentTargetMessageId = messageId
-                                print("🎯 MessageCell: Setting target message ID BEFORE navigation: \(messageId)")
+                                // print("🎯 MessageCell: Setting target message ID BEFORE navigation: \(messageId)")
                             } else {
                                 viewState.currentTargetMessageId = nil
                             }
                             
                             // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
                             // This ensures that when user presses back, they go to server list instead of previous channel
-                            print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel")
+                            // print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel")
                             viewState.path = []
                             
                             // CRITICAL FIX: Clear existing messages for target channel to force reload
@@ -220,12 +220,12 @@ extension MessageCell {
                             // CRITICAL FIX: Use a small delay before adding to path to ensure state updates are processed
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 viewState.path.append(NavigationDestination.maybeChannelView)
-                                print("🎯 MessageCell: Navigation completed - new view controller will handle target message")
+                                // print("🎯 MessageCell: Navigation completed - new view controller will handle target message")
                             }
                         }
                     } else {
                         // User is not a member - navigate to Discover
-                        print("🔍 MessageCell: User is not member, navigating to Discover")
+                        // print("🔍 MessageCell: User is not member, navigating to Discover")
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             viewState.selectDiscover()
                         }
@@ -242,14 +242,14 @@ extension MessageCell {
         } else if url.absoluteString.hasPrefix("https://peptide.chat/channel/") ||
                   url.absoluteString.hasPrefix("https://app.revolt.chat/channel/") {
             let components = url.pathComponents
-            print("🔗 MessageCell: Channel URL components: \(components)")
+            // print("🔗 MessageCell: Channel URL components: \(components)")
             
                                                       if components.count >= 3 {
                 let channelId = components[2]
                 let messageId = components.count >= 4 ? components[3] : nil
                 
-                print("🔗 MessageCell: Parsed - Channel: \(channelId), Message: \(messageId ?? "nil")")
-                print("🔗 MessageCell: Channel exists: \(viewState.channels[channelId] != nil)")
+                // print("🔗 MessageCell: Parsed - Channel: \(channelId), Message: \(messageId ?? "nil")")
+                // print("🔗 MessageCell: Channel exists: \(viewState.channels[channelId] != nil)")
                 
                 if let channel = viewState.channels[channelId] ?? viewState.allEventChannels[channelId] {
                     // For DM channels, check if user has access
@@ -269,14 +269,14 @@ extension MessageCell {
                                 // CRITICAL FIX: Set target message BEFORE navigation
                                 if let messageId = messageId {
                                     viewState.currentTargetMessageId = messageId
-                                    print("🎯 MessageCell: Setting target message ID BEFORE DM navigation: \(messageId)")
+                                    // print("🎯 MessageCell: Setting target message ID BEFORE DM navigation: \(messageId)")
                                 } else {
                                     viewState.currentTargetMessageId = nil
                                 }
                                 
                                 // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
                                 // This ensures that when user presses back, they go to server list instead of previous channel
-                                print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel (DM)")
+                                // print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel (DM)")
                                 viewState.path = []
                                 
                                 // CRITICAL FIX: Clear existing messages for target channel to force reload
@@ -290,7 +290,7 @@ extension MessageCell {
                                 // CRITICAL FIX: Use a small delay before adding to path to ensure state updates are processed
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     viewState.path.append(NavigationDestination.maybeChannelView)
-                                    print("🎯 MessageCell: DM Navigation completed - new view controller will handle target message")
+                                    // print("🎯 MessageCell: DM Navigation completed - new view controller will handle target message")
                                 }
                             }
                         } else {
@@ -315,13 +315,13 @@ extension MessageCell {
                                 // CRITICAL FIX: Set target message BEFORE navigation
                                 if let messageId = messageId {
                                     viewState.currentTargetMessageId = messageId
-                                    print("🎯 MessageCell: Setting target message ID BEFORE Group DM navigation: \(messageId)")
+                                    // print("🎯 MessageCell: Setting target message ID BEFORE Group DM navigation: \(messageId)")
                                 } else {
                                     viewState.currentTargetMessageId = nil
                                 }
                                 
                                 // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
-                                print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel (Group DM)")
+                                // print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel (Group DM)")
                                 viewState.path = []
                                 
                                 // CRITICAL FIX: Clear existing messages for target channel to force reload
@@ -335,7 +335,7 @@ extension MessageCell {
                                 // CRITICAL FIX: Use a small delay before adding to path to ensure state updates are processed
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     viewState.path.append(NavigationDestination.maybeChannelView)
-                                    print("🎯 MessageCell: Group DM Navigation completed - new view controller will handle target message")
+                                    // print("🎯 MessageCell: Group DM Navigation completed - new view controller will handle target message")
                                 }
                             }
                         } else {
@@ -352,11 +352,11 @@ extension MessageCell {
                         // Check if this channel belongs to a server
                         if let serverId = channel.server {
                             // This is a server channel - navigate to server first, then channel
-                            print("🔗 MessageCell: Channel \(channelId) belongs to server \(serverId)")
+                            // print("🔗 MessageCell: Channel \(channelId) belongs to server \(serverId)")
                             
                             // Check if user has access to this server
                             guard let currentUser = viewState.currentUser else {
-                                print("❌ MessageCell: Current user not found")
+                                // print("❌ MessageCell: Current user not found")
                                 return
                             }
                             
@@ -364,19 +364,19 @@ extension MessageCell {
                             
                             if userMember != nil {
                                 // User is a member - navigate to the server and channel
-                                print("✅ MessageCell: User is member of server, navigating to server channel")
+                                // print("✅ MessageCell: User is member of server, navigating to server channel")
                                 
                                 DispatchQueue.main.async {
                                     // CRITICAL FIX: Set target message BEFORE navigation
                                     if let messageId = messageId {
                                         viewState.currentTargetMessageId = messageId
-                                        print("🎯 MessageCell: Setting target message ID BEFORE server channel navigation: \(messageId)")
+                                        // print("🎯 MessageCell: Setting target message ID BEFORE server channel navigation: \(messageId)")
                                     } else {
                                         viewState.currentTargetMessageId = nil
                                     }
                                     
                                     // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
-                                    print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel (Server Channel)")
+                                    // print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel (Server Channel)")
                                     viewState.path = []
                                     
                                     // CRITICAL FIX: Clear existing messages for target channel to force reload
@@ -391,31 +391,31 @@ extension MessageCell {
                                     // CRITICAL FIX: Use a small delay before adding to path to ensure state updates are processed
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                         viewState.path.append(NavigationDestination.maybeChannelView)
-                                        print("🎯 MessageCell: Server Channel Navigation completed - new view controller will handle target message")
+                                        // print("🎯 MessageCell: Server Channel Navigation completed - new view controller will handle target message")
                                     }
                                 }
                             } else {
                                 // User is not a member - navigate to Discover
-                                print("🔍 MessageCell: User is not member of server \(serverId), navigating to Discover")
+                                // print("🔍 MessageCell: User is not member of server \(serverId), navigating to Discover")
                                 DispatchQueue.main.async {
                                     viewState.selectDiscover()
                                 }
                             }
                         } else {
                             // This is not a server channel (saved messages, etc.) - navigate as DM
-                            print("🔗 MessageCell: Channel \(channelId) is not a server channel, treating as DM")
+                            // print("🔗 MessageCell: Channel \(channelId) is not a server channel, treating as DM")
                             
                             DispatchQueue.main.async {
                                 // CRITICAL FIX: Set target message BEFORE navigation
                                 if let messageId = messageId {
                                     viewState.currentTargetMessageId = messageId
-                                    print("🎯 MessageCell: Setting target message ID BEFORE DM navigation: \(messageId)")
+                                    // print("🎯 MessageCell: Setting target message ID BEFORE DM navigation: \(messageId)")
                                 } else {
                                     viewState.currentTargetMessageId = nil
                                 }
                                 
                                 // CRITICAL FIX: Clear navigation path to prevent going back to previous channel
-                                print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel (Non-server Channel)")
+                                // print("🔄 MessageCell: Clearing navigation path to prevent back to previous channel (Non-server Channel)")
                                 viewState.path = []
                                 
                                 // CRITICAL FIX: Clear existing messages for target channel to force reload
@@ -430,7 +430,7 @@ extension MessageCell {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     viewState.path.append(NavigationDestination.maybeChannelView)
                                 }
-                                print("🎯 MessageCell: DM Navigation completed - new view controller will handle target message")
+                                // print("🎯 MessageCell: DM Navigation completed - new view controller will handle target message")
                             }
                         }
                     }

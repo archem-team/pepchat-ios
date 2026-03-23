@@ -32,7 +32,7 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
         // REMOVED: No longer clear protection based on scroll gestures
         // User should be free to scroll anywhere while protection is active
         if targetMessageProtectionActive {
-            print("🛡️ DRAG_END: Protection maintained regardless of scroll gesture - user can scroll freely")
+            // print("🛡️ DRAG_END: Protection maintained regardless of scroll gesture - user can scroll freely")
         }
         
         // Check if we've reached near the top and trigger message loading
@@ -44,7 +44,7 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
             // CRITICAL FIX: Check if we recently received an empty response (reached beginning)
             if let lastEmpty = lastEmptyResponseTime,
                Date().timeIntervalSince(lastEmpty) < 60.0 { // Don't retry for 1 minute
-                print("⏹️ DRAG_END_BLOCKED: Reached beginning of conversation recently, skipping load")
+                // print("⏹️ DRAG_END_BLOCKED: Reached beginning of conversation recently, skipping load")
                 return
             }
             
@@ -83,7 +83,7 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
         
         // CRITICAL: Protect against scrolling during data source changes
         guard !isDataSourceUpdating else {
-            print("📊 SCROLL_PROTECTION: Ignoring scroll event during data source update")
+            // print("📊 SCROLL_PROTECTION: Ignoring scroll event during data source update")
             return
         }
         
@@ -107,7 +107,7 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
             
             // Mark as data source stable when user actively scrolls
             if isDataSourceUpdating {
-                print("📊 DATA_SOURCE: User scroll detected, marking data source as stable")
+                // print("📊 DATA_SOURCE: User scroll detected, marking data source as stable")
                 isDataSourceUpdating = false
             }
         }
@@ -121,7 +121,7 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
             // User should be free to scroll anywhere while protection is active
             // Protection will only be cleared by timer, manual actions, or sending messages
             if targetMessageProtectionActive {
-                print("🛡️ TARGET_PROTECTION: Scroll detected but protection maintained - user can scroll freely")
+                // print("🛡️ TARGET_PROTECTION: Scroll detected but protection maintained - user can scroll freely")
             }
             
             let translation = scrollView.panGestureRecognizer.translation(in: scrollView)
@@ -143,7 +143,7 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
                 // CRITICAL FIX: Check if we recently received an empty response (reached beginning)
                 if let lastEmpty = lastEmptyResponseTime,
                    Date().timeIntervalSince(lastEmpty) < 60.0 { // Don't retry for 1 minute
-                    print("⏹️ SCROLL_BLOCKED: Reached beginning of conversation recently, skipping load")
+                    // print("⏹️ SCROLL_BLOCKED: Reached beginning of conversation recently, skipping load")
                     return
                 }
                 
@@ -241,24 +241,24 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
         
         guard !isViewDisappearing else { return }
         
-        print("🔍 SCROLL_TO_BOTTOM: Called with animated: \(animated)")
+        // print("🔍 SCROLL_TO_BOTTOM: Called with animated: \(animated)")
         debugTargetMessageProtection()
         
         guard !localMessages.isEmpty else { 
-            print("🚫 SCROLL_TO_BOTTOM: No messages, returning")
+            // print("🚫 SCROLL_TO_BOTTOM: No messages, returning")
             return 
         }
         
         // SIMPLIFIED TARGET MESSAGE PROTECTION
         if targetMessageProtectionActive {
-            print("🎯 scrollToBottom: Target message protection active, blocking auto-scroll")
-            print("🎯 Protection details - targetMessageId: \(targetMessageId != nil), isInPosition: \(isInTargetMessagePosition), processed: \(targetMessageProcessed)")
+            // print("🎯 scrollToBottom: Target message protection active, blocking auto-scroll")
+            // print("🎯 Protection details - targetMessageId: \(targetMessageId != nil), isInPosition: \(isInTargetMessagePosition), processed: \(targetMessageProcessed)")
             return
         }
         
         // ADDITIONAL SAFEGUARD: Double-check that we're not in the middle of target message operations
         if let targetId = targetMessageId {
-            print("🛡️ scrollToBottom: Additional check - target message \(targetId) still exists, blocking scroll")
+            // print("🛡️ scrollToBottom: Additional check - target message \(targetId) still exists, blocking scroll")
             return
         }
         

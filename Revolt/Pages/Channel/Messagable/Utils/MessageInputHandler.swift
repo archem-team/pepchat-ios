@@ -97,28 +97,28 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         // Convert mentions from display format (@username) to server format (<@USER_ID>)
         let convertedText = viewController.messageInputView.convertTextForSending()
         
-        print("📝 MESSAGE_INPUT_HANDLER: User sent message: \"\(text)\"")
-        print("📝 MESSAGE_INPUT_HANDLER: Converted message: \"\(convertedText)\"")
+        // print("📝 MESSAGE_INPUT_HANDLER: User sent message: \"\(text)\"")
+        // print("📝 MESSAGE_INPUT_HANDLER: Converted message: \"\(convertedText)\"")
         
         checkForCharacterLimit(text: convertedText)
         
         if InternetMonitor.shared.isConnected {
-            print("Internet Monitor: ❤️ ❤️ ❤️ ❤️ ❤️ Internet is available")
+            // print("Internet Monitor: ❤️ ❤️ ❤️ ❤️ ❤️ Internet is available")
         } else {
-            print("Internet Monitor: 😭 😭 😭 😭 😭 Internet not available")
+            // print("Internet Monitor: 😭 😭 😭 😭 😭 Internet not available")
             queueMessage(convertedText)
             viewModel.viewState.clearDraft(channelId: viewModel.channel.id)
-            print("Message sent to Queue: ✅ ✅ ✅ ✅ ✅")
+            // print("Message sent to Queue: ✅ ✅ ✅ ✅ ✅")
             viewController.showErrorAlert(message: "You're offline. Will send when internet comes back.")
-            print("Alert Sent to user: ⚠️ ⚠️ ⚠️ ⚠️ ⚠️")
+            // print("Alert Sent to user: ⚠️ ⚠️ ⚠️ ⚠️ ⚠️")
             return
         }
         let socketConnnected = (viewModel.viewState.ws?.currentState == .connected)
         
         if !socketConnnected {
-            print("Web Socket: 😭 😭 😭 😭 😭 Websocket is not connected")
+            // print("Web Socket: 😭 😭 😭 😭 😭 Websocket is not connected")
         } else {
-            print("Web Socket: ❤️ ❤️ ❤️ ❤️ ❤️ Websocket is connected")
+            // print("Web Socket: ❤️ ❤️ ❤️ ❤️ ❤️ Websocket is connected")
         }
         isSendingMessage = true
         // Create a queued message immediately for local display (no attachments)
@@ -141,7 +141,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                 viewModel.viewState.queuedMessages[viewModel.channel.id] = []
             }
             viewModel.viewState.queuedMessages[viewModel.channel.id]?.append(queuedMessage)
-            print("📝 MESSAGE_INPUT_HANDLER: Added to queued messages for channel \(viewModel.channel.id)")
+            // print("📝 MESSAGE_INPUT_HANDLER: Added to queued messages for channel \(viewModel.channel.id)")
             
             // Also add the temporary message ID to the channel messages list for immediate display
             if viewModel.viewState.channelMessages[viewModel.channel.id] == nil {
@@ -153,7 +153,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             viewModel.viewState.messages[messageNonce] = queuedMessage.toTemporaryMessage()
             viewModel.viewState.clearDraft(channelId: viewModel.channel.id)
             
-            print("📝 MESSAGE_INPUT_HANDLER: Sending with \(apiReplies.count) replies")
+            // print("📝 MESSAGE_INPUT_HANDLER: Sending with \(apiReplies.count) replies")
             
             // Hide new message button when sending message
             if viewController.hasUnreadMessages {
@@ -166,7 +166,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             }
             
             // IMPROVED: Handle new message sent with better keyboard coordination
-            print("📝 MESSAGE_INPUT_HANDLER: Calling handleNewMessageSent()")
+            // print("📝 MESSAGE_INPUT_HANDLER: Calling handleNewMessageSent()")
             viewController.handleNewMessageSent()
             
             // Reset lastManualScrollUpTime since user is sending a message and expects to see it
@@ -176,7 +176,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             // which properly coordinates with keyboard state
             
             // Add notification for debugging - post MessagesDidChange notification without an object
-            print("📝 MESSAGE_INPUT_HANDLER: Posting MessagesDidChange notification")
+            // print("📝 MESSAGE_INPUT_HANDLER: Posting MessagesDidChange notification")
             // Only post notification if we actually have messages
             if !viewModel.messages.isEmpty {
                 NotificationCenter.default.post(
@@ -184,12 +184,12 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                     object: ["channelId": viewModel.channel.id, "messageCount": viewModel.messages.count]
                 )
             } else {
-                print("📝 MESSAGE_INPUT_HANDLER: Skipping notification post because no messages exist")
+                // print("📝 MESSAGE_INPUT_HANDLER: Skipping notification post because no messages exist")
             }
             
             // Send message to server with replies
             Task {
-                print("📝 MESSAGE_INPUT_HANDLER: Starting async task to send message to server")
+                // print("📝 MESSAGE_INPUT_HANDLER: Starting async task to send message to server")
                 do {
                     let result = try await viewModel.viewState.http.sendMessage(
                         channel: viewModel.channel.id,
@@ -198,7 +198,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                         attachments: [],
                         nonce: messageNonce
                     ).get()
-                    print("📝 MESSAGE_INPUT_HANDLER: Successfully sent message to server: \(result)")
+                    // print("📝 MESSAGE_INPUT_HANDLER: Successfully sent message to server: \(result)")
                     
                     // Write sent message to cache so it appears on next session
                     if let userId = viewModel.viewState.currentUser?.id, let baseURL = viewModel.viewState.baseURL,
@@ -213,13 +213,13 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                     
                     // Post notification again after successful API response
                     DispatchQueue.main.async {
-                        print("📝 MESSAGE_INPUT_HANDLER: Posting MessagesDidChange notification after API success")
+                        // print("📝 MESSAGE_INPUT_HANDLER: Posting MessagesDidChange notification after API success")
                         NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: nil)
                         // Note: No additional scroll here - handleNewMessageSent() already handled it
                         self.isSendingMessage = false
                     }
                 } catch {
-                    print("❌ MESSAGE_INPUT_HANDLER: Error sending message: \(error)")
+                    // print("❌ MESSAGE_INPUT_HANDLER: Error sending message: \(error)")
                     let channelId = viewModel.channel.id
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }
@@ -237,7 +237,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             // Clear replies after sending
             repliesManager.clearReplies()
         } else {
-            print("⚠️ MESSAGE_INPUT_HANDLER: currentUser is nil, can't send message")
+            // print("⚠️ MESSAGE_INPUT_HANDLER: currentUser is nil, can't send message")
             isSendingMessage = false
         }
     }
@@ -249,8 +249,8 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         // Convert mentions from display format (@username) to server format (<@USER_ID>)
         let convertedText = viewController.messageInputView.convertTextForSending()
         
-        print("📝 MESSAGE_INPUT_HANDLER: User sent message with attachments: \"\(text)\", attachments count: \(attachments.count)")
-        print("📝 MESSAGE_INPUT_HANDLER: Converted message: \"\(convertedText)\"")
+        // print("📝 MESSAGE_INPUT_HANDLER: User sent message with attachments: \"\(text)\", attachments count: \(attachments.count)")
+        // print("📝 MESSAGE_INPUT_HANDLER: Converted message: \"\(convertedText)\"")
         
         checkForCharacterLimit(text: convertedText)
         
@@ -276,7 +276,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                 viewModel.viewState.queuedMessages[viewModel.channel.id] = []
             }
             viewModel.viewState.queuedMessages[viewModel.channel.id]?.append(queuedMessage)
-            print("📝 MESSAGE_INPUT_HANDLER: Added attachment message with upload tracking")
+            // print("📝 MESSAGE_INPUT_HANDLER: Added attachment message with upload tracking")
             
             // NOW show in UI with upload progress
             if viewModel.viewState.channelMessages[viewModel.channel.id] == nil {
@@ -288,7 +288,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             viewModel.viewState.messages[messageNonce] = queuedMessage.toTemporaryMessage()
             viewModel.viewState.clearDraft(channelId: viewModel.channel.id)
             
-            print("📝 MESSAGE_INPUT_HANDLER: Sending with \(apiReplies.count) replies")
+            // print("📝 MESSAGE_INPUT_HANDLER: Sending with \(apiReplies.count) replies")
             
             // Hide new message button when sending message
             if viewController.hasUnreadMessages {
@@ -301,7 +301,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             }
             
             // IMPROVED: Handle new message sent with better keyboard coordination
-            print("📝 MESSAGE_INPUT_HANDLER: Calling handleNewMessageSent()")
+            // print("📝 MESSAGE_INPUT_HANDLER: Calling handleNewMessageSent()")
             viewController.handleNewMessageSent()
             
             // Reset lastManualScrollUpTime since user is sending a message and expects to see it
@@ -312,7 +312,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             
             // Send message to server with attachments
             Task {
-                print("📝 MESSAGE_INPUT_HANDLER: Starting async task to send message with attachments to server")
+                // print("📝 MESSAGE_INPUT_HANDLER: Starting async task to send message with attachments to server")
                 do {
                     let result = try await viewModel.viewState.http.sendMessage(
                         channel: viewModel.channel.id,
@@ -324,7 +324,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                             self?.updateUploadProgress(nonce: messageNonce, filename: filename, progress: progress)
                         }
                     ).get()
-                    print("📝 MESSAGE_INPUT_HANDLER: Successfully sent message with attachments to server: \(result)")
+                    // print("📝 MESSAGE_INPUT_HANDLER: Successfully sent message with attachments to server: \(result)")
                     
                     // Write sent message to cache so it appears on next session
                     if let userId = viewModel.viewState.currentUser?.id, let baseURL = viewModel.viewState.baseURL,
@@ -339,25 +339,25 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                     
                     // Post notification again after successful API response
                     DispatchQueue.main.async {
-                        print("📝 MESSAGE_INPUT_HANDLER: Posting MessagesDidChange notification after API success")
+                        // print("📝 MESSAGE_INPUT_HANDLER: Posting MessagesDidChange notification after API success")
                         NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: nil)
                         // Note: No additional scroll here - handleNewMessageSent() already handled it
                         
                         // Clear attachments after successful upload
-                        print("📝 MESSAGE_INPUT_HANDLER: viewController is \(viewController == nil ? "nil" : "not nil")")
+                        // print("📝 MESSAGE_INPUT_HANDLER: viewController is \(viewController == nil ? "nil" : "not nil")")
                         
                         if let messageInputView = viewController.messageInputView {
-                            print("📝 MESSAGE_INPUT_HANDLER: messageInputView found, calling onAttachmentsUploadComplete")
+                            // print("📝 MESSAGE_INPUT_HANDLER: messageInputView found, calling onAttachmentsUploadComplete")
                             messageInputView.onAttachmentsUploadComplete()
                         } else {
-                            print("❌ MESSAGE_INPUT_HANDLER: messageInputView is nil!")
+                            // print("❌ MESSAGE_INPUT_HANDLER: messageInputView is nil!")
                         }
                         
-                        print("📝 MESSAGE_INPUT_HANDLER: Upload complete handler finished")
+                        // print("📝 MESSAGE_INPUT_HANDLER: Upload complete handler finished")
                         self.isSendingMessage = false
                     }
                 } catch {
-                    print("❌ MESSAGE_INPUT_HANDLER: Error sending message with attachments: \(error)")
+                    // print("❌ MESSAGE_INPUT_HANDLER: Error sending message with attachments: \(error)")
                     let channelId = viewModel.channel.id
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }
@@ -368,14 +368,14 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                             viewController.showErrorAlert(message: "Failed to send message: \(error.localizedDescription)")
                         }
                         // Clear attachments even on failure
-                        print("📝 MESSAGE_INPUT_HANDLER: viewController is \(viewController == nil ? "nil" : "not nil")")
+                        // print("📝 MESSAGE_INPUT_HANDLER: viewController is \(viewController == nil ? "nil" : "not nil")")
                         if let messageInputView = viewController.messageInputView {
-                            print("📝 MESSAGE_INPUT_HANDLER: messageInputView found on error, calling onAttachmentsUploadComplete")
+                            // print("📝 MESSAGE_INPUT_HANDLER: messageInputView found on error, calling onAttachmentsUploadComplete")
                             messageInputView.onAttachmentsUploadComplete()
                         } else {
-                            print("❌ MESSAGE_INPUT_HANDLER: messageInputView is nil on error!")
+                            // print("❌ MESSAGE_INPUT_HANDLER: messageInputView is nil on error!")
                         }
-                        print("📝 MESSAGE_INPUT_HANDLER: Error handler finished")
+                        // print("📝 MESSAGE_INPUT_HANDLER: Error handler finished")
                         self.isSendingMessage = false
                     }
                 }
@@ -384,7 +384,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             // Clear replies after sending
             repliesManager.clearReplies()
         } else {
-            print("⚠️ MESSAGE_INPUT_HANDLER: currentUser is nil, can't send message")
+            // print("⚠️ MESSAGE_INPUT_HANDLER: currentUser is nil, can't send message")
             isSendingMessage = false
         }
     }
@@ -394,11 +394,11 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
     func editMessage(_ message: Types.Message, newText: String) {
         guard let viewController = viewController else { return }
         
-        print("📝 MESSAGE_INPUT_HANDLER: Editing message with ID: \(message.id), new text: \(newText)")
+        // print("📝 MESSAGE_INPUT_HANDLER: Editing message with ID: \(message.id), new text: \(newText)")
         
         // Only proceed if content has actually changed
         if message.content == newText {
-            print("⚠️ MESSAGE_INPUT_HANDLER: Message content hasn't changed, no need to update")
+            // print("⚠️ MESSAGE_INPUT_HANDLER: Message content hasn't changed, no need to update")
             return
         }
         
@@ -414,7 +414,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                     edits: Revolt.MessageEdit(content: newText)
                 ).get()
                 
-                print("✅ MESSAGE_INPUT_HANDLER: Successfully edited message")
+                // print("✅ MESSAGE_INPUT_HANDLER: Successfully edited message")
                 
                 // Update the local copy of the message with the new content
                 await MainActor.run {
@@ -448,7 +448,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
     // MARK: - Reply Handling
     
     func replyToMessage(_ message: Types.Message, withText text: String) {
-        print("📝 MESSAGE_INPUT_HANDLER: Replying to message with ID: \(message.id), text: \(text)")
+        // print("📝 MESSAGE_INPUT_HANDLER: Replying to message with ID: \(message.id), text: \(text)")
         
         // The reply should already be set in the RepliesManager when this method is called
         // Just send the message - the sendMessage method will handle the replies
@@ -618,7 +618,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                 }
             }
         } catch {
-            print("❌ Error reading file: \(error)")
+            // print("❌ Error reading file: \(error)")
             viewController?.showErrorAlert(message: "Failed to read the selected file: \(error.localizedDescription)")
         }
     }
@@ -682,7 +682,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                             }
                         }
                     } catch {
-                        print("❌ Error reading video file: \(error)")
+                        // print("❌ Error reading video file: \(error)")
                         self?.viewController?.showErrorAlert(message: "Failed to read the selected video: \(error.localizedDescription)")
                     }
                 }
@@ -744,7 +744,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                             }
                         } catch {
                             DispatchQueue.main.async {
-                                print("❌ Error reading video file from picker: \(error)")
+                                // print("❌ Error reading video file from picker: \(error)")
                                 viewController.showErrorAlert(message: "Failed to read the selected video: \(error.localizedDescription)")
                             }
                         }
@@ -789,17 +789,17 @@ extension MessageInputHandler: MessageInputViewDelegate {
     func showFullScreenImage(_ image: UIImage) {
         // Delegate to view controller
         // viewController?.showFullScreenImage(image)
-        print("📝 MESSAGE_INPUT_HANDLER: showFullScreenImage called")
+        // print("📝 MESSAGE_INPUT_HANDLER: showFullScreenImage called")
     }
     
     func dismissFullscreenImage(_ gesture: UITapGestureRecognizer) {
         // Delegate to view controller
-        print("📝 MESSAGE_INPUT_HANDLER: dismissFullscreenImage called")
+        // print("📝 MESSAGE_INPUT_HANDLER: dismissFullscreenImage called")
     }
     
     func handlePinch(_ gesture: UIPinchGestureRecognizer) {
         // Delegate to view controller
-        print("📝 MESSAGE_INPUT_HANDLER: handlePinch called")
+        // print("📝 MESSAGE_INPUT_HANDLER: handlePinch called")
     }
     
     // Update upload progress for a specific file
@@ -816,7 +816,7 @@ extension MessageInputHandler: MessageInputViewDelegate {
             // Update progress directly on the observable object
             queuedMessage.uploadProgress[filename] = progress
             
-            print("📤 UPLOAD_PROGRESS: \(filename) = \(Int(progress * 100))%")
+            // print("📤 UPLOAD_PROGRESS: \(filename) = \(Int(progress * 100))%")
             
             // Update the temporary message in messages dictionary to trigger UI refresh
             self.viewModel.viewState.messages[nonce] = queuedMessage.toTemporaryMessage()

@@ -1670,7 +1670,7 @@ class EmojiParser {
             
             return processedText
         } catch {
-            print("Error processing emoji shortcodes: \(error)")
+            // print("Error processing emoji shortcodes: \(error)")
             return text
         }
     }
@@ -1688,7 +1688,7 @@ class EmojiParser {
     /// Test function to verify emoji parsing works correctly
     /// This can be called during development to test various emoji formats
     static func testEmojiParsing() {
-        print("🧪 Testing EmojiParser functionality:")
+        // print("🧪 Testing EmojiParser functionality:")
         
         // Test cases
         let testCases = [
@@ -1706,25 +1706,25 @@ class EmojiParser {
         ]
         
         for testCase in testCases {
-            print("Input: '\(testCase)'")
+            // print("Input: '\(testCase)'")
             
             // Test individual shortcode lookup
             if isEmojiShortcode(testCase) {
                 let shortcode = extractShortcode(testCase)
                 if let emoji = findEmojiByShortcode(shortcode) {
-                    print("  Found: \(emoji)")
+                    // print("  Found: \(emoji)")
                 } else {
-                    print("  Not found")
+                    // print("  Not found")
                 }
             } else {
                 // Test text processing
                 let processed = processEmojiShortcodes(in: testCase)
-                print("  Processed: '\(processed)'")
+                // print("  Processed: '\(processed)'")
             }
-            print("")
+            // print("")
         }
         
-        print("✅ EmojiParser test completed")
+        // print("✅ EmojiParser test completed")
     }
 }
  

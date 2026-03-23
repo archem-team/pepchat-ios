@@ -538,7 +538,7 @@ class AudioPlayerManager: NSObject, ObservableObject {
                 self.currentTime = actualSeconds
                 
                 if !finished {
-                    print("⚠️ Seek to \(clampedTime)s did not finish (finished=\(finished))")
+                    // print("⚠️ Seek to \(clampedTime)s did not finish (finished=\(finished))")
                 }
             }
         }

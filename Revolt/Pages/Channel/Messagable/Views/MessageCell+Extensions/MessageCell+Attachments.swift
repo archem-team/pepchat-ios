@@ -207,10 +207,13 @@ extension MessageCell {
             } else {
                 // For real messages, load from server using Kingfisher
                 if let url = URL(string: viewState.formatUrl(fromId: attachmentId, withTag: "attachments")) {
+                    let downsampleSize = CGSize(width: finalImageWidth, height: imageHeight)
                     imageView.kf.setImage(
                         with: url,
                         placeholder: UIImage(systemName: "photo"),
                         options: [
+                            .processor(DownsamplingImageProcessor(size: downsampleSize)),
+                            .scaleFactor(UIScreen.main.scale),
                             .transition(.fade(0.3)),
                             .cacheOriginalImage,
                             .retryStrategy(DelayRetryStrategy(maxRetryCount: 3, retryInterval: .seconds(2)))
@@ -222,10 +225,15 @@ extension MessageCell {
                                 if let currentAttachments = self?.currentMessage?.attachments,
                                    currentAttachments.contains(where: { $0.id == attachmentId }) {
                                     // Success: keep the loaded image
-                                    
+
                                     // Force layout update to ensure proper positioning
                                     self?.contentView.setNeedsLayout()
                                     self?.contentView.layoutIfNeeded()
+
+                                    // Invalidate cached height — async image may have changed cell height
+                                    if let messageId = self?.currentMessage?.id {
+                                        self?.onAsyncContentLoaded?(messageId)
+                                    }
                                 } else {
                                     // Cell has been reused for a different message
                                     imageView.image = nil

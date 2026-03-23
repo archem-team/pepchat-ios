@@ -37,7 +37,7 @@ struct IntroPlatformView: View {
                 onClick(url)
             }
         }) {
-            
+
             VStack(alignment: .center, spacing: .spacing8){
                 
                 Group {
@@ -75,9 +75,10 @@ struct IntroPlatformView: View {
                             textColor: .textGray06,
                             alignment: .center)
                 .lineLimit(1)
-                
+
             }
         }
+        .accessibilityID(AccessibilityID.intro.platformButton(platformName))
     }
 }
 

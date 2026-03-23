@@ -55,27 +55,27 @@ struct HTTPClient {
         
         // Configure URLSessionConfiguration to reduce network warnings
         let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 10.0  // Reduced from 30 to 10 seconds
-        configuration.timeoutIntervalForResource = 20.0  // Reduced from 60 to 20 seconds
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.urlCache = nil
-        configuration.httpMaximumConnectionsPerHost = 2  // Reduced from 4 to minimize connection issues
+        configuration.timeoutIntervalForRequest = 20.0
+        configuration.timeoutIntervalForResource = 30.0
+        configuration.requestCachePolicy = .useProtocolCachePolicy  // Honor server cache headers (ETag, Cache-Control)
+        configuration.urlCache = URLCache(
+            memoryCapacity: 10 * 1024 * 1024,   // 10 MB memory cache
+            diskCapacity: 50 * 1024 * 1024       // 50 MB disk cache
+        )
+        configuration.httpMaximumConnectionsPerHost = 6  // Allow parallel requests (browser default is 6-8)
         configuration.waitsForConnectivity = false  // Don't wait for connectivity - fail fast
         configuration.allowsConstrainedNetworkAccess = true
         configuration.allowsExpensiveNetworkAccess = true
-        
-        // NETWORK OPTIMIZATION: Reduce connection warnings
-        configuration.httpShouldUsePipelining = false  // Disable pipelining to prevent connection issues
+
+        // NETWORK OPTIMIZATION
+        configuration.httpShouldUsePipelining = true   // Allow request pipelining over reused connections
         configuration.httpShouldSetCookies = false     // Disable cookies for API calls
         configuration.httpCookieAcceptPolicy = .never  // No cookies needed
         configuration.networkServiceType = .responsiveData  // Use responsive data for faster API calls
-        configuration.shouldUseExtendedBackgroundIdleMode = false  // Prevent background connection issues
-        
-        // CONNECTION MANAGEMENT: Prevent unconnected endpoint warnings
-        configuration.multipathServiceType = .none     // Disable multipath to reduce connection complexity
-        configuration.httpAdditionalHeaders = [
-            "Connection": "close"  // Force connection closure after each request to prevent lingering connections
-        ]
+        configuration.shouldUseExtendedBackgroundIdleMode = false
+
+        // CONNECTION MANAGEMENT: Let URLSession reuse connections (HTTP/2 keep-alive)
+        configuration.multipathServiceType = .none
         
         // Create session with optimized configuration
         self.session = Alamofire.Session(configuration: configuration)
@@ -125,7 +125,7 @@ struct HTTPClient {
             timeoutTask.cancel() // Cancel timeout if request completes
         } catch {
             timeoutTask.cancel()
-            print("❌ REQUEST_TIMEOUT: \(method.rawValue) \(route) timed out after 15 seconds")
+            // print("❌ REQUEST_TIMEOUT: \(method.rawValue) \(route) timed out after 15 seconds")
             return .failure(.HTTPError("Request timed out", 408))
         }
         
@@ -151,10 +151,10 @@ struct HTTPClient {
         
         // Logging the response based on success or failure
         do {
-            let resp = try response.result.get()
-            logger.debug("OK:    Received response \(code) for route \(method.rawValue) \(baseURL)\(route) with result \(resp)")
+            _ = try response.result.get()
+            logger.debug("OK:    \(code) \(method.rawValue) \(route)")
         } catch {
-            logger.debug("Error: Received response \(code) for route \(method.rawValue) \(baseURL)\(route) with result \(response.error)")
+            logger.debug("Error: \(code) \(method.rawValue) \(route) — \(response.error?.localizedDescription ?? "unknown")")
         }
         
         // Return an error if the status code is not within the successful range (2xx)
@@ -179,17 +179,24 @@ struct HTTPClient {
         headers: HTTPHeaders? = nil // Headers (optional)
     ) async -> Result<O, RevoltError> {
         // Perform the inner request and handle the result
-        return await innerReq(method: method, route: route, parameters: parameters, encoder: encoder, headers: headers).flatMap { response in
+        let result = await innerReq(method: method, route: route, parameters: parameters, encoder: encoder, headers: headers)
+        switch result {
+        case .failure(let error):
+            return .failure(error)
+        case .success(let response):
             if let error = response.error {
-                return .failure(.Alamofire(error)) // Return Alamofire error if present
+                return .failure(.Alamofire(error))
             } else if let data = response.data {
                 do {
-                    return .success(try JSONDecoder().decode(O.self, from: data)) // Decode JSON response to type O
+                    let decoded = try await Task.detached(priority: .userInitiated) {
+                        try JSONDecoder().decode(O.self, from: data)
+                    }.value
+                    return .success(decoded)
                 } catch {
-                    return .failure(.JSONDecoding(error)) // Handle JSON decoding error
+                    return .failure(.JSONDecoding(error))
                 }
             } else {
-                return .failure(.HTTPError("No error or body", 0)) // Handle case where no response or error is returned
+                return .failure(.HTTPError("No error or body", 0))
             }
         }
     }
@@ -349,7 +356,7 @@ struct HTTPClient {
         
         for attempt in 0..<maxRetries {
             let startTime = Date()
-            print("⏱️ FETCH_HISTORY_ATTEMPT [\(attempt + 1)/\(maxRetries)]: Starting at \(startTime.timeIntervalSince1970)")
+            // print("⏱️ FETCH_HISTORY_ATTEMPT [\(attempt + 1)/\(maxRetries)]: Starting at \(startTime.timeIntervalSince1970)")
             
             let result = await performFetchHistory(
                 channel: channel,
@@ -365,26 +372,26 @@ struct HTTPClient {
             
             let endTime = Date()
             let duration = endTime.timeIntervalSince(startTime)
-            print("⏱️ FETCH_HISTORY_ATTEMPT [\(attempt + 1)/\(maxRetries)]: Completed in \(String(format: "%.2f", duration))s")
+            // print("⏱️ FETCH_HISTORY_ATTEMPT [\(attempt + 1)/\(maxRetries)]: Completed in \(String(format: "%.2f", duration))s")
             
             switch result {
             case .success(let fetchHistory):
-                print("✅ FETCH_HISTORY_SUCCESS: Attempt \(attempt + 1) succeeded with \(fetchHistory.messages.count) messages")
+                // print("✅ FETCH_HISTORY_SUCCESS: Attempt \(attempt + 1) succeeded with \(fetchHistory.messages.count) messages")
                 return .success(fetchHistory)
                 
             case .failure(let error):
                 lastError = error
-                print("❌ FETCH_HISTORY_FAILED: Attempt \(attempt + 1) failed: \(error)")
+                // print("❌ FETCH_HISTORY_FAILED: Attempt \(attempt + 1) failed: \(error)")
                 
                 // If this is the last attempt, return the error
                 if attempt == maxRetries - 1 {
-                    print("❌ FETCH_HISTORY_EXHAUSTED: All \(maxRetries) attempts failed")
+                    // print("❌ FETCH_HISTORY_EXHAUSTED: All \(maxRetries) attempts failed")
                     break
                 }
                 
                 // Exponential backoff: 1s, 2s, 4s
                 let delay = pow(2.0, Double(attempt))
-                print("⏳ FETCH_HISTORY_RETRY: Waiting \(String(format: "%.1f", delay))s before retry...")
+                // print("⏳ FETCH_HISTORY_RETRY: Waiting \(String(format: "%.1f", delay))s before retry...")
                 
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }
@@ -961,28 +968,28 @@ struct HTTPClient {
         var lastError: RevoltError?
         
         for attempt in 0..<maxRetries {
-            print("📱 UPLOAD_NOTIFICATION_TOKEN_ATTEMPT [\(attempt + 1)/\(maxRetries)]: Attempting to upload token...")
+            // print("📱 UPLOAD_NOTIFICATION_TOKEN_ATTEMPT [\(attempt + 1)/\(maxRetries)]: Attempting to upload token...")
             
             let result = await req(method: .post, route: "/push/subscribe", parameters: ["endpoint": "apn", "p256dh": "", "auth": token])
             
             switch result {
             case .success(let response):
-                print("✅ UPLOAD_NOTIFICATION_TOKEN_SUCCESS: Token uploaded successfully on attempt \(attempt + 1)")
+                // print("✅ UPLOAD_NOTIFICATION_TOKEN_SUCCESS: Token uploaded successfully on attempt \(attempt + 1)")
                 return .success(response)
                 
             case .failure(let error):
                 lastError = error
-                print("❌ UPLOAD_NOTIFICATION_TOKEN_FAILED: Attempt \(attempt + 1) failed: \(error)")
+                // print("❌ UPLOAD_NOTIFICATION_TOKEN_FAILED: Attempt \(attempt + 1) failed: \(error)")
                 
                 // If this is the last attempt, return the error
                 if attempt == maxRetries - 1 {
-                    print("❌ UPLOAD_NOTIFICATION_TOKEN_EXHAUSTED: All \(maxRetries) attempts failed")
+                    // print("❌ UPLOAD_NOTIFICATION_TOKEN_EXHAUSTED: All \(maxRetries) attempts failed")
                     break
                 }
                 
                 // Exponential backoff: 2s, 4s, 8s
                 let delay = pow(2.0, Double(attempt + 1))
-                print("⏳ UPLOAD_NOTIFICATION_TOKEN_RETRY: Waiting \(String(format: "%.1f", delay))s before retry...")
+                // print("⏳ UPLOAD_NOTIFICATION_TOKEN_RETRY: Waiting \(String(format: "%.1f", delay))s before retry...")
                 
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }

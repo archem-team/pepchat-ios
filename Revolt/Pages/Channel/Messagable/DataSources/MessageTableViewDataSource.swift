@@ -20,14 +20,14 @@ class MessageTableViewDataSource: NSObject, UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         let count = viewModel?.messages.count ?? 0
-        print("📊 DATA SOURCE: Returning \(count) rows")
+        // print("📊 DATA SOURCE: Returning \(count) rows")
         return count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         guard let viewModel = viewModel,
               indexPath.row < viewModel.messages.count else {
-            print("⚠️ Invalid index path: \(indexPath.row), messages count: \(viewModel?.messages.count ?? 0)")
+            // print("⚠️ Invalid index path: \(indexPath.row), messages count: \(viewModel?.messages.count ?? 0)")
             return UITableViewCell()
         }
         
@@ -39,17 +39,25 @@ class MessageTableViewDataSource: NSObject, UITableViewDataSource {
             // Check if this is a system message
             if message.system != nil {
                 guard let systemCell = tableView.dequeueReusableCell(withIdentifier: "SystemMessageCell", for: indexPath) as? SystemMessageCell else {
-                    print("⚠️ Failed to dequeue SystemMessageCell")
+                    // print("⚠️ Failed to dequeue SystemMessageCell")
                     return UITableViewCell()
                 }
                 
                 systemCell.configure(with: message, viewState: viewModel.viewState)
+                systemCell.onPinnedMessageTap = { [weak self] messageId in
+                    guard let vc = self?.viewController else { return }
+                    DispatchQueue.main.async {
+                        guard vc.tableView.dataSource != nil else { return }
+                        vc.targetMessageId = messageId
+                        vc.scrollToTargetMessage()
+                    }
+                }
                 return systemCell
                 
             } else {
                 // Regular message - use MessageCell
                 guard let cell = tableView.dequeueReusableCell(withIdentifier: "MessageCell", for: indexPath) as? MessageCell else {
-                    print("⚠️ Failed to dequeue MessageCell")
+                    // print("⚠️ Failed to dequeue MessageCell")
                     return UITableViewCell()
                 }
                 
@@ -58,7 +66,7 @@ class MessageTableViewDataSource: NSObject, UITableViewDataSource {
                 if let foundAuthor = viewModel.viewState.users[message.author] {
                     author = foundAuthor
                 } else {
-                    print("⚠️ Could not find author for messageId: \(messageId), creating placeholder")
+                    // print("⚠️ Could not find author for messageId: \(messageId), creating placeholder")
                     // Create a placeholder user to prevent black messages
                     author = User(
                         id: message.author,
@@ -81,19 +89,23 @@ class MessageTableViewDataSource: NSObject, UITableViewDataSource {
                 cell.onMessageAction = { [weak viewController] action, message in
                     viewController?.handleMessageAction(action, message: message)
                 }
-                
+
                 cell.onImageTapped = { [weak viewController] image in
                     viewController?.showFullScreenImage(image)
                 }
-                
+
+                cell.onAsyncContentLoaded = { [weak viewController] messageId in
+                    viewController?.invalidateHeightForMessage(messageId)
+                }
+
                 if let viewController = viewController {
                     cell.textViewContent.delegate = viewController
                 }
-                
+
                 return cell
             }
         } else {
-            print("⚠️ Could not find message for messageId: \(messageId)")
+            // print("⚠️ Could not find message for messageId: \(messageId)")
             return UITableViewCell()
         }
     }
@@ -120,7 +132,7 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         let count = localMessages.count
-        print("📊 LOCAL DATA SOURCE: Returning \(count) rows")
+        // print("📊 LOCAL DATA SOURCE: Returning \(count) rows")
         
         // Update empty state visibility
         viewControllerRef?.updateEmptyStateVisibility()
@@ -130,7 +142,7 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         guard indexPath.row < localMessages.count else {
-            print("⚠️ Invalid index path: \(indexPath.row), messages count: \(localMessages.count)")
+            // print("⚠️ Invalid index path: \(indexPath.row), messages count: \(localMessages.count)")
             return UITableViewCell()
         }
         
@@ -140,23 +152,31 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
         if let message = viewModelRef.viewState.messages[messageId] {
             // Debug log for reactions
             if let reactions = message.reactions, !reactions.isEmpty {
-                print("🔥 DATASOURCE: Message \(messageId) has reactions: \(reactions.keys.joined(separator: ", "))")
+                // print("🔥 DATASOURCE: Message \(messageId) has reactions: \(reactions.keys.joined(separator: ", "))")
             }
             
             // Check if this is a system message
             if message.system != nil {
                 guard let systemCell = tableView.dequeueReusableCell(withIdentifier: "SystemMessageCell", for: indexPath) as? SystemMessageCell else {
-                    print("⚠️ Failed to dequeue SystemMessageCell")
+                    // print("⚠️ Failed to dequeue SystemMessageCell")
                     return UITableViewCell()
                 }
                 
                 systemCell.configure(with: message, viewState: viewModelRef.viewState)
+                systemCell.onPinnedMessageTap = { [weak viewControllerRef] messageId in
+                    guard let vc = viewControllerRef else { return }
+                    DispatchQueue.main.async {
+                        guard vc.tableView.dataSource != nil else { return }
+                        vc.targetMessageId = messageId
+                        vc.scrollToTargetMessage()
+                    }
+                }
                 return systemCell
                 
             } else {
                 // Regular message - use MessageCell
                 guard let cell = tableView.dequeueReusableCell(withIdentifier: "MessageCell", for: indexPath) as? MessageCell else {
-                    print("⚠️ Failed to dequeue MessageCell")
+                    // print("⚠️ Failed to dequeue MessageCell")
                     return UITableViewCell()
                 }
                 
@@ -165,7 +185,7 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                 if let foundAuthor = viewModelRef.viewState.users[message.author] {
                     author = foundAuthor
                 } else {
-                    print("⚠️ Could not find author for messageId: \(messageId), creating placeholder")
+                    // print("⚠️ Could not find author for messageId: \(messageId), creating placeholder")
                     // Create a placeholder user to prevent black messages
                     author = User(
                         id: message.author,
@@ -193,9 +213,13 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                 cell.onMessageAction = { [weak viewControllerRef] action, message in
                     viewControllerRef?.handleMessageAction(action, message: message)
                 }
-                
+
                 cell.onImageTapped = { [weak viewControllerRef] image in
                     viewControllerRef?.showFullScreenImage(image)
+                }
+
+                cell.onAsyncContentLoaded = { [weak viewControllerRef] messageId in
+                    viewControllerRef?.invalidateHeightForMessage(messageId)
                 }
                 
                 // Present user sheet on avatar tap
@@ -216,7 +240,7 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                 return cell
             }
         } else {
-            print("⚠️ Could not find message for messageId: \(messageId)")
+            // print("⚠️ Could not find message for messageId: \(messageId)")
             return UITableViewCell()
         }
     }
