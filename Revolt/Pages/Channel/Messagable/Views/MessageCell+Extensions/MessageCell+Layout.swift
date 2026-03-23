@@ -15,6 +15,7 @@ extension MessageCell {
         // Hide avatar and username for continuation messages
         avatarImageView.isHidden = isContinuation
         usernameLabel.isHidden = isContinuation
+        usernameVerifiedBadgeImageView.isHidden = isContinuation || usernameVerifiedBadgeImageView.image == nil
         timeLabel.isHidden = isContinuation
         bridgeBadgeLabel.isHidden = isContinuation || currentMessage?.masquerade == nil
 

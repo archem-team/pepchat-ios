@@ -83,6 +83,15 @@ extension MessageCell {
         usernameLabel.addGestureRecognizer(usernameTapGesture)
         contentView.addSubview(usernameLabel)
         
+        usernameVerifiedBadgeImageView.translatesAutoresizingMaskIntoConstraints = false
+        usernameVerifiedBadgeImageView.contentMode = .scaleAspectFit
+        usernameVerifiedBadgeImageView.clipsToBounds = true
+        usernameVerifiedBadgeImageView.tintColor = UIColor.systemYellow
+        usernameVerifiedBadgeImageView.isHidden = true
+        contentView.addSubview(usernameVerifiedBadgeImageView)
+        usernameVerifiedBadgeWidthConstraint = usernameVerifiedBadgeImageView.widthAnchor.constraint(equalToConstant: 0)
+        usernameVerifiedBadgeWidthConstraint?.isActive = true
+        
         // Time label
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
         timeLabel.font = UIFont.systemFont(ofSize: 12)
@@ -184,8 +193,12 @@ extension MessageCell {
             usernameLabel.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 10),
             // Note: Top constraint for username will be set dynamically in updateAppearanceForContinuation
             
+            usernameVerifiedBadgeImageView.leadingAnchor.constraint(equalTo: usernameLabel.trailingAnchor, constant: 6),
+            usernameVerifiedBadgeImageView.centerYAnchor.constraint(equalTo: usernameLabel.centerYAnchor),
+            usernameVerifiedBadgeImageView.heightAnchor.constraint(equalToConstant: 14),
+            
             // Time
-            timeLabel.leadingAnchor.constraint(equalTo: usernameLabel.trailingAnchor, constant: 8),
+            timeLabel.leadingAnchor.constraint(equalTo: usernameVerifiedBadgeImageView.trailingAnchor, constant: 8),
             timeLabel.centerYAnchor.constraint(equalTo: usernameLabel.centerYAnchor),
             
             // Bridge badge

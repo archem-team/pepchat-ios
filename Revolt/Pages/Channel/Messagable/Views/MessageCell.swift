@@ -29,7 +29,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     internal var fileAttachmentsContainer: UIView?
     internal var fileAttachmentViews: [UIView] = []
     internal var viewState: ViewState?
-    
+    internal let usernameVerifiedBadgeImageView = UIImageView()
+    internal var usernameVerifiedBadgeWidthConstraint: NSLayoutConstraint?
 
     
     // Reply components
@@ -262,6 +263,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         // PERFORMANCE: Clean up any temp video files immediately
         cleanupTempVideos()
         
+        usernameVerifiedBadgeImageView.image = nil
+        usernameVerifiedBadgeImageView.isHidden = true
+        
         // PERFORMANCE: Clean up video window if cell is reused
         if MessageCell.videoWindow != nil {
             MessageCell.videoWindow?.isHidden = true
@@ -418,6 +422,12 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         let displayName = message.masquerade?.name ?? member?.nickname ?? author.display_name ?? author.username
         usernameLabel.text = displayName
         usernameLabel.font = UIFont.boldSystemFont(ofSize: 16)
+        
+        let showVerified = author.hasVerifiedBadge()
+        usernameLabel.textColor = showVerified ? .systemYellow : .white
+        usernameVerifiedBadgeImageView.image = UIImage(systemName: "checkmark.seal.fill")
+        usernameVerifiedBadgeImageView.isHidden = !showVerified
+        usernameVerifiedBadgeWidthConstraint?.constant = showVerified ? 14 : 0
         
         // Show bridge badge if message has masquerade (indicating it's bridged)
         bridgeBadgeLabel.isHidden = message.masquerade == nil
