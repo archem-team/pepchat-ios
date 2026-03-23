@@ -1,0 +1,64 @@
+=== MERGE SUMMARY: Feature/Badges+ChannelName Branch ===
+
+Repository: /Users/akshatsrivastava/Desktop/pepchat-ios
+Branch: feature/Badges+ChannelName
+
+COMPLETED ACTIONS:
+==================
+
+1. Created new branch from main
+   - Branch name: feature/Badges+ChannelName
+   - Base commit: 4a915a6 (Merge pepperf into main)
+   - This branch already contains both fix/PinMessageScroll+ContactMessage and pepperf merges
+
+2. Added internship repo as remote
+   - Path: /Users/akshatsrivastava/Developer/Internship @Cyborn/pepchat-ios
+   - Remote name: internship-repo
+
+3. Committed pending changes in internship repo
+   - Branch: fix/PinMessageScroll+ContactMessage
+   - Commit: 5a7fbce
+
+4. Fetched and merged internship repo changes
+   - Source: internship-repo/fix/PinMessageScroll+ContactMessage
+   - Target: feature/Badges+ChannelName
+   - Result: SUCCESS (1 conflict resolved in Xcode project file)
+
+MERGED FEATURES:
+================
+
+From internship repo (fix/PinMessageScroll+ContactMessage):
+- ✅ Verified badge support in User types
+- ✅ Updated MessageView to display verified badges  
+- ✅ Enhanced MessageCell layout and setup for badges
+- ✅ Added badge display in ServerMembersView
+- ✅ Added badge display in FriendsList
+- ✅ New documentation: docs/Feature/VerifiedBadges.md
+
+FILES CHANGED (11 files total):
+================================
+- AGENTS.md
+- Revolt.xcodeproj/project.pbxproj
+- Revolt/Components/MessageRenderer/MessageView.swift
+- Revolt/Pages/Channel/Messagable/Extensions/MessageableChannelViewController+Setup.swift
+- Revolt/Pages/Channel/Messagable/Views/MessageCell+Extensions/MessageCell+Layout.swift
+- Revolt/Pages/Channel/Messagable/Views/MessageCell+Extensions/MessageCell+Setup.swift
+- Revolt/Pages/Channel/Messagable/Views/MessageCell.swift
+- Revolt/Pages/Channel/Settings/Server/ServerMembersView.swift
+- Revolt/Pages/Home/FriendsList.swift
+- Types/User.swift
+- docs/Feature/VerifiedBadges.md (NEW)
+
+Statistics: 291 insertions(+), 30 deletions(-)
+
+CURRENT BRANCH STATUS:
+======================
+Branch: feature/Badges+ChannelName
+Latest commit: b6753b8
+All changes are LOCAL ONLY (not pushed to remote)
+
+This branch now contains:
+1. Original main
+2. fix/PinMessageScroll+ContactMessage (from GitHub)
+3. pepperf (from GitHub)
+4. Badges and ChannelName improvements (from internship repo)

@@ -1,0 +1,49 @@
+=== MERGE CONFLICTS SUMMARY ===
+
+Repository: pepchat-ios
+Test performed: Local merge test (no remote changes)
+
+Step 1: Merge fix/PinMessageScroll+ContactMessage into main
+Result: SUCCESS (Fast-forward merge, no conflicts)
+Files changed: 18 files changed, 2345 insertions(+), 430 deletions(-)
+
+Step 2: Merge pepperf into main (after first merge)
+Result: MERGE CONFLICTS DETECTED
+
+Conflicting Files:
+1. Revolt/Pages/Channel/Messagable/Extensions/MessageableChannelViewController+Notifications.swift
+2. Revolt/Pages/Channel/Messagable/Utils/MessageInputHandler.swift
+
+Conflict Details:
+
+File 1: MessageableChannelViewController+Notifications.swift
+---------------------------------------------------------------
+Location: handleNewMessages method (around line 16-19)
+
+The pepperf branch adds critical fixes for message loading:
+- Checks if messageLoadingState == .loading and returns early
+- Checks if targetMessageProtectionActive and returns early
+- Renames local variable from 'channelId' to 'notifChannel'
+
+The fix/PinMessageScroll+ContactMessage branch doesn't have these checks.
+
+File 2: MessageInputHandler.swift
+---------------------------------------------------------------
+Multiple conflicts in this file:
+
+Conflict A (around line 153-160):
+- fix/PinMessageScroll+ContactMessage adds: refreshMessagesAfterLocalDelete() call
+- fix/PinMessageScroll+ContactMessage adds: print statement for debugging
+- pepperf comments out the print statement
+
+Conflict B (around line 179-199):
+- fix/PinMessageScroll+ContactMessage has active print + NotificationCenter post
+- fix/PinMessageScroll+ContactMessage has commented out conditional notification logic
+- pepperf has the conditional notification logic active (checks if messages not empty)
+- pepperf comments out the debug print statement
+
+Conflict C (around line 297-304):
+- Similar to Conflict A, same code appears twice in the file
+- fix/PinMessageScroll+ContactMessage adds: refreshMessagesAfterLocalDelete() call
+- fix/PinMessageScroll+ContactMessage adds: print statement for debugging
+- pepperf comments out the print statement
