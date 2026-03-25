@@ -42,6 +42,30 @@ extension MessageableChannelViewController: UITableViewDelegate {
             // Link preview overlap fix: finish layout before first draw (docs/Fix/LinkPreviewImage.md)
             currentCell.contentView.setNeedsLayout()
             currentCell.contentView.layoutIfNeeded()
+            var finalHeight = currentCell.bounds.height
+
+            // PERF: Only run second layout pass for cells with complex content
+            // (embeds, image/file attachments) where attributed text may need
+            // multiple passes to settle. Plain text cells are correct after one pass.
+            let hasComplexContent =
+                (currentCell.imageAttachmentsContainer != nil && !currentCell.imageAttachmentsContainer!.isHidden) ||
+                (currentCell.fileAttachmentsContainer != nil && !currentCell.fileAttachmentsContainer!.isHidden) ||
+                currentCell.contentView.viewWithTag(2000) != nil
+
+            if hasComplexContent {
+                let firstHeight = finalHeight
+                currentCell.contentView.setNeedsLayout()
+                currentCell.contentView.layoutIfNeeded()
+                finalHeight = currentCell.bounds.height
+
+                // If height changed between passes, first pass was premature — trigger re-query
+                if abs(finalHeight - firstHeight) > 1.0 {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.tableView.beginUpdates()
+                        self?.tableView.endUpdates()
+                    }
+                }
+            }
 
             // PERF Issue #9: Cache the measured height after layout
             let messageId = localMessages[indexPath.row]
@@ -51,7 +75,7 @@ extension MessageableChannelViewController: UITableViewDelegate {
                 isContinuation: isContinuation,
                 tableWidth: Int(tableView.bounds.width)
             )
-            cellHeightCache.store(height: currentCell.bounds.height, for: key)
+            cellHeightCache.store(height: finalHeight, for: key)
         }
 
         loadMoreMessagesIfNeeded(for: indexPath)

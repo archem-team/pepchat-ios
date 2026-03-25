@@ -453,6 +453,12 @@ extension MessageCell {
             let linkPreview = LinkPreviewView()
             linkPreview.translatesAutoresizingMaskIntoConstraints = false
             linkPreview.configure(with: embed, viewState: viewState)
+            linkPreview.onImageLoaded = { [weak self] in
+                guard let self = self, let messageId = self.currentMessage?.id else { return }
+                self.contentView.setNeedsLayout()
+                self.contentView.layoutIfNeeded()
+                self.onAsyncContentLoaded?(messageId)
+            }
             embedContainer.addArrangedSubview(linkPreview)
         }
         

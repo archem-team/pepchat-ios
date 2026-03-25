@@ -1997,6 +1997,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 // PERF Issue #9: Track for efficient deactivation in clearContentLabelBottomConstraints()
                 contentLabelBottomToContentViewConstraint = bottomConstraint
             }
+        } else {
+            // Reactions handle their own bottom constraint via setupReactionsContainerConstraints()
+            // Remove conflicting bottom constraints from embeds/attachments
+            removeConflictingBottomConstraints()
         }
         
         // Minimum height constraint

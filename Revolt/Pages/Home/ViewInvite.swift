@@ -143,21 +143,18 @@ struct ViewInvite: View {
                 
                 await MainActor.run {
                     isProcessingInvite = false
-                    
-                    // print("🎫 INVITE_ACCEPT: Before path change - path count: \(viewState.path.count)")
-                    // print("🎫 INVITE_ACCEPT: Before path change - path: \(viewState.path)")
-                    
-                    // CRITICAL: Clear entire navigation path and rebuild for server context
+
+                    // Ensure server and channel selection are set before navigation,
+                    // regardless of which code path fetchAndProcessMembers took
+                    viewState.selectServer(withId: join.server.id)
+                    viewState.selectChannel(inServer: join.server.id, withId: serverInfo.channel_id)
+
+                    // Clear entire navigation path and rebuild for server context
                     // This ensures back navigation goes to server channel list, not previous screen
                     viewState.path.removeAll()
-                    
-                    // print("🎫 INVITE_ACCEPT: After removeAll - path count: \(viewState.path.count)")
-                    
+
                     // Navigate to the channel with clean navigation stack
                     viewState.path.append(NavigationDestination.maybeChannelView)
-                    
-                    // print("🎫 INVITE_ACCEPT: After adding maybeChannelView - path count: \(viewState.path.count)")
-                    // print("🎫 INVITE_ACCEPT: Final path: \(viewState.path)")
                 }
                 
             } catch {
@@ -202,6 +199,7 @@ struct ViewInvite: View {
             await MainActor.run {
                 self.viewState.showAlert(message: "You have already joined the channel or are restricted from joining it!", icon: .peptideInfo)
                 isProcessingInvite = false
+                viewState.path.removeAll()
             }
         }
     }
