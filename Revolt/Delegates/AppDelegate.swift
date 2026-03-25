@@ -322,6 +322,8 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     ///   - response: The user's response to the notification, which could include text input or a default tap action.
     ///   - completionHandler: The closure to call when the method finishes processing
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        defer { completionHandler() }
+        
         let state = ViewState.shared ?? ViewState()
 
         if state.sessionToken == nil {
@@ -339,6 +341,8 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         let channelId = message?["channel"] as? String ?? ""
         //let messageId = message?["_id"] as? String ?? ""
 
+        clearNotifiationsForChannel(channelId)
+        
         let member = message?["member"] as? [String: Any]
         let memberId = member?["_id"] as? [String: Any]
         let serverId = memberId?["server"] as? String ?? ""
@@ -455,6 +459,59 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         // Per-channel notification settings could be opened here.
     }
     
-    
+    private func clearNotifiationsForChannel(_ channelId: String, center: UNUserNotificationCenter = .current()) {
+        guard !channelId.isEmpty else { return }
+        
+        // Remove already-delivered notifications in Notification Center
+        
+        center.getDeliveredNotifications { notifications in
+            let idsToRemove = notifications.compactMap { notification -> String? in
+                let userInfo = notification.request.content.userInfo
+                
+                // Primary matching: backend payload channel
+                
+                if let message = userInfo["message"] as? [String: Any],
+                   let notificationChannelId = message["channel"] as? String,
+                   notificationChannelId == channelId {
+                    return notification.request.identifier
+                }
+                
+                // Fallback matching: iOS thread grouping id
+                if notification.request.content.threadIdentifier == channelId {
+                    return notification.request.identifier
+                }
+                
+                return nil
+                
+            }
+            
+            if !idsToRemove.isEmpty {
+                center.removeDeliveredNotifications(withIdentifiers: idsToRemove)
+            }
+            
+            // Also clear pending requests for same channel
+            center.getPendingNotificationRequests { requests in
+                let pendingIdsToRemove = requests.compactMap { request -> String? in
+                    let userInfo = request.content.userInfo
+                    
+                    if let message = userInfo["message"] as? [String:Any],
+                       let notificationChannelId = message["channel"] as? String,
+                       notificationChannelId == channelId {
+                        return request.identifier
+                    }
+                    
+                    if request.content.threadIdentifier == channelId {
+                        return request.identifier
+                    }
+                    
+                    return nil
+                }
+                
+                if !pendingIdsToRemove.isEmpty {
+                    center.removePendingNotificationRequests(withIdentifiers: pendingIdsToRemove)
+                }
+            }
+        }
+    }
     
 }
