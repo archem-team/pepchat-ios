@@ -476,7 +476,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
                     return notification.request.identifier
                 }
                 
-                // Fallback mathcing: iOS thread grouping id
+                // Fallback matching: iOS thread grouping id
                 if notification.request.content.threadIdentifier == channelId {
                     return notification.request.identifier
                 }
