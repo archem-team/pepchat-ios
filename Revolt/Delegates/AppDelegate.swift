@@ -462,7 +462,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     private func clearNotifiationsForChannel(_ channelId: String, center: UNUserNotificationCenter = .current()) {
         guard !channelId.isEmpty else { return }
         
-        // Remove already-delivered notifications in Notification Center]
+        // Remove already-delivered notifications in Notification Center
         
         center.getDeliveredNotifications { notifications in
             let idsToRemove = notifications.compactMap { notification -> String? in
