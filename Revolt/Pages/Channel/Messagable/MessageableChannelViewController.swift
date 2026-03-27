@@ -1123,6 +1123,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                 let indexPath = IndexPath(row: messageIndex, section: 0)
                 let isLastMessage = messageIndex == localMessages.count - 1
                 let wasNearBottom = isUserNearBottom(threshold: 80)
+                // Reaction count changes can change row height. Invalidate cache before row reload.
+                cellHeightCache.invalidate(messageId: messageId)
+                continuationCache.removeValue(forKey: messageId)
 
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
@@ -1139,6 +1142,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                     }
 
                     self.tableView.reloadRows(at: [indexPath], with: .none)
+                    self.tableView.beginUpdates()
+                    self.tableView.endUpdates()
                     self.tableView.layoutIfNeeded()
 
                     // CRITICAL FIX: Don't auto-scroll if target message was recently highlighted

@@ -78,8 +78,20 @@ struct MessageReactionsSheet: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Avatar(user: user, member: member)
-                                
-                                Text(verbatim: member?.nickname ?? user.display_name ?? user.username)
+
+                                let displayName = member?.nickname ?? user.display_name ?? user.username
+                                let isVerified = user.hasVerifiedBadge()
+
+                                HStack(spacing: 4) {
+                                    Text(verbatim: displayName)
+                                        .foregroundStyle(isVerified ? .yellow : .primary)
+
+                                    if isVerified {
+                                        Image(systemName: "checkmark.seal.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.yellow)
+                                    }
+                                }
                             }
                         }
                     }

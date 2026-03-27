@@ -264,6 +264,7 @@
 		36D461CF77D84B97B94929A9 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 03268FCCFC7D4D1F8B6E9F6F /* Sentry */; };
 		5C950CA0787B4F15B7A6C6E9922080C7 /* PlatformConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E642E7DF038749479E84C536018420D4 /* PlatformConfigService.swift */; };
 		7031993BD3D264C895FFB466 /* CreateServerRoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F75CCC5D94FA80B2DCBD7821 /* CreateServerRoleView.swift */; };
+		77A94DDC2F7420C500AA6BA6 /* MessageReactionsSheetUIKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A94DDB2F7420C500AA6BA6 /* MessageReactionsSheetUIKit.swift */; };
 		77AC56512F1F677B00070CCE /* MessageableChannelViewController+NSFW.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AC56502F1F677B00070CCE /* MessageableChannelViewController+NSFW.swift */; };
 		77AC56532F1F683200070CCE /* NSFWOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AC56522F1F683200070CCE /* NSFWOverlayView.swift */; };
 		77AC56552F1F976F00070CCE /* MessageableChannelViewController+NotificationBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AC56542F1F976F00070CCE /* MessageableChannelViewController+NotificationBanner.swift */; };
@@ -639,6 +640,7 @@
 		17F555262AFC229900958F2F /* ServerSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSettings.swift; sourceTree = "<group>"; };
 		17F9D7622C9208B500D0BB6F /* MessageReactionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageReactionsSheet.swift; sourceTree = "<group>"; };
 		56C3A459C46C9725691178F3 /* RoleColorPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleColorPickerSheet.swift; sourceTree = "<group>"; };
+		77A94DDB2F7420C500AA6BA6 /* MessageReactionsSheetUIKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageReactionsSheetUIKit.swift; sourceTree = "<group>"; };
 		77AC56502F1F677B00070CCE /* MessageableChannelViewController+NSFW.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+NSFW.swift"; sourceTree = "<group>"; };
 		77AC56522F1F683200070CCE /* NSFWOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSFWOverlayView.swift; sourceTree = "<group>"; };
 		77AC56542F1F976F00070CCE /* MessageableChannelViewController+NotificationBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageableChannelViewController+NotificationBanner.swift"; sourceTree = "<group>"; };
@@ -1309,7 +1311,7 @@
 				175465CC2C42147B0076B393 /* NotificationService.swift */,
 				175465CE2C42147B0076B393 /* Info.plist */,
 			);
-			path = NotificationService;
+			path = notificationservice;
 			sourceTree = "<group>";
 		};
 		175E01DC2ADAB3EA004F6431 /* Components */ = {
@@ -1521,6 +1523,7 @@
 				1759C3992B291A75006E6BBE /* MessageContentsView.swift */,
 				1759C39B2B291E2F006E6BBE /* SystemMessageView.swift */,
 				17F9D7622C9208B500D0BB6F /* MessageReactionsSheet.swift */,
+				77A94DDB2F7420C500AA6BA6 /* MessageReactionsSheetUIKit.swift */,
 				050E93302D04DA00006B2330 /* MessageOptionSheet.swift */,
 				0520B9092D5621EF009B83F4 /* SwipeToReplyView.swift */,
 				05BB3E172D58C8A200C3BA3B /* MessageEmojisReact.swift */,
@@ -2157,6 +2160,7 @@
 				285F7581BAD6234593D2394F /* RoleDeleteSheet.swift in Sources */,
 				F0A1B2C3D4E5F60718293A4C /* MessageCacheManager.swift in Sources */,
 				F0A1B2C4D4E5F60718293A4C /* MessageCacheWriter.swift in Sources */,
+				77A94DDC2F7420C500AA6BA6 /* MessageReactionsSheetUIKit.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2206,7 +2210,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_USE_OPTIMIZATION_PROFILE = YES;
-				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
+				CODE_SIGN_ENTITLEMENTS = notificationservice/NotificationService.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
@@ -2216,7 +2220,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = NotificationService/Info.plist;
+				INFOPLIST_FILE = notificationservice/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NotificationService;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -2247,7 +2251,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_USE_OPTIMIZATION_PROFILE = YES;
-				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
+				CODE_SIGN_ENTITLEMENTS = notificationservice/NotificationService.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
@@ -2257,7 +2261,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = NotificationService/Info.plist;
+				INFOPLIST_FILE = notificationservice/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NotificationService;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -2288,7 +2292,7 @@
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_MODULES = YES;
-				CLANG_USE_OPTIMIZATION_PROFILE = YES;
+				CLANG_USE_OPTIMIZATION_PROFILE = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
@@ -2337,7 +2341,7 @@
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_MODULES = YES;
-				CLANG_USE_OPTIMIZATION_PROFILE = YES;
+				CLANG_USE_OPTIMIZATION_PROFILE = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
@@ -2516,7 +2520,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
 				DEVELOPMENT_TEAM = "";
@@ -2581,7 +2585,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "Revolt/Resources/Assets.xcassets Revolt/Resources/Preview\\ Content/Preview\\ Assets.xcassets";
 				DEVELOPMENT_TEAM = "";
