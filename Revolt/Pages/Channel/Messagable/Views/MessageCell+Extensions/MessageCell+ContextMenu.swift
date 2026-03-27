@@ -9,10 +9,31 @@ import UIKit
 import Types
 import Kingfisher
 import AVKit
+import SwiftUI
 
 extension MessageCell {
     @objc internal func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
-       guard gesture.state == .began, let message = currentMessage else { return }
+        guard gesture.state == .began, let message = currentMessage, let viewState = self.viewState else { return }
+        
+        // Detect if the long-press is on a reaction pill
+        let location = gesture.location(in: contentView)
+        var hitView: UIView? = contentView.hitTest(location, with: nil)
+        
+        var pressedEmoji: String?
+        while let v = hitView, v != contentView {
+            if let emoji = v.accessibilityLabel,
+               !emoji.isEmpty,
+               v.restorationIdentifier == message.id {
+                pressedEmoji = emoji
+                break
+            }
+            hitView = v.superview
+        }
+        
+        if let emoji = pressedEmoji {
+            presentReactionsList(emoji: emoji, for: message)
+            return
+        }
        
        // Show custom option sheet instead of UIAlertController
        if let viewController = findViewController() {
@@ -36,11 +57,11 @@ extension MessageCell {
            )
            
            // Present as a modal with custom style
-           optionSheet.modalPresentationStyle = .pageSheet
+           optionSheet.modalPresentationStyle = UIModalPresentationStyle.pageSheet
            if #available(iOS 15.0, *) {
                if let sheet = optionSheet.sheetPresentationController {
                    sheet.prefersGrabberVisible = true
-                   sheet.detents = [.medium()]
+                   sheet.detents = [UISheetPresentationController.Detent.medium()]
                    sheet.preferredCornerRadius = 16
                }
            }
@@ -149,6 +170,37 @@ extension MessageCell {
         }
         
         return true
+    }
+    
+    
+    private func presentReactionsList(emoji: String, for message: Types.Message) {
+        guard let viewState = self.viewState else { return }
+        
+        let latestMessage = viewState.messages[message.id] ?? message
+        guard let reactions = latestMessage.reactions,
+              reactions[emoji] != nil else { return }
+        
+        let channel = viewState.channels[latestMessage.channel] ?? viewState.allEventChannels[latestMessage.channel]
+        let server: Types.Server? = channel?.server.flatMap { viewState.servers[$0] }
+        
+        let sheet = MessageReactionsSheetUIKit(message: latestMessage, server: server, initialEmoji: emoji)
+            .environmentObject(viewState)
+        
+        guard let viewController = findViewController() else { return }
+        
+        let hosting = UIHostingController(rootView: sheet)
+        hosting.modalPresentationStyle = UIModalPresentationStyle.pageSheet
+        
+        if #available(iOS 15.0, *) {
+            if let ps = hosting.sheetPresentationController {
+                ps.detents = [UISheetPresentationController.Detent.medium(), UISheetPresentationController.Detent.large()]
+                ps.prefersGrabberVisible = true
+                ps.preferredCornerRadius = 16
+            }
+        }
+        
+        viewController.present(hosting, animated: true)
+        
     }
     
 }

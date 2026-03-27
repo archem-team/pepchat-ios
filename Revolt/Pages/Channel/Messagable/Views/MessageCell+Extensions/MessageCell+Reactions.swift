@@ -38,65 +38,83 @@ extension MessageCell {
             return
         }
         
+        // Reset contraints so we don't accumulate layout contraints across updates
+        clearReactionsContainerConstraints()
+        
         // print("🔥 Found \(reactions.count) reactions, showing container")
         reactionsContainerView.isHidden = false
         
-        // Position spacer below images/content
-        let spacerView = UIView()
-        spacerView.translatesAutoresizingMaskIntoConstraints = false
-        spacerView.backgroundColor = UIColor.clear // Remove debug color, make it invisible
-        spacerView.tag = 9999 // Special tag for spacer
-        contentView.addSubview(spacerView)
-        
-        // Find what to anchor to
-        var topAnchor: NSLayoutYAxisAnchor
-        if let embedContainer = contentView.viewWithTag(2000), !embedContainer.isHidden {
-            topAnchor = embedContainer.bottomAnchor
-        } else if let imageContainer = imageAttachmentsContainer, !imageContainer.isHidden {
-            topAnchor = imageContainer.bottomAnchor
-        } else if let fileContainer = fileAttachmentsContainer, !fileContainer.isHidden {
-            topAnchor = fileContainer.bottomAnchor
-        } else {
-            topAnchor = contentLabel.bottomAnchor
-        }
-        
-        // Position spacer below content/images
-        let heightConstraint = spacerView.heightAnchor.constraint(equalToConstant: 50)
-        heightConstraint.priority = UILayoutPriority(999) // High but not required to avoid conflicts
-        
-        NSLayoutConstraint.activate([
-            spacerView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-            spacerView.leadingAnchor.constraint(equalTo: contentLabel.leadingAnchor), // Align with text content
-            spacerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            spacerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16), // Increased bottom padding
-            heightConstraint
-        ])
-        
-        // Add all reaction buttons to spacer in a row
-        var currentX: CGFloat = 0
-        let buttonSpacing: CGFloat = 8
-        
+        var reactionButtons: [UIView] = []
         for (emoji, users) in reactions {
-            let reactionButton = createSimpleReactionButton(emoji: emoji, count: users.count, viewState: viewState)
-            spacerView.addSubview(reactionButton)
-            
-            // Position button in a horizontal layout
-            NSLayoutConstraint.activate([
-                reactionButton.centerYAnchor.constraint(equalTo: spacerView.centerYAnchor),
-                reactionButton.leadingAnchor.constraint(equalTo: spacerView.leadingAnchor, constant: currentX),
-                reactionButton.heightAnchor.constraint(equalToConstant: 32),
-                reactionButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 60)
-            ])
-            
-            // Update position for next button
-            currentX += 68 // 60 + 8 spacing
+            let pill = createSimpleReactionButton(emoji: emoji, count: users.count, viewState: viewState)
+            reactionButtons.append(pill)
         }
         
-        // print("🔥 Added spacer and reaction button to force cell expansion")
+        // Anchor reactions below embeds/files/images/text and pin it to the cell bottom
+        setupReactionsContainerConstraints()
         
-        // Force layout update to ensure proper rendering
-        self.setNeedsLayout()
-        self.layoutIfNeeded()
+        //Layput buttons in rows inside reactionsContainerView
+        layoutReactionsWithFlowLayout(buttons: reactionButtons)
+        
+        contentView.setNeedsLayout()
+        contentView.layoutIfNeeded()
+        
+//        // Position spacer below images/content
+//        let spacerView = UIView()
+//        spacerView.translatesAutoresizingMaskIntoConstraints = false
+//        spacerView.backgroundColor = UIColor.clear // Remove debug color, make it invisible
+//        spacerView.tag = 9999 // Special tag for spacer
+//        contentView.addSubview(spacerView)
+//        
+//        // Find what to anchor to
+//        var topAnchor: NSLayoutYAxisAnchor
+//        if let embedContainer = contentView.viewWithTag(2000), !embedContainer.isHidden {
+//            topAnchor = embedContainer.bottomAnchor
+//        } else if let imageContainer = imageAttachmentsContainer, !imageContainer.isHidden {
+//            topAnchor = imageContainer.bottomAnchor
+//        } else if let fileContainer = fileAttachmentsContainer, !fileContainer.isHidden {
+//            topAnchor = fileContainer.bottomAnchor
+//        } else {
+//            topAnchor = contentLabel.bottomAnchor
+//        }
+//        
+//        // Position spacer below content/images
+//        let heightConstraint = spacerView.heightAnchor.constraint(equalToConstant: 50)
+//        heightConstraint.priority = UILayoutPriority(999) // High but not required to avoid conflicts
+//        
+//        NSLayoutConstraint.activate([
+//            spacerView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+//            spacerView.leadingAnchor.constraint(equalTo: contentLabel.leadingAnchor), // Align with text content
+//            spacerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+//            spacerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16), // Increased bottom padding
+//            heightConstraint
+//        ])
+//        
+//        // Add all reaction buttons to spacer in a row
+//        var currentX: CGFloat = 0
+//        let buttonSpacing: CGFloat = 8
+//        
+//        for (emoji, users) in reactions {
+//            let reactionButton = createSimpleReactionButton(emoji: emoji, count: users.count, viewState: viewState)
+//            spacerView.addSubview(reactionButton)
+//            
+//            // Position button in a horizontal layout
+//            NSLayoutConstraint.activate([
+//                reactionButton.centerYAnchor.constraint(equalTo: spacerView.centerYAnchor),
+//                reactionButton.leadingAnchor.constraint(equalTo: spacerView.leadingAnchor, constant: currentX),
+//                reactionButton.heightAnchor.constraint(equalToConstant: 32),
+//                reactionButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 60)
+//            ])
+//            
+//            // Update position for next button
+//            currentX += 68 // 60 + 8 spacing
+//        }
+//        
+//        // print("🔥 Added spacer and reaction button to force cell expansion")
+//        
+//        // Force layout update to ensure proper rendering
+//        self.setNeedsLayout()
+//        self.layoutIfNeeded()
     }
     
     private func layoutReactionsWithFlowLayout(buttons: [UIView]) {
@@ -120,7 +138,7 @@ extension MessageCell {
             // Calculate button width
             button.translatesAutoresizingMaskIntoConstraints = false
             let buttonSize = button.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
-            let buttonWidth = max(buttonSize.width, 50) // Minimum width
+            let buttonWidth = max(buttonSize.width, 60) // Minimum width
             
             // Check if button fits in current row
             if currentX + buttonWidth > containerWidth && currentX > 0 {
@@ -134,7 +152,8 @@ extension MessageCell {
             NSLayoutConstraint.activate([
                 button.leadingAnchor.constraint(equalTo: reactionsContainerView.leadingAnchor, constant: currentX),
                 button.topAnchor.constraint(equalTo: reactionsContainerView.topAnchor, constant: currentY),
-                button.heightAnchor.constraint(equalToConstant: 32)
+                button.heightAnchor.constraint(equalToConstant: 32),
+                button.widthAnchor.constraint(equalToConstant: buttonWidth)
             ])
             
             // Update position for next button

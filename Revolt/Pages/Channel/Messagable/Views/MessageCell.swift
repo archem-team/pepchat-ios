@@ -1982,7 +1982,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     }
     
     private func setBottomConstraints(message: Message) {
-        let hasReactions = !(message.reactions?.isEmpty ?? true)
+        let latestMessage = viewState?.messages[message.id] ?? message
+        let hasReactions = !(latestMessage.reactions?.isEmpty ?? true)
         let hasAttachments = !(message.attachments?.isEmpty ?? true)
         let hasImageAttachments = imageAttachmentsContainer != nil && !imageAttachmentsContainer!.isHidden
         let hasFileAttachments = fileAttachmentsContainer != nil && !fileAttachmentsContainer!.isHidden
@@ -2007,12 +2008,47 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 // PERF Issue #9: Track for efficient deactivation in clearContentLabelBottomConstraints()
                 contentLabelBottomToContentViewConstraint = bottomConstraint
             }
+        } else {
+            // Reactions become the bottomost element, so remove "bottom pinned" contraints
+            // from embeds/images/files that currently fight with reactions
+            removeBottomConstraintsForReactions()
         }
         
         // Minimum height constraint
         let minHeightConstraint = contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 50)
         minHeightConstraint.priority = UILayoutPriority.defaultLow
         minHeightConstraint.isActive = true
+    }
+    
+    private func removeBottomConstraintsForReactions() {
+        var constraintsToRemove: [NSLayoutConstraint] = []
+
+        let embedContainer = contentView.viewWithTag(2000)
+
+        for constraint in contentView.constraints {
+            // Images pinned to contentView.bottom -> must be removed when reactions exist
+            if let imageContainer = imageAttachmentsContainer,
+               (constraint.firstItem === imageContainer && constraint.firstAttribute == .bottom && constraint.secondItem === contentView) ||
+               (constraint.secondItem === imageContainer && constraint.secondAttribute == .bottom && constraint.firstItem === contentView) {
+                constraintsToRemove.append(constraint)
+            }
+
+            // Files pinned to contentView.bottom (if any) -> remove
+            if let fileContainer = fileAttachmentsContainer,
+               (constraint.firstItem === fileContainer && constraint.firstAttribute == .bottom && constraint.secondItem === contentView) ||
+               (constraint.secondItem === fileContainer && constraint.secondAttribute == .bottom && constraint.firstItem === contentView) {
+                constraintsToRemove.append(constraint)
+            }
+
+            // Embeds pinned to contentView.bottom -> remove
+            if let embedContainer,
+               (constraint.firstItem === embedContainer && constraint.firstAttribute == .bottom && constraint.secondItem === contentView) ||
+               (constraint.secondItem === embedContainer && constraint.secondAttribute == .bottom && constraint.firstItem === contentView) {
+                constraintsToRemove.append(constraint)
+            }
+        }
+
+        constraintsToRemove.forEach { $0.isActive = false }
     }
     
     private func removeConflictingBottomConstraints() {

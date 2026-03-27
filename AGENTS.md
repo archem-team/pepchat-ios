@@ -1,3 +1,5 @@
+API docs: https://developers.revolt.chat/developers/endpoints.html
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization
