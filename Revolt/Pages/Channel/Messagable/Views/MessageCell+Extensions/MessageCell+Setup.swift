@@ -133,7 +133,7 @@ extension MessageCell {
         
         // Set content hugging and compression resistance priorities
         contentLabel.setContentHuggingPriority(.defaultLow, for: .vertical)
-        contentLabel.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
+        contentLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         
         // Configure link colors
         contentLabel.linkTextAttributes = [

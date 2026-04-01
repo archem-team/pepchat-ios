@@ -32,6 +32,8 @@ class LinkPreviewView: UIView {
     // MARK: - Properties
     private var embed: Embed = .none
     private var viewState: ViewState?
+    /// Called when an async image finishes loading, so the cell can invalidate its cached height.
+    var onImageLoaded: (() -> Void)?
     
     // MARK: - Initialization
     
@@ -318,9 +320,13 @@ class LinkPreviewView: UIView {
     
     private func configureImagePreview(_ image: JanuaryImage) -> Bool {
         guard let url = URL(string: image.url) else { return false }
-        
+
         previewImageView.isHidden = false
-        previewImageView.kf.setImage(with: url)
+        previewImageView.kf.setImage(with: url) { [weak self] result in
+            if case .success = result {
+                self?.onImageLoaded?()
+            }
+        }
         contentStackView.addArrangedSubview(previewImageView)
         
         let aspectRatio = CGFloat(image.width) / CGFloat(image.height)
@@ -342,11 +348,15 @@ class LinkPreviewView: UIView {
     
     private func configureVideoPreview(_ video: JanuaryVideo) -> Bool {
         guard let url = URL(string: video.url) else { return false }
-        
+
         previewImageView.isHidden = false
         // For video, you might want to show a thumbnail or use AVPlayerLayer
         // For now, we'll treat it like an image
-        previewImageView.kf.setImage(with: url)
+        previewImageView.kf.setImage(with: url) { [weak self] result in
+            if case .success = result {
+                self?.onImageLoaded?()
+            }
+        }
         contentStackView.addArrangedSubview(previewImageView)
         
         let aspectRatio = CGFloat(video.width) / CGFloat(video.height)

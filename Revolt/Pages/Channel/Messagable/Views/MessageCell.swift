@@ -2009,8 +2009,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 contentLabelBottomToContentViewConstraint = bottomConstraint
             }
         } else {
-            // Reactions become the bottomost element, so remove "bottom pinned" contraints
-            // from embeds/images/files that currently fight with reactions
+            // Reactions become the bottommost element, so remove "bottom pinned" constraints
+            // from embeds/images/files that currently fight with reactions.
             removeBottomConstraintsForReactions()
         }
         
