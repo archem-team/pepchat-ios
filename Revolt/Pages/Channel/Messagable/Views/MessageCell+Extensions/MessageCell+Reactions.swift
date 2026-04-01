@@ -43,18 +43,19 @@ extension MessageCell {
         
         // print("🔥 Found \(reactions.count) reactions, showing container")
         reactionsContainerView.isHidden = false
-        
-        var reactionButtons: [UIView] = []
+
+        // Build reaction buttons
+        var buttons: [UIView] = []
         for (emoji, users) in reactions {
-            let pill = createSimpleReactionButton(emoji: emoji, count: users.count, viewState: viewState)
-            reactionButtons.append(pill)
+            let reactionButton = createSimpleReactionButton(emoji: emoji, count: users.count, viewState: viewState)
+            buttons.append(reactionButton)
         }
-        
-        // Anchor reactions below embeds/files/images/text and pin it to the cell bottom
+
+        // Position reactionsContainerView with proper constraints
         setupReactionsContainerConstraints()
-        
-        //Layput buttons in rows inside reactionsContainerView
-        layoutReactionsWithFlowLayout(buttons: reactionButtons)
+
+        // Layout buttons in rows inside reactionsContainerView
+        layoutReactionsWithFlowLayout(buttons: buttons)
         
         contentView.setNeedsLayout()
         contentView.layoutIfNeeded()
@@ -161,6 +162,13 @@ extension MessageCell {
             maxHeightInRow = max(maxHeightInRow, 32)
         }
         
+        // Remove any existing height constraints to prevent accumulation on cell reuse
+        reactionsContainerView.constraints.forEach { constraint in
+            if constraint.firstAttribute == .height {
+                constraint.isActive = false
+            }
+        }
+
         // Set container height based on total rows
         let totalHeight = currentY + maxHeightInRow
         reactionsContainerView.heightAnchor.constraint(equalToConstant: totalHeight).isActive = true
