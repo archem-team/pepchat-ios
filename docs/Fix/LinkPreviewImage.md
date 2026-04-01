@@ -72,3 +72,148 @@ The same fixes are marked in the codebase with short comments that reference thi
 - **MessageableChannelViewController+TableView.swift** — comment above the `setNeedsLayout`/`layoutIfNeeded()` block in `willDisplay`
 
 See those comments for exact line references. For full context and future changes to link preview or message cell layout, refer to this document.
+
+---
+
+## Regression fix (latest)
+
+After further usage, a second issue was reproduced:
+
+- link preview image could become fully visible, but
+- the preview still overlapped nearby message content for the latest few rows.
+
+Root cause found during runtime debugging:
+
+- Embed image load completion happened after initial cell sizing, but async invalidation callback was sometimes unavailable on reused cells.
+- That meant row height cache was not always invalidated for those embed rows.
+
+### Final code changes kept
+
+#### 1) Link preview exposes async layout callback
+
+```swift
+// LinkPreviewView.swift
+internal var onAsyncLayoutAffectingContentLoaded: (() -> Void)?
+
+private func configureImagePreview(_ image: JanuaryImage) -> Bool {
+    guard let url = URL(string: image.url) else { return false }
+
+    previewImageView.isHidden = false
+    previewImageView.kf.setImage(with: url) { [weak self] result in
+        guard let self = self else { return }
+        switch result {
+        case .success:
+            self.setNeedsLayout()
+            self.layoutIfNeeded()
+            self.onAsyncLayoutAffectingContentLoaded?()
+        case .failure:
+            break
+        }
+    }
+    contentStackView.addArrangedSubview(previewImageView)
+    // ... existing aspect-ratio constraints
+    return true
+}
+```
+
+#### 2) Message cell captures callback/message-id at embed setup and falls back to VC invalidation
+
+```swift
+// MessageCell+Attachments.swift (inside loadEmbeds)
+let callbackMessageId = currentMessage?.id
+let asyncCallback = onAsyncContentLoaded
+linkPreview.onAsyncLayoutAffectingContentLoaded = { [weak self] in
+    guard let messageId = callbackMessageId else { return }
+    if let asyncCallback {
+        asyncCallback(messageId)
+    } else if let vc = self?.findParentViewController() as? MessageableChannelViewController {
+        vc.invalidateHeightForMessage(messageId)
+    }
+}
+```
+
+This removes dependence on mutable cell state at async completion time and ensures embed rows still invalidate their cached height.
+
+#### 3) Data source assigns async callback before configure
+
+```swift
+// MessageTableViewDataSource.swift (both data source paths)
+cell.onAsyncContentLoaded = { [weak viewController] messageId in
+    viewController?.invalidateHeightForMessage(messageId)
+}
+
+cell.configure(with: message,
+               author: author,
+               member: member,
+               viewState: viewModel.viewState,
+               isContinuation: isContinuation)
+```
+
+This ensures cache-hit async paths are wired before embed loading starts.
+
+---
+
+## Regression fix (prefetch inconsistency + duplicate/blank preview area)
+
+After additional real-device testing, another issue appeared even with the overlap fixes:
+
+- some link-preview rows looked duplicated or left a blank preview-sized gap,
+- scrolling up/down often made the preview appear correctly again.
+
+### Runtime evidence (critical)
+
+The root cause was confirmed from runtime logs, not code inspection alone:
+
+- `UITableView internal inconsistency: cell already prefetched for IP(...)`
+- `prefetchedCells (...) and indexPathsForPrefetchedCells (...) are out of sync`
+
+These errors happened while message rows were being remeasured/relaid out during display, which can desync UITableView’s prefetch bookkeeping and produce visual artifacts that look like duplicate preview cards or empty preview slots.
+
+### Root cause
+
+The issue was the combination of:
+
+1. **UITableView prefetching enabled** for the chat list, and
+2. **Aggressive table-wide relayout calls** (`beginUpdates()/endUpdates()`) triggered from display/async height paths.
+
+For complex auto-height rows (text wrapping + attachments + embeds + async image load), this caused unstable row lifecycle behavior in prefetch state.
+
+### Final fix kept
+
+#### 1) Disable row prefetching for this chat table
+
+In `MessageableChannelViewController+Setup.swift`:
+
+- `tableView.prefetchDataSource = nil`
+- `tableView.isPrefetchingEnabled = false`
+
+This avoids UIKit prefetch bookkeeping races for highly dynamic message rows.
+
+#### 2) Stop table-wide update bursts from `willDisplay`
+
+In `MessageableChannelViewController+TableView.swift`:
+
+- removed `beginUpdates()/endUpdates()` calls from `willDisplay`-driven height correction paths,
+- kept only targeted cache invalidation when measurement changes.
+
+#### 3) Use row-specific async height refresh
+
+In `MessageableChannelViewController.invalidateHeightForMessage(_:)`:
+
+- invalidate the message’s cached height,
+- reload only that row (without animation) when it is visible,
+- avoid global `beginUpdates()/endUpdates()` for async embed callbacks.
+
+### Why this fixes the symptom
+
+- Prevents prefetch state corruption in UITableView for dynamic embed rows.
+- Keeps height invalidation scoped to the affected message instead of re-laying out the whole table.
+- Eliminates the duplicate/blank preview effect that self-corrected only after manual scrolling/reuse.
+
+### Files updated for this regression
+
+| File | Change |
+|------|--------|
+| `Revolt/Pages/Channel/Messagable/Extensions/MessageableChannelViewController+Setup.swift` | Disabled table prefetching (`prefetchDataSource = nil`, `isPrefetchingEnabled = false`). |
+| `Revolt/Pages/Channel/Messagable/Extensions/MessageableChannelViewController+TableView.swift` | Removed table-wide update bursts from `willDisplay` height correction paths. |
+| `Revolt/Pages/Channel/Messagable/MessageableChannelViewController.swift` | Changed async embed height invalidation to row-specific visible reload. |

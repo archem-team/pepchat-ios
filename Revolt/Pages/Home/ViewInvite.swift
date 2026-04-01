@@ -19,6 +19,7 @@ struct ViewInvite: View {
     /// Holds the invite information, which could be `nil`, a valid response, or an invalid one.
     @State var info: InviteInfoResponse?? = nil
     @State var isProcessingInvite: Bool = false
+    @State private var showUnknownJoinError: Bool = false
     
     var body: some View {
         
@@ -27,8 +28,15 @@ struct ViewInvite: View {
         ){_,_ in
             
             ZStack {
-                // Switch on the invite info to show different views depending on the invite type or state.
-                switch info {
+                if showUnknownJoinError {
+                    UnknownInviteJoinErrorView {
+                        Task { @MainActor in
+                            viewState.path.removeAll()
+                        }
+                    }
+                } else {
+                    // Switch on the invite info to show different views depending on the invite type or state.
+                    switch info {
                     case .none:
                         // Show loading spinner while waiting for invite data.
                         LoadingSpinnerView(frameSize: CGSize(width: 32, height: 32), isActionComplete: .constant(false))
@@ -80,6 +88,7 @@ struct ViewInvite: View {
                             onAcceptInvite: { handleAcceptInvite(serverInfo: serverInfo) },
                             onDeclineInvite: { handleDeclineInvite() }
                         )
+                    }
                 }
             }
 
@@ -163,8 +172,7 @@ struct ViewInvite: View {
             } catch {
                 // print("❌ Critical error in accept invite: \(error)")
                 await MainActor.run {
-                    self.viewState.showAlert(message: "error accepting invite", icon: .peptideInfo)
-                    isProcessingInvite = false
+                    presentUnknownJoinError()
                 }
             }
         }
@@ -180,30 +188,48 @@ struct ViewInvite: View {
     }
     
     private func handleJoinFailure(serverInfo: ServerInfoResponse) async {
-        if case .server(let serverInfo) = self.info ?? .none {
+        if case .server(let inviteServerInfo) = self.info ?? .none {
             await MainActor.run {
-                self.viewState.selectServer(withId: serverInfo.server_id)
-                
-                // Navigate to the invite channel if available
-                if let server = viewState.servers[serverInfo.server_id],
-                   let channelId = server.channels.first {
-                    viewState.selectChannel(inServer: serverInfo.server_id, withId: channelId)
+                self.viewState.selectServer(withId: inviteServerInfo.server_id)
+
+                guard let server = viewState.servers[inviteServerInfo.server_id] else {
+                    presentUnknownJoinError()
+                    return
                 }
-                
+
+                // Prefer invite channel, fallback to first available server channel.
+                let resolvedChannelId: String? = {
+                    if server.channels.contains(inviteServerInfo.channel_id) {
+                        return inviteServerInfo.channel_id
+                    }
+                    return server.channels.first
+                }()
+
+                guard let channelId = resolvedChannelId else {
+                    presentUnknownJoinError()
+                    return
+                }
+
+                viewState.selectChannel(inServer: inviteServerInfo.server_id, withId: channelId)
                 isProcessingInvite = false
-                
+
                 // CRITICAL: Clear entire navigation path and rebuild for server context
                 viewState.path.removeAll()
-                
+
                 // Navigate to the channel with clean navigation stack
                 viewState.path.append(NavigationDestination.maybeChannelView)
             }
         } else {
             await MainActor.run {
-                self.viewState.showAlert(message: "You have already joined the channel or are restricted from joining it!", icon: .peptideInfo)
-                isProcessingInvite = false
+                presentUnknownJoinError()
             }
         }
+    }
+
+    @MainActor
+    private func presentUnknownJoinError() {
+        isProcessingInvite = false
+        showUnknownJoinError = true
     }
     
     private func updateServerAndChannels(join: JoinResponse) async {
@@ -478,6 +504,36 @@ struct ServerInviteView: View {
             }
             .padding(.padding16)
         }
+    }
+}
+
+struct UnknownInviteJoinErrorView: View {
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(spacing: .zero) {
+            Image(.peptideLinkInvalid)
+
+            PeptideText(text: "Something went wrong",
+                        font: .peptideTitle1,
+                        textColor: .textDefaultGray01)
+            .padding(top: .padding32, bottom: .padding4)
+
+            PeptideText(text: "An unknown error occurred. Please try again in some time.",
+                        font: .peptideBody3,
+                        textColor: .textGray07,
+                        alignment: .center)
+
+            PeptideButton(title: "Got it") {
+                onDismiss()
+            }
+            .padding(.top, .padding32)
+        }
+        .padding(.padding24)
+        .background {
+            RoundedRectangle(cornerRadius: .radius16).fill(Color.bgGray12)
+        }
+        .padding(.padding16)
     }
 }
 
