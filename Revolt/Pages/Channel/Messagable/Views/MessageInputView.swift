@@ -194,6 +194,7 @@ class MessageInputView: UIView {
     // Add properties for attachment preview
     private let attachmentPreviewView = AttachmentPreviewView()
     let pendingAttachmentsManager = PendingAttachmentsManager()
+    private var isSendingAttachments = false
     
     weak var delegate: MessageInputViewDelegate?
     
@@ -441,6 +442,7 @@ class MessageInputView: UIView {
         
         // Re-enable interactions
         plusButton.isEnabled = true
+        isSendingAttachments = false
         // print("🎯 Plus button re-enabled")
         
         updateSendButtonState()
@@ -873,6 +875,7 @@ class MessageInputView: UIView {
                 
                 // Disable interactions during upload
                 plusButton.isEnabled = false
+                isSendingAttachments = true
                 
                 let attachments = pendingAttachmentsManager.getAttachmentsForSending()
                 delegate?.messageInputView(self, didSendMessageWithAttachments: text, attachments: attachments)
@@ -893,6 +896,7 @@ class MessageInputView: UIView {
                 
                 // Disable interactions during upload
                 plusButton.isEnabled = false
+                isSendingAttachments = true
                 
                 let attachments = pendingAttachmentsManager.getAttachmentsForSending()
                 delegate?.messageInputView(self, didSendMessageWithAttachments: text, attachments: attachments)
@@ -933,9 +937,11 @@ class MessageInputView: UIView {
         let canSend = hasText || hasAttachments
         
         sendButton.isEnabled = canSend
-        sendButton.tintColor = canSend ? 
-            (UIColor(named: "iconDefaultPurple05") ?? .systemBlue) : 
-            (UIColor(named: "iconGray07") ?? .systemGray)
+        if isSendingAttachments && !canSend {
+            sendButton.tintColor = UIColor(named: "iconGray07") ?? .systemGray
+        } else {
+            sendButton.tintColor = UIColor(named: "iconDefaultPurple05") ?? .systemBlue
+        }
     }
     
     private func updateTextViewPosition() {

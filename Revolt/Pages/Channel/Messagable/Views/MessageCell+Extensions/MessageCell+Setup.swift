@@ -31,24 +31,40 @@ extension MessageCell {
         replyView.layer.cornerRadius = 4
         replyView.layer.masksToBounds = true
         
-        // Reply vertical line
-        replyLineView.translatesAutoresizingMaskIntoConstraints = false
-        replyLineView.backgroundColor = UIColor.systemGray.withAlphaComponent(0.7)
-        replyLineView.layer.cornerRadius = 1
-        replyView.addSubview(replyLineView)
+        // Reply indicator icon
+        replyIndicatorImageView.translatesAutoresizingMaskIntoConstraints = false
+        replyIndicatorImageView.image = UIImage(systemName: "arrow.turn.up.right")
+        replyIndicatorImageView.tintColor = .bgOrane07
+        replyIndicatorImageView.contentMode = .scaleAspectFit
+        replyView.addSubview(replyIndicatorImageView)
+
+        // Reply author mini avatar
+        replyAuthorAvatarImageView.translatesAutoresizingMaskIntoConstraints = false
+        replyAuthorAvatarImageView.clipsToBounds = true
+        replyAuthorAvatarImageView.layer.cornerRadius = 7
+        replyAuthorAvatarImageView.contentMode = .scaleAspectFill
+        replyAuthorAvatarImageView.backgroundColor = UIColor.gray.withAlphaComponent(0.25)
+        replyAuthorAvatarImageView.isHidden = true
+        replyView.addSubview(replyAuthorAvatarImageView)
         
         // Reply author label
         replyAuthorLabel.translatesAutoresizingMaskIntoConstraints = false
-        replyAuthorLabel.font = UIFont.boldSystemFont(ofSize: 12)
-        replyAuthorLabel.textColor = UIColor(named: "textGray06") ?? .systemGray
+        replyAuthorLabel.font = UIFont.boldSystemFont(ofSize: 13)
+        replyAuthorLabel.textColor = .bgOrane07
+        // Keep author compact so preview text starts right after a minimum gap.
+        replyAuthorLabel.setContentHuggingPriority(.required, for: .horizontal)
+        replyAuthorLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         replyView.addSubview(replyAuthorLabel)
         
         // Reply content label
         replyContentLabel.translatesAutoresizingMaskIntoConstraints = false
-        replyContentLabel.font = UIFont.systemFont(ofSize: 12)
-        replyContentLabel.textColor = UIColor(named: "textGray06") ?? .systemGray
+        replyContentLabel.font = UIFont.systemFont(ofSize: 13)
+        replyContentLabel.textColor = .bgOrane07
         replyContentLabel.lineBreakMode = .byTruncatingTail
         replyContentLabel.numberOfLines = 1
+        // Let preview text absorb compression/truncation first, Discord-like behavior.
+        replyContentLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        replyContentLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         replyView.addSubview(replyContentLabel)
         
         // Reply loading indicator
@@ -133,7 +149,9 @@ extension MessageCell {
         
         // Set content hugging and compression resistance priorities
         contentLabel.setContentHuggingPriority(.defaultLow, for: .vertical)
-        contentLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+        contentLabel.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
+        contentLabelMinHeightConstraint = contentLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 18)
+        contentLabelMinHeightConstraint?.isActive = true
         
         // Configure link colors
         contentLabel.linkTextAttributes = [
@@ -164,15 +182,22 @@ extension MessageCell {
 
         // Activate the rest of the constraints
         NSLayoutConstraint.activate([
-            // Reply line view
-            replyLineView.leadingAnchor.constraint(equalTo: replyView.leadingAnchor),
-            replyLineView.topAnchor.constraint(equalTo: replyView.topAnchor),
-            replyLineView.bottomAnchor.constraint(equalTo: replyView.bottomAnchor),
-            replyLineView.widthAnchor.constraint(equalToConstant: 2),
+            // Reply indicator icon
+            replyIndicatorImageView.leadingAnchor.constraint(equalTo: replyView.leadingAnchor),
+            replyIndicatorImageView.centerYAnchor.constraint(equalTo: replyView.centerYAnchor),
+            replyIndicatorImageView.widthAnchor.constraint(equalToConstant: 18),
+            replyIndicatorImageView.heightAnchor.constraint(equalToConstant: 18),
+
+            // Reply author mini avatar
+            replyAuthorAvatarImageView.leadingAnchor.constraint(equalTo: replyIndicatorImageView.trailingAnchor, constant: 4),
+            replyAuthorAvatarImageView.centerYAnchor.constraint(equalTo: replyView.centerYAnchor),
+            replyAuthorAvatarImageView.widthAnchor.constraint(equalToConstant: 14),
+            replyAuthorAvatarImageView.heightAnchor.constraint(equalToConstant: 14),
             
             // Reply author label
-            replyAuthorLabel.leadingAnchor.constraint(equalTo: replyLineView.trailingAnchor, constant: 4),
+            replyAuthorLabel.leadingAnchor.constraint(equalTo: replyAuthorAvatarImageView.trailingAnchor, constant: 4),
             replyAuthorLabel.centerYAnchor.constraint(equalTo: replyView.centerYAnchor),
+            replyAuthorLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 110),
             
             // Reply content label
             replyContentLabel.leadingAnchor.constraint(equalTo: replyAuthorLabel.trailingAnchor, constant: 4),

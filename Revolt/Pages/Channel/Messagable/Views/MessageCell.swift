@@ -17,6 +17,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         cache.countLimit = 300
         return cache
     }()
+    
 
     private let messageContentView = UIView()
     internal let avatarImageView = UIImageView()
@@ -35,7 +36,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     
     // Reply components
     internal let replyView = UIView()
-    internal let replyLineView = UIView()
+    internal let replyIndicatorImageView = UIImageView()
+    internal let replyAuthorAvatarImageView = UIImageView()
     internal let replyAuthorLabel = UILabel()
     internal let replyContentLabel = UILabel()
     internal var currentReplyId: String? // Store the ID of the message being replied to
@@ -90,6 +92,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     internal var nonContinuationNoReplyConstraints: [NSLayoutConstraint] = []
     internal var nonContinuationWithReplyConstraints: [NSLayoutConstraint] = []
     internal var contentLabelBottomToContentViewConstraint: NSLayoutConstraint?
+    internal var contentLabelMinHeightConstraint: NSLayoutConstraint?
 
     // Additional property to determine if this is a continuation message.
     // Note: updateAppearanceForContinuation() is called explicitly at the end of configure(),
@@ -106,7 +109,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     
     // Callback for message actions
     var onMessageAction: ((MessageAction, Message) -> Void)?
-    var onImageTapped: ((UIImage) -> Void)?
+    var onImageTapped: ((UIImage, URL?, String?) -> Void)?
     /// Called when async content (images, link previews) finishes loading and may have changed cell height.
     var onAsyncContentLoaded: ((String) -> Void)?
     var onAvatarTap: (() -> Void)?
@@ -159,6 +162,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         bridgeBadgeLabel.isHidden = true
         
         // Reset reply view
+        replyAuthorAvatarImageView.kf.cancelDownloadTask()
+        replyAuthorAvatarImageView.image = nil
+        replyAuthorAvatarImageView.isHidden = true
+        replyAuthorAvatarImageView.backgroundColor = .clear
         replyAuthorLabel.text = nil
         replyContentLabel.text = nil
         replyView.isHidden = true
@@ -282,6 +289,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         if let debugSpacer = contentView.viewWithTag(9999) {
             debugSpacer.removeFromSuperview()
         }
+        
+        // Reset text sizing state that can leak from previous long messages.
+        contentLabelMinHeightConstraint?.constant = 18
+        contentLabel.textContainer.size = .zero
+        
     }
     
     // MARK: - Cleanup Helper
@@ -433,6 +445,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         bridgeBadgeLabel.isHidden = message.masquerade == nil
         
         // Configure content with improved performance
+        // Ensure each message starts from baseline text height; willDisplay can expand if needed.
+        contentLabelMinHeightConstraint?.constant = 18
+        contentLabel.textContainer.size = .zero
         configureMessageContent(message: message, viewState: viewState)
         
         // Configure time - for pending messages, try to get queued timestamp, otherwise use createdAt
@@ -1126,14 +1141,42 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     // Set the author name (prioritize masquerade name, then nickname, then display name)
                     let replyAuthorName = replyMessage.masquerade?.name ?? replyMember?.nickname ?? replyAuthor.display_name ?? replyAuthor.username
                     replyAuthorLabel.text = replyAuthorName
+
+                    // Configure mini avatar for reply author (supports masquerade/server avatars)
+                    let replyAvatarInfo = viewState.resolveAvatarUrl(
+                        user: replyAuthor,
+                        member: replyMember,
+                        masquerade: replyMessage.masquerade
+                    )
+                    replyAuthorAvatarImageView.isHidden = false
+                    replyAuthorAvatarImageView.kf.setImage(
+                        with: replyAvatarInfo.url,
+                        placeholder: UIImage(systemName: "person.circle.fill"),
+                        options: [
+                            .processor(DownsamplingImageProcessor(size: CGSize(width: 28, height: 28))),
+                            .scaleFactor(UIScreen.main.scale),
+                            .transition(.fade(0.15)),
+                            .cacheOriginalImage
+                        ]
+                    )
+                    if !replyAvatarInfo.isAvatarSet {
+                        replyAuthorAvatarImageView.backgroundColor = UIColor(
+                            hue: CGFloat(replyAuthorName.hashValue % 100) / 100.0,
+                            saturation: 0.8,
+                            brightness: 0.8,
+                            alpha: 1.0
+                        )
+                    } else {
+                        replyAuthorAvatarImageView.backgroundColor = .clear
+                    }
                     
                     // Set the message content (truncated if needed)
                     if let content = replyMessage.content, !content.isEmpty {
                         // Process both channel and user mentions in reply content
                         var processedContent = processChannelMentionsSimple(in: content, viewState: viewState)
                         processedContent = replaceMentionsWithUsernames(in: processedContent, viewState: viewState)
-                        let truncatedContent = processedContent.count > 30 ? String(processedContent.prefix(30)) + "..." : processedContent
-                        replyContentLabel.text = truncatedContent
+                        // Let UILabel truncate based on available width instead of fixed character count.
+                        replyContentLabel.text = processedContent
                         replyContentLabel.font = UIFont.systemFont(ofSize: 12) // Reset to normal font
                     } else if !(replyMessage.attachments?.isEmpty ?? true) {
                         let attachmentCount = replyMessage.attachments?.count ?? 0
@@ -1149,6 +1192,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     replyContentLabel.textColor = UIColor(named: "textGray06") ?? .systemGray // Reset color
                 } else {
                     // Fallback if author not found
+                    replyAuthorAvatarImageView.kf.cancelDownloadTask()
+                    replyAuthorAvatarImageView.image = nil
+                    replyAuthorAvatarImageView.isHidden = true
+                    replyAuthorAvatarImageView.backgroundColor = .clear
                     replyAuthorLabel.text = ""
                     replyContentLabel.text = ""
                     replyContentLabel.textColor = UIColor(named: "textGray06") ?? .systemGray // Reset color
@@ -1158,6 +1205,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 // CRITICAL: Only show loading indicator if we expect the message to be loadable
                 // For deleted messages, we should show an error state instead of infinite loading
                 replyLoadingIndicator.startAnimating() // Show loading indicator
+                replyAuthorAvatarImageView.kf.cancelDownloadTask()
+                replyAuthorAvatarImageView.image = nil
+                replyAuthorAvatarImageView.isHidden = true
+                replyAuthorAvatarImageView.backgroundColor = .clear
                 replyAuthorLabel.isHidden = true
                 replyContentLabel.isHidden = true
                 replyAuthorLabel.text = ""
@@ -1188,6 +1239,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                                 // Show "message deleted" placeholder
                                 self.replyAuthorLabel.isHidden = false
                                 self.replyContentLabel.isHidden = false
+                                self.replyAuthorAvatarImageView.kf.cancelDownloadTask()
+                                self.replyAuthorAvatarImageView.image = nil
+                                self.replyAuthorAvatarImageView.isHidden = true
+                                self.replyAuthorAvatarImageView.backgroundColor = .clear
                                 self.replyAuthorLabel.text = "Deleted Message"
                                 self.replyContentLabel.text = "This message was deleted"
                                 self.replyContentLabel.textColor = UIColor(named: "textGray08") ?? .systemGray2
@@ -1399,7 +1454,19 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         guard let imageView = gesture.view as? UIImageView,
               let image = imageView.image else { return }
         
-        onImageTapped?(image)
+        // Default fallback: still open preview if URL resolution fails
+        var originalURL: URL? = nil
+        var sessionToken: String? = nil
+        
+        
+        if let viewState = viewState,
+           let attachmentId = imageView.accessibilityIdentifier {
+            let urlString = viewState.formatUrl(fromId: attachmentId, withTag: "attachments")
+            originalURL = URL(string: urlString)
+            sessionToken = viewState.sessionToken
+        }
+        
+        onImageTapped?(image, originalURL, sessionToken)
     }
     
 
@@ -1887,7 +1954,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             contentLabel.isSelectable = false
             return
         }
-
         let cacheKey = message.id as NSString
         let hasMentions = content.contains("<@") || content.contains("<#")
 
@@ -1896,7 +1962,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             let mutableCopy = NSMutableAttributedString(attributedString: cached)
             processCustomEmojis(in: mutableCopy, textView: contentLabel)
             contentLabel.attributedText = mutableCopy
-            contentLabel.isSelectable = hasMentions
+            contentLabel.isSelectable = false
+            refreshContentTextViewLayout()
             return
         }
 
@@ -1917,7 +1984,40 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         let mutableAttributedText = NSMutableAttributedString(attributedString: baseAttributedString)
         processCustomEmojis(in: mutableAttributedText, textView: contentLabel)
         contentLabel.attributedText = mutableAttributedText
-        contentLabel.isSelectable = hasMentions
+        contentLabel.isSelectable = false
+        refreshContentTextViewLayout()
+    }
+    
+    private func refreshContentTextViewLayout() {
+        // UITextView can keep a stale one-line frame/contentSize in reused cells
+        // when isScrollEnabled is false. Toggle to force layout manager refresh.
+        contentLabel.isScrollEnabled = true
+        contentLabel.isScrollEnabled = false
+        contentLabel.layoutIfNeeded()
+        contentLabel.invalidateIntrinsicContentSize()
+    }
+    
+    internal func enforceVisibleTextHeightIfNeeded() -> (old: CGFloat, fitted: CGFloat, after: CGFloat, updated: Bool) {
+        let width = max(1, contentLabel.bounds.width)
+        let fitted = contentLabel.sizeThatFits(
+            CGSize(width: width, height: .greatestFiniteMagnitude)
+        ).height
+        let old = contentLabel.bounds.height
+        
+        // Only enforce when we are clearly showing fewer lines than needed.
+        if fitted - old > 6 {
+            contentLabelMinHeightConstraint?.constant = ceil(fitted)
+            contentLabel.textContainer.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+            contentLabel.isScrollEnabled = true
+            contentLabel.isScrollEnabled = false
+            contentLabel.setNeedsLayout()
+            contentView.setNeedsLayout()
+            contentView.layoutIfNeeded()
+            let after = contentLabel.bounds.height
+            return (old, fitted, after, true)
+        }
+        
+        return (old, fitted, old, false)
     }
     
     private func configureAvatar(author: User, member: Member?, message: Message, viewState: ViewState) {
@@ -2009,8 +2109,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 contentLabelBottomToContentViewConstraint = bottomConstraint
             }
         } else {
-            // Reactions become the bottommost element, so remove "bottom pinned" constraints
-            // from embeds/images/files that currently fight with reactions.
+            // Reactions become the bottomost element, so remove "bottom pinned" contraints
+            // from embeds/images/files that currently fight with reactions
             removeBottomConstraintsForReactions()
         }
         

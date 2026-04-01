@@ -265,7 +265,7 @@ extension MessageableChannelViewController {
         // Set up the table view
         tableView.delegate = self
         tableView.dataSource = dataSource
-        tableView.prefetchDataSource = self
+        tableView.prefetchDataSource = nil
         tableView.register(MessageCell.self, forCellReuseIdentifier: "MessageCell")
         tableView.register(SystemMessageCell.self, forCellReuseIdentifier: "SystemMessageCell")
         tableView.separatorStyle = .none
@@ -276,7 +276,7 @@ extension MessageableChannelViewController {
         tableView.rowHeight = UITableView.automaticDimension
 
         // PERFORMANCE: Enable cell prefetching and optimize scrolling
-        tableView.isPrefetchingEnabled = true
+        tableView.isPrefetchingEnabled = false
         tableView.dragInteractionEnabled = false  // Disable drag to improve performance
 
         // PERFORMANCE: Optimize table view for better scrolling
