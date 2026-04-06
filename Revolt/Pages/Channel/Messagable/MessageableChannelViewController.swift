@@ -343,6 +343,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             name: NSNotification.Name("MessageDeletedLocally"),
             object: nil
         )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppBecameActiveForRealtimeSync),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWebSocketReconnectedForRealtimeSync),
+            name: NSNotification.Name("WebSocketReconnected"),
+            object: nil
+        )
     }
 
     @objc private func handleMessageDeletedLocally(_ notification: Notification) {
@@ -353,6 +367,28 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         cellHeightCache.invalidateAll()
         continuationCache.removeAll()
         refreshMessagesAfterLocalDelete()
+    }
+
+    @objc private func handleWebSocketReconnectedForRealtimeSync() {
+        // Allow websocket auth/ready processing to settle before catch-up.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.handleAppBecameActiveForRealtimeSync()
+        }
+    }
+
+    @objc private func handleAppBecameActiveForRealtimeSync() {
+        guard UIApplication.shared.applicationState == .active else { return }
+        guard !isViewDisappearing else { return }
+        guard messageLoadingState != .loading, !isLoadingMore else { return }
+
+        // Catch up any missed foreground-gap messages using existing "after" pagination path.
+        if let lastMessageId = localMessages.last ?? viewModel.messages.last {
+            throttledAPICall(for: lastMessageId)
+        } else {
+            Task { [weak self] in
+                await self?.loadInitialMessages()
+            }
+        }
     }
 
     @objc internal func newMessageButtonTapped() {

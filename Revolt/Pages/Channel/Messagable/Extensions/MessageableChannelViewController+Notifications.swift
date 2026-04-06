@@ -17,15 +17,6 @@ extension MessageableChannelViewController {
     // Update handleNewMessages to only scroll if user is near bottom
     @objc internal func handleNewMessages(_ notification: Notification) {
         let notifChannel = notification.userInfo?["channelId"] as? String
-        // CRITICAL FIX: Don't handle new messages during nearby loading
-        if messageLoadingState == .loading {
-            return
-        }
-
-        // CRITICAL FIX: Don't handle if target message protection is active
-        if targetMessageProtectionActive {
-            return
-        }
 
         // If notification includes channelId, only refresh when the new message is for this channel (e.g. message from another device).
         if let notifChannel = notifChannel, notifChannel != viewModel.channel.id {
@@ -44,7 +35,6 @@ extension MessageableChannelViewController {
         }
 
         if targetMessageProtectionActive {
-            print("📬 BLOCKED: handleNewMessages blocked - target message protection active")
             return
         }
 
@@ -52,38 +42,27 @@ extension MessageableChannelViewController {
         let storedMessageCount = UserDefaults.standard.integer(
             forKey: "LastMessageCount_\(viewModel.channel.id)")
 
-        // Only scroll if there are actual new messages
-        if currentMessageCount > storedMessageCount {
-            // print("📬 Direct notification of new messages - found \(currentMessageCount - storedMessageCount) new messages")
-            // Update stored count
-            UserDefaults.standard.set(
-                currentMessageCount, forKey: "LastMessageCount_\(viewModel.channel.id)")
+        guard currentMessageCount > storedMessageCount else {
+            return
+        }
 
-            // Check if user has manually scrolled up recently
-            let hasManuallyScrolledUp =
-                lastManualScrollUpTime != nil
-                && Date().timeIntervalSince(lastManualScrollUpTime!) < 10.0
+        UserDefaults.standard.set(
+            currentMessageCount, forKey: "LastMessageCount_\(viewModel.channel.id)")
 
-            // COMPREHENSIVE TARGET MESSAGE PROTECTION
-            // Only scroll if user is near bottom AND hasn't manually scrolled up recently AND no target message protection
-            if isUserNearBottom() && !hasManuallyScrolledUp && !targetMessageProtectionActive {
-                // First scroll immediately
-                scrollToBottom(animated: true)
-                // Then schedule multiple scrolls with delays to ensure we catch the UI update
+        // Check if user has manually scrolled up recently
+        let hasManuallyScrolledUp =
+            lastManualScrollUpTime != nil
+            && Date().timeIntervalSince(lastManualScrollUpTime!) < 10.0
+
+        // Only auto-scroll if user is already near bottom and not actively reading older messages.
+        if isUserNearBottom() && !hasManuallyScrolledUp {
+            scrollToBottom(animated: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.scrollToBottom(animated: true)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    self.scrollToBottom(animated: true)
-                    // One more scroll after a bit longer delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        self.scrollToBottom(animated: false)
-                    }
+                    self.scrollToBottom(animated: false)
                 }
-            } else {
-                // print("👆 User is not near bottom or has manually scrolled up, not auto-scrolling")
-                // Do NOT show new message button here anymore
-                // showNewMessageButton() // <-- REMOVE THIS LINE
             }
-        } else {
-            // print("📬 Message notification received but no new messages found. Ignoring scroll request.")
         }
     }
     

@@ -6,10 +6,9 @@
 import UIKit
 import Types
 import Kingfisher
-import AVKit
 
 // MARK: - MessageCell
-class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDelegate {
+class MessageCell: UITableViewCell, UITextViewDelegate {
     // PERFORMANCE: Cache pre-emoji NSAttributedString by message ID.
     // NSCache auto-evicts under memory pressure. Invalidated on message edit.
     static let attributedStringCache: NSCache<NSString, NSAttributedString> = {
@@ -298,20 +297,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     
     // MARK: - Cleanup Helper
     internal func cleanupTempVideos() {
-        if !tempVideoURLs.isEmpty {
-            // print("🧹 Cleaning up \(tempVideoURLs.count) temp video files...")
-        }
-        for url in tempVideoURLs {
-            do {
-                if FileManager.default.fileExists(atPath: url.path) {
-                    try FileManager.default.removeItem(at: url)
-                    // print("✅ Deleted temp video: \(url.lastPathComponent)")
-                }
-            } catch {
-                // print("❌ Failed to delete temp video: \(error)")
-            }
-        }
-        tempVideoURLs.removeAll()
+        AttachmentVideoPlayback.cleanupTempVideos()
     }
     
     internal func isCurrentUserAuthor() -> Bool {
@@ -1671,281 +1657,15 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     
     // MARK: - Markdown Processing Helpers
     
-    // Store temp video URLs for cleanup
-    private var tempVideoURLs: Set<URL> = []
-    
-    private func createLoadingView() -> UIView {
-        let loadingView = UIView()
-        loadingView.translatesAutoresizingMaskIntoConstraints = false
-        loadingView.backgroundColor = UIColor.black.withAlphaComponent(0.7)
-        loadingView.layer.cornerRadius = 10
-        
-        let activityIndicator = UIActivityIndicatorView(style: .large)
-        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
-        activityIndicator.color = .white
-        activityIndicator.startAnimating()
-        
-        let label = UILabel()
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "Loading video..."
-        label.textColor = .white
-        label.font = UIFont.systemFont(ofSize: 14)
-        
-        loadingView.addSubview(activityIndicator)
-        loadingView.addSubview(label)
-        
-        NSLayoutConstraint.activate([
-            activityIndicator.centerXAnchor.constraint(equalTo: loadingView.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: loadingView.centerYAnchor, constant: -15),
-            
-            label.centerXAnchor.constraint(equalTo: loadingView.centerXAnchor),
-            label.topAnchor.constraint(equalTo: activityIndicator.bottomAnchor, constant: 10)
-        ])
-        
-        return loadingView
-    }
-    
-    private func removeLoadingView(from viewController: UIViewController) {
-        // Remove loading view by tag
-        if let loadingView = viewController.view.viewWithTag(99999) {
-            loadingView.removeFromSuperview()
-        }
-        
-        // Also check in all windows
-        if #available(iOS 13.0, *) {
-            // iOS 13+ - use scenes
-            for scene in UIApplication.shared.connectedScenes {
-                if let windowScene = scene as? UIWindowScene {
-                    for window in windowScene.windows {
-                        if let loadingView = window.viewWithTag(99999) {
-                            loadingView.removeFromSuperview()
-                        }
-                    }
-                }
-            }
-        } else {
-            // iOS 12 and below
-            for window in UIApplication.shared.windows {
-                if let loadingView = window.viewWithTag(99999) {
-                    loadingView.removeFromSuperview()
-                }
-            }
-        }
-    }
+    internal static var videoWindow: UIWindow?
 
     internal func playVideo(at urlString: String) {
-        // print("🎬 playVideo called with URL: \(urlString)")
-        
-        guard let url = URL(string: urlString) else {
-            // print("❌ Failed to create URL from: \(urlString)")
-            return
-        }
-        
-        guard let viewController = findParentViewController() else {
-            // print("❌ Failed to find parent view controller")
-            return
-        }
-        
-        // Show loading indicator
-        let loadingView = createLoadingView()
-        loadingView.tag = 99999 // Tag for identification
-        
-        // Make sure we're adding to the right view
-        let targetView = viewController.view ?? UIApplication.shared.windows.first?.rootViewController?.view
-        targetView?.addSubview(loadingView)
-        
-        NSLayoutConstraint.activate([
-            loadingView.centerXAnchor.constraint(equalTo: targetView?.centerXAnchor ?? loadingView.centerXAnchor),
-            loadingView.centerYAnchor.constraint(equalTo: targetView?.centerYAnchor ?? loadingView.centerYAnchor),
-            loadingView.widthAnchor.constraint(equalToConstant: 120),
-            loadingView.heightAnchor.constraint(equalToConstant: 120)
-        ])
-        
-        // Download video to temp file first
-        Task {
-            do {
-                // print("📥 Starting video download task...")
-                let videoData = try await downloadVideo(from: urlString)
-                // print("📥 Video data received: \(videoData.count) bytes")
-                
-                // Save to temp file
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_video_\(UUID().uuidString).mp4")
-                // print("📥 Saving to temp file: \(tempURL.path)")
-                try videoData.write(to: tempURL)
-                // print("✅ Video saved successfully")
-                
-                await MainActor.run {
-                    // Store URL for cleanup
-                    self.tempVideoURLs.insert(tempURL)
-                    
-                    // Remove loading view safely
-                    self.removeLoadingView(from: viewController)
-                    
-                    // Play from local file
-                    self.playLocalVideo(at: tempURL, from: viewController)
-                }
-            } catch {
-                // print("❌ Failed to download video: \(error)")
-                await MainActor.run {
-                    // Remove loading view safely
-                    self.removeLoadingView(from: viewController)
-                    
-                    // Show error
-                    let errorMessage = error.localizedDescription
-                    let errorAlert = UIAlertController(
-                        title: "Error",
-                        message: "Failed to load video: \(errorMessage)",
-                        preferredStyle: .alert
-                    )
-                    errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
-                    viewController.present(errorAlert, animated: true)
-                }
-            }
-        }
+        AttachmentVideoPlayback.play(
+            from: self,
+            urlString: urlString,
+            sessionToken: viewState?.sessionToken
+        )
     }
-    
-    private func downloadVideo(from urlString: String) async throws -> Data {
-        // print("📥 Starting video download from: \(urlString)")
-        
-        guard let url = URL(string: urlString) else {
-            throw URLError(.badURL)
-        }
-        
-        var request = URLRequest(url: url)
-        
-        // Add auth header
-        if let viewState = self.viewState, let token = viewState.sessionToken {
-            request.setValue(token, forHTTPHeaderField: "x-session-token")
-            // print("📥 Added auth token to request")
-        } else {
-            // print("⚠️ No auth token available")
-        }
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            // print("❌ Invalid response type")
-            throw URLError(.badServerResponse)
-        }
-        
-        // print("📥 Response status code: \(httpResponse.statusCode)")
-        // print("📥 Response headers: \(httpResponse.allHeaderFields)")
-        
-        // Check content type
-        if let contentType = httpResponse.allHeaderFields["Content-Type"] as? String {
-            // print("📥 Content-Type: \(contentType)")
-        }
-        
-        guard httpResponse.statusCode == 200 else {
-            // print("❌ Bad status code: \(httpResponse.statusCode)")
-            
-            // If we get a 401, it's likely an auth issue
-            if httpResponse.statusCode == 401 {
-                // print("❌ Authentication failed - token might be invalid")
-            }
-            
-            // Try to read error body
-            if let errorString = String(data: data, encoding: .utf8) {
-                // print("❌ Error response: \(errorString)")
-            }
-            
-            throw URLError(.badServerResponse)
-        }
-        
-        // print("✅ Downloaded \(data.count) bytes")
-        return data
-    }
-    
-    // Store reference to video window
-    internal static var videoWindow: UIWindow?
-    
-    private func playLocalVideo(at url: URL, from viewController: UIViewController) {
-        // print("🎬 Playing local video from: \(url)")
-        
-        // Verify file exists
-        if FileManager.default.fileExists(atPath: url.path) {
-            // print("✅ Video file exists at path")
-            
-            // Check file size
-            if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-               let fileSize = attributes[.size] as? NSNumber {
-                // print("📊 Video file size: \(fileSize.intValue) bytes")
-            }
-        } else {
-            // print("❌ Video file does NOT exist at path!")
-            return
-        }
-        
-        // Create AVPlayer with local file
-        let player = AVPlayer(url: url)
-        
-        // Create AVPlayerViewController
-        let playerViewController = AVPlayerViewController()
-        playerViewController.player = player
-        
-        // Clean up temp file when done
-        playerViewController.delegate = self
-        
-        // Set modal presentation style to full screen
-        playerViewController.modalPresentationStyle = .fullScreen
-        
-        // Enable standard video player features
-        playerViewController.showsPlaybackControls = true
-        playerViewController.allowsPictureInPicturePlayback = false // Disable PiP to avoid issues
-        playerViewController.entersFullScreenWhenPlaybackBegins = true
-        playerViewController.exitsFullScreenWhenPlaybackEnds = true
-        
-        // print("🎬 Creating separate window for video player...")
-        
-        // Create a new window for the video player
-        let window: UIWindow
-        
-        if #available(iOS 13.0, *) {
-            // For iOS 13+, get the proper window scene
-            if let windowScene = UIApplication.shared.connectedScenes
-                .filter({ $0.activationState == .foregroundActive })
-                .first as? UIWindowScene {
-                window = UIWindow(windowScene: windowScene)
-            } else {
-                window = UIWindow(frame: UIScreen.main.bounds)
-            }
-        } else {
-            window = UIWindow(frame: UIScreen.main.bounds)
-        }
-        
-        // Set window level to be above normal windows
-        window.windowLevel = .statusBar + 1
-        
-        // Create a simple root view controller to present from
-        let rootVC = UIViewController()
-        rootVC.view.backgroundColor = .black
-        window.rootViewController = rootVC
-        
-        // Store window reference
-        MessageCell.videoWindow = window
-        
-        // Make window visible
-        window.makeKeyAndVisible()
-        
-        // Present player from the window's root view controller
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            rootVC.present(playerViewController, animated: true) {
-                // print("✅ Video player presented in separate window, starting playback...")
-                // Start playback
-                player.play()
-                
-                // Check player status after a delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    if let error = player.currentItem?.error {
-                        // print("❌ Player error: \(error)")
-                    } else {
-                        // print("✅ Player seems to be working")
-                    }
-                }
-            }
-        }
-    }
-    
 
     
     private func configureMessageContent(message: Message, viewState: ViewState) {
