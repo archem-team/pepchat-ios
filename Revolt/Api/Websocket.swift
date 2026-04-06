@@ -563,10 +563,11 @@ class WebSocketStream: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            // print("🔌 App entering foreground - checking WebSocket connection")
-            if self?.currentState == .disconnected {
-                self?.forceConnect()
-            }
+            guard let self = self else { return }
+
+            // Starscream in this project does not expose `isConnected`.
+            // Use a deterministic resume strategy: always reconnect to avoid stale socket state.
+            self.forceConnect()
         }
         
         // Observer for app entering background

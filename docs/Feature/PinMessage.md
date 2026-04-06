@@ -293,6 +293,7 @@ Result:
 |----------|------------------|
 | `Revolt/Pages/Channel/Messagable/ChannelInfo/ChannelInfo.swift` | Channel information sheet; navigation entry for pinned messages (via header pin icon + navigation path) |
 | `Revolt/Pages/Channel/Messagable/ChannelInfo/PinnedMessagesView.swift` | Pinned messages list powered by `fetchPinnedMessages` and `MessageView` |
+| `Revolt/Components/MessageRenderer/MessageAttachment.swift` | SwiftUI attachments; **`ChannelVideoAttachmentPlayerView`** + **`AttachmentVideoPlayback`** (same file, §9.1) for pinned list / zoom and shared chat playback |
 
 ---
 
@@ -398,3 +399,63 @@ Covered in **§4.5**, but in short:
   - Set `viewState.messages[message.id]?.pinned = false`.
   - Optionally show a softer message (“Message is not pinned”) or no alert.
   - Avoid scaring the user with “Failed to unpin” when the message is already in the desired state.
+
+---
+
+## 9. Fixes
+
+Post–initial implementation fixes that are not covered in §8 as historical bug log entries.
+
+### 9.1 SwiftUI attachment video (pinned list and other `MessageView` surfaces)
+
+**Symptom**
+
+- In **Pinned Messages** (and anywhere SwiftUI `MessageAttachment` renders a video), the inline SwiftUI `VideoPlayer` showed a black tile with a **slashed play** icon (load failure), and did not match chat UX (thumbnail, download, duration, etc.).
+
+**Root causes**
+
+1. SwiftUI `AVPlayer(url:)` did not send **`x-session-token`** for Autumn attachment URLs, so inline playback failed.
+2. Even with auth, product expectation is to reuse the **same UIKit `VideoPlayerView`** as the main chat, not a different SwiftUI player.
+
+**Fix (code)**
+
+1. **`ChannelVideoAttachmentPlayerView`** (`MessageAttachment.swift`) – `UIViewRepresentable` around **`VideoPlayerView`** (same class as `MessageCell+Attachments.swift`). It calls `configure(with:filename:fileSize:headers:)` with `x-session-token` when present. A small **`Coordinator`** avoids re-running `configure` on every SwiftUI `body` pass (prevents thumbnail flicker / redundant range downloads). Height **200** matches the chat row (`videoPlayerHeight` in `MessageCell+Attachments.swift`).
+2. **`AttachmentVideoPlayback`** (bottom of `MessageAttachment.swift`, same module as `ChannelVideoAttachmentPlayerView`) – shared helper used by both **`MessageCell.playVideo`** and the representable’s `onPlayTapped`: loading overlay, **`URLSession`** download with `x-session-token`, temp file, **`AVPlayerViewController`** in the extra window. **`Session`** implements **`AVPlayerViewControllerDelegate`** for cleanup, **`MessageCell.videoWindow`**, and **`MessageableChannelViewController`** nav-bar workaround (formerly **`MessageCell+AVPlayer.swift`**).
+3. **`MessageCell`** – `playVideo(at:)` now delegates to **`AttachmentVideoPlayback.play(from:urlString:sessionToken:)`**; duplicate download/present code removed; **`AVPlayerViewControllerDelegate`** conformance removed from the cell.
+
+**`ChannelVideoAttachmentPlayerView` (essential parts)**
+
+```swift
+struct ChannelVideoAttachmentPlayerView: UIViewRepresentable {
+    var videoURL: String
+    var filename: String
+    var fileSize: Int64
+    var sessionToken: String?
+
+    func makeUIView(context: Context) -> VideoPlayerView { ... }
+    func updateUIView(_ uiView: VideoPlayerView, context: Context) { ... }
+    // Coordinator skips configure when URL / filename / size / token unchanged
+}
+```
+
+**`MessageAttachment` video branch (inline + `ZoomableMessageAttachment`)**
+
+```swift
+let videoURL = viewState.formatUrl(fromId: attachment.id, withTag: "attachments")
+ChannelVideoAttachmentPlayerView(
+    videoURL: videoURL,
+    filename: attachment.filename,
+    fileSize: attachment.size,
+    sessionToken: viewState.sessionToken
+)
+.id(attachment.id)
+.frame(height: 200)
+```
+
+**Reference**
+
+| Location | Role |
+|----------|------|
+| `Revolt/Components/MessageRenderer/MessageAttachment.swift` | `ChannelVideoAttachmentPlayerView`, `AttachmentVideoPlayback`, video branches in `MessageAttachment` / `ZoomableMessageAttachment` |
+| `Revolt/Pages/Channel/Messagable/Views/MessageCell.swift` | `playVideo` → `AttachmentVideoPlayback` |
+| `Revolt/Pages/Channel/Messagable/Views/MessageCell+Extensions/MessageCell+Attachments.swift` | Chat `VideoPlayerView` setup (reference parity) |
