@@ -111,6 +111,9 @@ extension MessageCell {
     }
     
     internal func clearReactionsContainerConstraints() {
+        reactionsBottomToContentViewConstraint?.isActive = false
+        reactionsBottomToContentViewConstraint = nil
+
         // Clear all constraints related to reactions container
         var constraintsToRemove: [NSLayoutConstraint] = []
         
@@ -120,29 +123,10 @@ extension MessageCell {
             }
         }
         
-        // CRITICAL FIX: Only remove BOTTOM constraints from attachment containers
-        // Keep all other constraints intact to maintain proper sizing and positioning
-        for constraint in contentView.constraints {
-            if let imageContainer = imageAttachmentsContainer,
-               (constraint.firstItem === imageContainer && constraint.firstAttribute == .bottom) ||
-               (constraint.secondItem === imageContainer && constraint.secondAttribute == .bottom) {
-                // Only remove bottom constraints that connect to contentView
-                if (constraint.secondItem === contentView || constraint.firstItem === contentView) {
-                    constraintsToRemove.append(constraint)
-                }
-            }
-        }
-        
-        // Also remove bottom constraints from file attachment containers
-        for constraint in contentView.constraints {
-            if let fileContainer = fileAttachmentsContainer,
-               (constraint.firstItem === fileContainer && constraint.firstAttribute == .bottom) ||
-               (constraint.secondItem === fileContainer && constraint.secondAttribute == .bottom) {
-                if (constraint.secondItem === contentView || constraint.firstItem === contentView) {
-                    constraintsToRemove.append(constraint)
-                }
-            }
-        }
+        // Do not strip image/file bottom → contentView here. updateReactions runs for every cell,
+        // including messages without reactions; removing those bottoms breaks self-sizing for
+        // attachment-only rows. When reactions exist, removeBottomConstraintsForReactions()
+        // clears conflicting attachment/embed bottoms after reaction constraints are set.
         
         // Remove constraints safely
         constraintsToRemove.forEach { $0.isActive = false }

@@ -280,6 +280,18 @@ struct ApplicationSwitcher: View {
             viewState.setBaseUrlToHttp()
             await viewState.backgroundWsTask()
         }
+        .onChange(of: viewState.sessionToken) { _, newToken in
+            guard newToken != nil, viewState.state != .signedOut else { return }
+            if viewState.ws == nil || viewState.wsCurrentState == .disconnected {
+                Task { await viewState.backgroundWsTask() }
+            }
+        }
+        .onChange(of: viewState.state) { _, newState in
+            guard newState == .connecting, viewState.sessionToken != nil else { return }
+            if viewState.ws == nil || viewState.wsCurrentState == .disconnected {
+                Task { await viewState.backgroundWsTask() }
+            }
+        }
     }
 }
 

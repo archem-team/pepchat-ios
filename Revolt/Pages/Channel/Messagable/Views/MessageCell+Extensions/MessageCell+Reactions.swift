@@ -30,6 +30,10 @@ extension MessageCell {
         if let existingSpacerView = contentView.viewWithTag(9999) {
             existingSpacerView.removeFromSuperview()
         }
+
+        // Always clear reaction constraints first. This is required when a cached cell
+        // with reactions is reconciled to a live state without reactions.
+        clearReactionsContainerConstraints()
         
         // Check if latest message has reactions
         guard let reactions = latestMessage.reactions, !reactions.isEmpty else {
@@ -37,9 +41,6 @@ extension MessageCell {
             reactionsContainerView.isHidden = true
             return
         }
-        
-        // Reset contraints so we don't accumulate layout contraints across updates
-        clearReactionsContainerConstraints()
         
         // print("🔥 Found \(reactions.count) reactions, showing container")
         reactionsContainerView.isHidden = false
@@ -56,9 +57,10 @@ extension MessageCell {
 
         // Layout buttons in rows inside reactionsContainerView
         layoutReactionsWithFlowLayout(buttons: buttons)
-        
+
+        // Avoid synchronous layoutIfNeeded() here: on busy channels it forces full cell layout
+        // on the main thread and compounds cost while a sheet is animating (watchdog / SIGKILL risk).
         contentView.setNeedsLayout()
-        contentView.layoutIfNeeded()
         
 //        // Position spacer below images/content
 //        let spacerView = UIView()
@@ -124,7 +126,9 @@ extension MessageCell {
         
         guard !buttons.isEmpty else { return }
         
-        let containerWidth: CGFloat = UIScreen.main.bounds.width - 32 - 50 // Account for margins and avatar
+        let measuredWidth = reactionsContainerView.bounds.width
+        let fallbackWidth = contentView.bounds.width - 32 - 50 // Account for margins and avatar
+        let containerWidth: CGFloat = max(120, measuredWidth > 0 ? measuredWidth : fallbackWidth)
         let spacing: CGFloat = 8
         let lineSpacing: CGFloat = 8
         
@@ -207,7 +211,8 @@ extension MessageCell {
         
         // Set bottom constraint to contentView to properly define cell height
         let bottomConstraint = reactionsContainerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16)
-        bottomConstraint.priority = .defaultHigh // High but not required to avoid conflicts
+        bottomConstraint.priority = .required
+        reactionsBottomToContentViewConstraint = bottomConstraint
         
         NSLayoutConstraint.activate([
             topConstraint,
@@ -221,10 +226,8 @@ extension MessageCell {
         reactionsContainerView.setContentHuggingPriority(.required, for: .vertical)
         reactionsContainerView.setContentCompressionResistancePriority(.required, for: .vertical)
         
-        // CRITICAL FIX: Force layout update after constraint changes to prevent image jumping
         DispatchQueue.main.async { [weak self] in
             self?.contentView.setNeedsLayout()
-            self?.contentView.layoutIfNeeded()
         }
     }
     

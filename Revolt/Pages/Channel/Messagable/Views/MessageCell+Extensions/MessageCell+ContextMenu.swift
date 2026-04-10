@@ -63,6 +63,10 @@ extension MessageCell {
                    sheet.prefersGrabberVisible = true
                    sheet.detents = [UISheetPresentationController.Detent.medium()]
                    sheet.preferredCornerRadius = 16
+                   if #available(iOS 16.0, *) {
+                       // Lets sheet detent gestures win over inner scroll expansion (reduces nested-scroll fights).
+                       sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+                   }
                }
            }
            

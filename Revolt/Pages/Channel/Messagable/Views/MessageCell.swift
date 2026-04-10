@@ -91,6 +91,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
     internal var nonContinuationNoReplyConstraints: [NSLayoutConstraint] = []
     internal var nonContinuationWithReplyConstraints: [NSLayoutConstraint] = []
     internal var contentLabelBottomToContentViewConstraint: NSLayoutConstraint?
+    internal var reactionsBottomToContentViewConstraint: NSLayoutConstraint?
+    internal var contentViewMinHeightConstraint: NSLayoutConstraint?
     internal var contentLabelMinHeightConstraint: NSLayoutConstraint?
 
     // Additional property to determine if this is a continuation message.
@@ -235,6 +237,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         
         // PERFORMANCE: Clear content label bottom constraints for clean reuse
         clearContentLabelBottomConstraints()
+        contentViewMinHeightConstraint?.isActive = false
+        contentViewMinHeightConstraint = nil
 
         // PERFORMANCE: Clear ALL dynamic constraints that might cause layout conflicts
         clearDynamicConstraints()
@@ -1831,13 +1835,16 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         } else {
             // Reactions become the bottomost element, so remove "bottom pinned" contraints
             // from embeds/images/files that currently fight with reactions
+            clearContentLabelBottomConstraints()
             removeBottomConstraintsForReactions()
         }
         
         // Minimum height constraint
+        contentViewMinHeightConstraint?.isActive = false
         let minHeightConstraint = contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 50)
         minHeightConstraint.priority = UILayoutPriority.defaultLow
         minHeightConstraint.isActive = true
+        contentViewMinHeightConstraint = minHeightConstraint
     }
     
     private func removeBottomConstraintsForReactions() {
@@ -1864,6 +1871,12 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
             if let embedContainer,
                (constraint.firstItem === embedContainer && constraint.firstAttribute == .bottom && constraint.secondItem === contentView) ||
                (constraint.secondItem === embedContainer && constraint.secondAttribute == .bottom && constraint.firstItem === contentView) {
+                constraintsToRemove.append(constraint)
+            }
+
+            // Content label pinned to contentView.bottom -> remove when reactions exist.
+            if (constraint.firstItem === contentLabel && constraint.firstAttribute == .bottom && constraint.secondItem === contentView) ||
+               (constraint.secondItem === contentLabel && constraint.secondAttribute == .bottom && constraint.firstItem === contentView) {
                 constraintsToRemove.append(constraint)
             }
         }

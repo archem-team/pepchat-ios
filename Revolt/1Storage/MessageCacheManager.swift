@@ -31,7 +31,7 @@ class MessageCacheManager {
     // MARK: - Schema Versioning
     /// Migration: when upgrading from channel-only (v1) to multi-tenant (v2), we cannot prove
     /// session at init, so we always purge to avoid cross-account leakage.
-    private let currentSchemaVersion = 2
+    private let currentSchemaVersion = 3
     private let schemaVersionKey = "messageCacheSchemaVersion"
     
     // MARK: - Database Schema (v2: channel_id + user_id + base_url)
@@ -227,7 +227,7 @@ class MessageCacheManager {
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
         for message in messages {
             let content = extractMessageContent(from: message)
-            let createdAt = Int64(messageCacheCreatedAt(id: message.id).timeIntervalSince1970)
+            let createdAt = Int64(messageCacheCreatedAt(id: message.id).timeIntervalSince1970 * 1000)
             var editedAt: Int64?
             if let ed = message.edited, let date = ISO8601DateFormatter().date(from: ed) {
                 editedAt = Int64(date.timeIntervalSince1970)
@@ -274,7 +274,7 @@ class MessageCacheManager {
               AND m.user_id = t.user_id AND m.base_url = t.base_url
             WHERE m.channel_id = ? AND m.user_id = ? AND m.base_url = ?
               AND t.message_id IS NULL
-            ORDER BY m.created_at DESC
+            ORDER BY m.created_at DESC, m.id DESC
             LIMIT ? OFFSET ?
         """
         var statement: OpaquePointer?
@@ -349,6 +349,18 @@ class MessageCacheManager {
     func updateCachedMessage(id messageId: String, content: String?, editedAt: Date?, channelId: String, userId: String, baseURL: String) {
         dbQueue.async { [weak self] in
             self?._updateCachedMessage(id: messageId, content: content, editedAt: editedAt, channelId: channelId, userId: userId, baseURL: baseURL)
+        }
+    }
+
+    func updateCachedMessageReactions(id messageId: String, reactions: [String: [String]]?, channelId: String, userId: String, baseURL: String) {
+        dbQueue.async { [weak self] in
+            self?._updateCachedMessageReactions(
+                id: messageId,
+                reactions: reactions,
+                channelId: channelId,
+                userId: userId,
+                baseURL: baseURL
+            )
         }
     }
 
@@ -428,6 +440,36 @@ class MessageCacheManager {
         bindText(stmt2, 5, channelId)
         bindText(stmt2, 6, userId)
         bindText(stmt2, 7, baseURL)
+        sqlite3_step(stmt2)
+    }
+
+    private func _updateCachedMessageReactions(id messageId: String, reactions: [String: [String]]?, channelId: String, userId: String, baseURL: String) {
+        guard let db = db else { return }
+        let sel = "SELECT message_data FROM messages WHERE id = ? AND channel_id = ? AND user_id = ? AND base_url = ?"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sel, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, messageId)
+        bindText(stmt, 2, channelId)
+        bindText(stmt, 3, userId)
+        bindText(stmt, 4, baseURL)
+        guard sqlite3_step(stmt) == SQLITE_ROW, let blob = sqlite3_column_blob(stmt, 0) else { return }
+        let size = sqlite3_column_bytes(stmt, 0)
+        let data = Data(bytes: blob, count: Int(size))
+        guard var message = try? JSONDecoder().decode(Message.self, from: data) else { return }
+        message.reactions = reactions
+        guard let newData = try? JSONEncoder().encode(message) else { return }
+        let upd = "UPDATE messages SET message_data = ? WHERE id = ? AND channel_id = ? AND user_id = ? AND base_url = ?"
+        var stmt2: OpaquePointer?
+        guard sqlite3_prepare_v2(db, upd, -1, &stmt2, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt2) }
+        let ptr = UnsafeMutablePointer<UInt8>.allocate(capacity: newData.count)
+        newData.copyBytes(to: ptr, count: newData.count)
+        sqlite3_bind_blob(stmt2, 1, ptr, Int32(newData.count)) { p in p?.deallocate() }
+        bindText(stmt2, 2, messageId)
+        bindText(stmt2, 3, channelId)
+        bindText(stmt2, 4, userId)
+        bindText(stmt2, 5, baseURL)
         sqlite3_step(stmt2)
     }
     
@@ -681,7 +723,7 @@ class MessageCacheManager {
     private func _cleanupOldMessages(olderThan days: Int) {
         guard let db = db else { return }
         
-        let cutoffDate = Int64(Date().addingTimeInterval(-Double(days * 24 * 60 * 60)).timeIntervalSince1970)
+        let cutoffDate = Int64(Date().addingTimeInterval(-Double(days * 24 * 60 * 60)).timeIntervalSince1970 * 1000)
         let deleteSQL = "DELETE FROM messages WHERE created_at < ?"
         
         var statement: OpaquePointer?
