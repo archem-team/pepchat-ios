@@ -150,6 +150,7 @@ extension MessageCell {
             imageView.backgroundColor = UIColor.gray.withAlphaComponent(0.1) // Lighter background
             imageView.isUserInteractionEnabled = true
             imageView.tag = index // Store index for tap handling
+            imageView.accessibilityIdentifier = attachmentId
             
             // Add tap gesture recognizer for fullscreen view
             let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleImageCellTap(_:)))
@@ -452,6 +453,16 @@ extension MessageCell {
         for embed in embeds {
             let linkPreview = LinkPreviewView()
             linkPreview.translatesAutoresizingMaskIntoConstraints = false
+            let callbackMessageId = currentMessage?.id
+            let asyncCallback = onAsyncContentLoaded
+            linkPreview.onAsyncLayoutAffectingContentLoaded = { [weak self] in
+                guard let messageId = callbackMessageId else { return }
+                if let asyncCallback {
+                    asyncCallback(messageId)
+                } else if let vc = self?.findParentViewController() as? MessageableChannelViewController {
+                    vc.invalidateHeightForMessage(messageId)
+                }
+            }
             linkPreview.configure(with: embed, viewState: viewState)
             embedContainer.addArrangedSubview(linkPreview)
         }

@@ -168,6 +168,12 @@ protocol MessageInputViewDelegate: AnyObject {
 
 // MARK: - MessageInputView Class
 class MessageInputView: UIView {
+    private struct MentionToken {
+        let userId: String
+        let displayText: String
+        var range: NSRange
+    }
+
     // Making textView internal instead of private so extensions can access it
     let textView = UITextView()
     private let sendButton = UIButton(type: .system)
@@ -188,6 +194,7 @@ class MessageInputView: UIView {
     // Add properties for attachment preview
     private let attachmentPreviewView = AttachmentPreviewView()
     let pendingAttachmentsManager = PendingAttachmentsManager()
+    private var isSendingAttachments = false
     
     weak var delegate: MessageInputViewDelegate?
     
@@ -196,6 +203,9 @@ class MessageInputView: UIView {
     private var currentChannel: Channel?
     private var currentServer: Server?
     private var currentViewState: ViewState?
+    private var mentionTokens: [MentionToken] = []
+    private let mentionTextColor = UIColor.systemYellow
+    private var isApplyingMentionStyle = false
     
     private var normalTextViewTopConstraint: NSLayoutConstraint!
     private var editingTextViewTopConstraint: NSLayoutConstraint!
@@ -268,6 +278,43 @@ class MessageInputView: UIView {
         // print("DEBUG: hideMentionView called")
         mentionInputView?.hidePopup()
     }
+
+    func refreshMentionStylingAfterTextChange() {
+        let text = textView.text ?? ""
+        let nsText = text as NSString
+
+        mentionTokens = mentionTokens.filter { token in
+            guard token.range.location >= 0,
+                  token.range.location + token.range.length <= nsText.length else { return false }
+            return nsText.substring(with: token.range) == token.displayText
+        }
+
+        applyMentionStyling()
+    }
+
+    private func applyMentionStyling() {
+        guard !isApplyingMentionStyle else { return }
+        isApplyingMentionStyle = true
+        defer { isApplyingMentionStyle = false }
+
+        let raw = textView.text ?? ""
+        let selected = textView.selectedRange
+        let baseAttrs: [NSAttributedString.Key: Any] = [
+            .font: textView.font ?? UIFont.systemFont(ofSize: 16),
+            .foregroundColor: UIColor(named: "textDefaultGray01") ?? UIColor.label
+        ]
+
+        let attributed = NSMutableAttributedString(string: raw, attributes: baseAttrs)
+        for token in mentionTokens {
+            guard token.range.location >= 0,
+                  token.range.location + token.range.length <= (raw as NSString).length else { continue }
+            attributed.addAttribute(.foregroundColor, value: mentionTextColor, range: token.range)
+        }
+
+        textView.attributedText = attributed
+        textView.selectedRange = selected
+        textView.typingAttributes = baseAttrs
+    }
     
     // MARK: - Cleanup Methods
     
@@ -292,6 +339,7 @@ class MessageInputView: UIView {
         
         // Clear mention data
         clearMentionData()
+        mentionTokens.removeAll()
     }
 
     deinit {
@@ -309,6 +357,7 @@ class MessageInputView: UIView {
             self?.updateTextViewHeight()
         }
         updateSendButtonState()
+        refreshMentionStylingAfterTextChange()
         NotificationCenter.default.post(name: UITextView.textDidChangeNotification, object: textView)
     }
     
@@ -393,6 +442,7 @@ class MessageInputView: UIView {
         
         // Re-enable interactions
         plusButton.isEnabled = true
+        isSendingAttachments = false
         // print("🎯 Plus button re-enabled")
         
         updateSendButtonState()
@@ -825,6 +875,7 @@ class MessageInputView: UIView {
                 
                 // Disable interactions during upload
                 plusButton.isEnabled = false
+                isSendingAttachments = true
                 
                 let attachments = pendingAttachmentsManager.getAttachmentsForSending()
                 delegate?.messageInputView(self, didSendMessageWithAttachments: text, attachments: attachments)
@@ -845,6 +896,7 @@ class MessageInputView: UIView {
                 
                 // Disable interactions during upload
                 plusButton.isEnabled = false
+                isSendingAttachments = true
                 
                 let attachments = pendingAttachmentsManager.getAttachmentsForSending()
                 delegate?.messageInputView(self, didSendMessageWithAttachments: text, attachments: attachments)
@@ -885,9 +937,11 @@ class MessageInputView: UIView {
         let canSend = hasText || hasAttachments
         
         sendButton.isEnabled = canSend
-        sendButton.tintColor = canSend ? 
-            (UIColor(named: "iconDefaultPurple05") ?? .systemBlue) : 
-            (UIColor(named: "iconGray07") ?? .systemGray)
+        if isSendingAttachments && !canSend {
+            sendButton.tintColor = UIColor(named: "iconGray07") ?? .systemGray
+        } else {
+            sendButton.tintColor = UIColor(named: "iconDefaultPurple05") ?? .systemBlue
+        }
     }
     
     private func updateTextViewPosition() {
@@ -1020,10 +1074,19 @@ extension MessageInputView: MentionInputViewDelegate {
             // Replace the text from @ to the end with the display text
             let newText = currentText.replacingCharacters(in: range, with: "\(displayText) ")
             textView.text = newText
+
+            let nsText = newText as NSString
+            let insertedRange = nsText.range(of: displayText, options: .backwards)
+            if insertedRange.location != NSNotFound {
+                mentionTokens.append(
+                    MentionToken(userId: user.id, displayText: displayText, range: insertedRange)
+                )
+            }
             
             // Update UI
             updateSendButtonState()
             updateTextViewHeight()
+            applyMentionStyling()
             
             // Notify delegate about text change
             if let delegate = textView.delegate {
@@ -1070,15 +1133,28 @@ extension MessageInputView: MentionInputViewDelegate {
     // Convert text for sending (replace @username with <@USER_ID>)
     func convertTextForSending() -> String {
         let originalText = textView.text ?? ""
+        let mutable = NSMutableString(string: originalText)
+        let validTokens = mentionTokens
+            .filter { token in
+                token.range.location >= 0
+                    && token.range.location + token.range.length <= mutable.length
+                    && mutable.substring(with: token.range) == token.displayText
+            }
+            .sorted { $0.range.location > $1.range.location }
+
+        if !validTokens.isEmpty {
+            for token in validTokens {
+                mutable.replaceCharacters(in: token.range, with: "<@\(token.userId)>")
+            }
+            return mutable as String
+        }
+
         var convertedText = originalText
         let mentionDataList = getMentionDataList()
-        
-        // Replace each mention display text with server format
         for mentionData in mentionDataList {
-            let serverFormat = "<@\(mentionData.userId)>"
             convertedText = convertedText.replacingOccurrences(
                 of: mentionData.displayText,
-                with: serverFormat
+                with: "<@\(mentionData.userId)>"
             )
         }
         
@@ -1094,6 +1170,7 @@ extension MessageInputView: MentionInputViewDelegate {
             nil,
             .OBJC_ASSOCIATION_RETAIN_NONATOMIC
         )
+        mentionTokens.removeAll()
         // print("DEBUG: Cleared mention data")
     }
 }

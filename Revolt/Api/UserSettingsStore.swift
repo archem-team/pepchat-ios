@@ -370,8 +370,8 @@ class UserSettingsData {
         }
         
         let state = viewState!
-        if await state.state == .signedOut {
-            return // No need to fetch if signed out.
+        if await state.sessionToken == nil {
+            return // No authenticated token, skip fetch.
         }
         
         do {

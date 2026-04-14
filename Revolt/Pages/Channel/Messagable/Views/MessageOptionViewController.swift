@@ -51,6 +51,26 @@ class MessageOptionViewController: UIViewController {
         setupEmojiReactions()
         setupOptions()
     }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Hysteresis avoids flipping isScrollEnabled when content height hovers near the visible
+        // height (reduces layout churn / jank while scrolling).
+        let visibleH = scrollView.bounds.height
+        guard visibleH > 1 else { return }
+        let contentH = scrollView.contentSize.height
+        let overflow = contentH - visibleH
+        let needsScroll: Bool
+        if scrollView.isScrollEnabled {
+            needsScroll = overflow > -12
+        } else {
+            needsScroll = overflow > 8
+        }
+        if scrollView.isScrollEnabled != needsScroll {
+            scrollView.isScrollEnabled = needsScroll
+            scrollView.alwaysBounceVertical = needsScroll
+        }
+    }
     
     private func setupUI() {
         // Set background color to match SwiftUI version (.bgGray12)
@@ -64,16 +84,29 @@ class MessageOptionViewController: UIViewController {
             view.clipsToBounds = true
         }
         
-        // Set up scroll view
+        // Set up scroll view — avoid automatic inset / indicator adjustments that recurse into
+        // UIScrollView _baseInsetsForAccessory… during interactive sheet detent + table behind.
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.showsVerticalScrollIndicator = false
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.contentInset = .zero
+        scrollView.verticalScrollIndicatorInsets = .zero
+        scrollView.horizontalScrollIndicatorInsets = .zero
+        scrollView.keyboardDismissMode = .none
+        scrollView.alwaysBounceVertical = false
+        if #available(iOS 11.0, *) {
+            scrollView.contentInsetAdjustmentBehavior = .never
+        }
+        scrollView.automaticallyAdjustsScrollIndicatorInsets = false
+        scrollView.isOpaque = true
+        scrollView.backgroundColor = view.backgroundColor
         view.addSubview(scrollView)
         
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.topAnchor, constant: 32),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -8)
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
         ])
         
         // Set up content stack view
@@ -82,12 +115,13 @@ class MessageOptionViewController: UIViewController {
         contentStackView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(contentStackView)
         
+        // contentLayoutGuide + frameLayoutGuide: stable content size; bottom inset keeps last card off the home indicator.
         NSLayoutConstraint.activate([
-            contentStackView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            contentStackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            contentStackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            contentStackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            contentStackView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
+            contentStackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentStackView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentStackView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentStackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -20),
+            contentStackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
         ])
     }
     
@@ -155,6 +189,8 @@ class MessageOptionViewController: UIViewController {
         button.addTarget(self, action: #selector(emojiButtonTapped(_:)), for: .touchUpInside)
         button.addTarget(self, action: #selector(buttonTouchDown(_:)), for: .touchDown)
         button.addTarget(self, action: #selector(buttonTouchUpOutside(_:)), for: .touchUpOutside)
+        button.addTarget(self, action: #selector(buttonTouchUpOutside(_:)), for: .touchCancel)
+        button.addTarget(self, action: #selector(buttonTouchUpOutside(_:)), for: .touchDragOutside)
         
         // Store emoji string in button's accessibilityLabel for later retrieval
         button.accessibilityLabel = emojiString
@@ -213,6 +249,8 @@ class MessageOptionViewController: UIViewController {
         button.addTarget(self, action: #selector(customEmojiButtonTapped), for: .touchUpInside)
         button.addTarget(self, action: #selector(buttonTouchDown(_:)), for: .touchDown)
         button.addTarget(self, action: #selector(buttonTouchUpOutside(_:)), for: .touchUpOutside)
+        button.addTarget(self, action: #selector(buttonTouchUpOutside(_:)), for: .touchCancel)
+        button.addTarget(self, action: #selector(buttonTouchUpOutside(_:)), for: .touchDragOutside)
         containerView.addSubview(button)
         
         // Set up constraints
@@ -446,26 +484,27 @@ class MessageOptionViewController: UIViewController {
         return stack
     }
     
-    private func createDivider() -> UIView {
+    /// Inserts a horizontal rule without pinning an arranged subview to the stack’s edges.
+    /// Pinning `divider.leading` to `group.leading` fights `UISV-canvas-connection` / margins and
+    /// can thrash layout (CPU spike) when the sheet detent animates over a busy table underneath.
+    private func addDividerToGroup(group: UIStackView) {
+        let wrapper = UIView()
+        wrapper.translatesAutoresizingMaskIntoConstraints = false
+
         let divider = UIView()
         divider.translatesAutoresizingMaskIntoConstraints = false
         divider.backgroundColor = UIColor(named: "borderGray10") ?? UIColor.gray.withAlphaComponent(0.3)
-        
-        // Just set the height - leading constraint will be set after adding to stackView
-        divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
-        
-        return divider
-    }
-    
-    // Method to add divider to group with padding
-    private func addDividerToGroup(group: UIStackView) {
-        let divider = createDivider()
-        group.addArrangedSubview(divider)
-        
-        // Now that divider is added to stackView, we can set its constraints safely
+
+        wrapper.addSubview(divider)
         NSLayoutConstraint.activate([
-            divider.leadingAnchor.constraint(equalTo: group.leadingAnchor, constant: 12)
+            divider.heightAnchor.constraint(equalToConstant: 1),
+            divider.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 12),
+            divider.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -12),
+            divider.topAnchor.constraint(equalTo: wrapper.topAnchor),
+            divider.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor)
         ])
+
+        group.addArrangedSubview(wrapper)
     }
     
     private func createOptionButton(title: String, iconName: String, titleColor: UIColor = UIColor(named: "textDefaultGray01") ?? .white, iconColor: UIColor = UIColor(named: "iconDefaultGray01") ?? .white, action: @escaping () -> Void) -> UIView {
@@ -476,9 +515,10 @@ class MessageOptionViewController: UIViewController {
         let button = UIButton(type: .custom)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(optionButtonTapped(_:)), for: .touchUpInside)
-        // Add highlight effect
         button.addTarget(self, action: #selector(buttonTouchDown(_:)), for: .touchDown)
         button.addTarget(self, action: #selector(buttonTouchUpOutside(_:)), for: .touchUpOutside)
+        button.addTarget(self, action: #selector(buttonTouchUpOutside(_:)), for: .touchCancel)
+        button.addTarget(self, action: #selector(buttonTouchUpOutside(_:)), for: .touchDragOutside)
         button.tag = actions.count // Use tag to identify button action
         actions.append(action)
         
@@ -545,26 +585,25 @@ class MessageOptionViewController: UIViewController {
     }
     
     @objc private func buttonTouchDown(_ sender: UIButton) {
-        // Highlight effect when button is pressed
-        UIView.animate(withDuration: 0.1) {
-            sender.superview?.backgroundColor = UIColor.white.withAlphaComponent(0.1)
-        }
+        // No UIView.animate — queued animations + sheet pan starve the main thread (gesture gate timeouts).
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        sender.superview?.backgroundColor = UIColor.white.withAlphaComponent(0.1)
+        CATransaction.commit()
     }
-    
+
     @objc private func buttonTouchUpOutside(_ sender: UIButton) {
-        // Remove highlight when touch is cancelled
-        UIView.animate(withDuration: 0.1) {
-            sender.superview?.backgroundColor = nil
-        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        sender.superview?.backgroundColor = nil
+        CATransaction.commit()
     }
-    
+
     @objc private func optionButtonTapped(_ sender: UIButton) {
-        // Restore original background
-        UIView.animate(withDuration: 0.1) {
-            sender.superview?.backgroundColor = nil
-        }
-        
-        // Execute the action
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        sender.superview?.backgroundColor = nil
+        CATransaction.commit()
         if let action = actions[safe: sender.tag] {
             action()
         }

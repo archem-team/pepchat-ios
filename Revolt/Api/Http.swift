@@ -44,6 +44,7 @@ struct HTTPClient {
     var baseURL: String // Base URL for Revolt's API endpoints
     var apiInfo: ApiInfo? // Information about the Revolt API
     var session: Alamofire.Session // Alamofire session for managing network requests
+    var uploadSession: Alamofire.Session // Dedicated session for uploads with longer timeouts
     var logger: Logger // Logger used for logging HTTP request responses and errors
     weak var viewState: ViewState? // Weak reference to ViewState for immediate local updates
     
@@ -79,6 +80,18 @@ struct HTTPClient {
         
         // Create session with optimized configuration
         self.session = Alamofire.Session(configuration: configuration)
+        
+        // Create a dedicated upload session with longer timeout values
+        let uploadConfiguration = URLSessionConfiguration.default
+        uploadConfiguration.timeoutIntervalForRequest = 60.0      // handshake/request setup
+        uploadConfiguration.timeoutIntervalForResource = 240.0    // actual upload window
+        uploadConfiguration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        uploadConfiguration.httpMaximumConnectionsPerHost = 3
+        uploadConfiguration.waitsForConnectivity = true
+        uploadConfiguration.allowsConstrainedNetworkAccess = true
+        uploadConfiguration.allowsExpensiveNetworkAccess = true
+
+        self.uploadSession = Alamofire.Session(configuration: uploadConfiguration)
         
         self.logger = Logger(subsystem: "chat.peptide.app", category: "http")
         self.viewState = viewState
@@ -492,7 +505,7 @@ struct HTTPClient {
     func uploadFile(data: Data, name: String, category: FileCategory) async -> Result<AutumnResponse, RevoltError> {
         let url = "\(apiInfo!.features.autumn.url)/\(category.rawValue)"
         
-        return await session.upload(
+        return await uploadSession.upload(
             multipartFormData: { form in form.append(data, withName: "file", fileName: name)},
             to: url
         )
@@ -507,8 +520,8 @@ struct HTTPClient {
         let url = "\(apiInfo!.features.autumn.url)/\(category.rawValue)"
         
         return await withCheckedContinuation { continuation in
-            let request = session.upload(
-                multipartFormData: { form in 
+            let request = uploadSession.upload(
+                multipartFormData: { form in
                     form.append(data, withName: "file", fileName: name)
                 },
                 to: url

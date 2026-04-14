@@ -6,10 +6,9 @@
 import UIKit
 import Types
 import Kingfisher
-import AVKit
 
 // MARK: - MessageCell
-class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDelegate {
+class MessageCell: UITableViewCell, UITextViewDelegate {
     // PERFORMANCE: Cache pre-emoji NSAttributedString by message ID.
     // NSCache auto-evicts under memory pressure. Invalidated on message edit.
     static let attributedStringCache: NSCache<NSString, NSAttributedString> = {
@@ -17,6 +16,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         cache.countLimit = 300
         return cache
     }()
+    
 
     private let messageContentView = UIView()
     internal let avatarImageView = UIImageView()
@@ -35,7 +35,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     
     // Reply components
     internal let replyView = UIView()
-    internal let replyLineView = UIView()
+    internal let replyIndicatorImageView = UIImageView()
+    internal let replyAuthorAvatarImageView = UIImageView()
     internal let replyAuthorLabel = UILabel()
     internal let replyContentLabel = UILabel()
     internal var currentReplyId: String? // Store the ID of the message being replied to
@@ -90,6 +91,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     internal var nonContinuationNoReplyConstraints: [NSLayoutConstraint] = []
     internal var nonContinuationWithReplyConstraints: [NSLayoutConstraint] = []
     internal var contentLabelBottomToContentViewConstraint: NSLayoutConstraint?
+    internal var reactionsBottomToContentViewConstraint: NSLayoutConstraint?
+    internal var contentViewMinHeightConstraint: NSLayoutConstraint?
+    internal var contentLabelMinHeightConstraint: NSLayoutConstraint?
 
     // Additional property to determine if this is a continuation message.
     // Note: updateAppearanceForContinuation() is called explicitly at the end of configure(),
@@ -106,7 +110,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     
     // Callback for message actions
     var onMessageAction: ((MessageAction, Message) -> Void)?
-    var onImageTapped: ((UIImage) -> Void)?
+    var onImageTapped: ((UIImage, URL?, String?) -> Void)?
     /// Called when async content (images, link previews) finishes loading and may have changed cell height.
     var onAsyncContentLoaded: ((String) -> Void)?
     var onAvatarTap: (() -> Void)?
@@ -159,6 +163,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         bridgeBadgeLabel.isHidden = true
         
         // Reset reply view
+        replyAuthorAvatarImageView.kf.cancelDownloadTask()
+        replyAuthorAvatarImageView.image = nil
+        replyAuthorAvatarImageView.isHidden = true
+        replyAuthorAvatarImageView.backgroundColor = .clear
         replyAuthorLabel.text = nil
         replyContentLabel.text = nil
         replyView.isHidden = true
@@ -229,6 +237,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         
         // PERFORMANCE: Clear content label bottom constraints for clean reuse
         clearContentLabelBottomConstraints()
+        contentViewMinHeightConstraint?.isActive = false
+        contentViewMinHeightConstraint = nil
 
         // PERFORMANCE: Clear ALL dynamic constraints that might cause layout conflicts
         clearDynamicConstraints()
@@ -282,24 +292,16 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         if let debugSpacer = contentView.viewWithTag(9999) {
             debugSpacer.removeFromSuperview()
         }
+        
+        // Reset text sizing state that can leak from previous long messages.
+        contentLabelMinHeightConstraint?.constant = 18
+        contentLabel.textContainer.size = .zero
+        
     }
     
     // MARK: - Cleanup Helper
     internal func cleanupTempVideos() {
-        if !tempVideoURLs.isEmpty {
-            // print("🧹 Cleaning up \(tempVideoURLs.count) temp video files...")
-        }
-        for url in tempVideoURLs {
-            do {
-                if FileManager.default.fileExists(atPath: url.path) {
-                    try FileManager.default.removeItem(at: url)
-                    // print("✅ Deleted temp video: \(url.lastPathComponent)")
-                }
-            } catch {
-                // print("❌ Failed to delete temp video: \(error)")
-            }
-        }
-        tempVideoURLs.removeAll()
+        AttachmentVideoPlayback.cleanupTempVideos()
     }
     
     internal func isCurrentUserAuthor() -> Bool {
@@ -433,6 +435,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         bridgeBadgeLabel.isHidden = message.masquerade == nil
         
         // Configure content with improved performance
+        // Ensure each message starts from baseline text height; willDisplay can expand if needed.
+        contentLabelMinHeightConstraint?.constant = 18
+        contentLabel.textContainer.size = .zero
         configureMessageContent(message: message, viewState: viewState)
         
         // Configure time - for pending messages, try to get queued timestamp, otherwise use createdAt
@@ -1126,14 +1131,42 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     // Set the author name (prioritize masquerade name, then nickname, then display name)
                     let replyAuthorName = replyMessage.masquerade?.name ?? replyMember?.nickname ?? replyAuthor.display_name ?? replyAuthor.username
                     replyAuthorLabel.text = replyAuthorName
+
+                    // Configure mini avatar for reply author (supports masquerade/server avatars)
+                    let replyAvatarInfo = viewState.resolveAvatarUrl(
+                        user: replyAuthor,
+                        member: replyMember,
+                        masquerade: replyMessage.masquerade
+                    )
+                    replyAuthorAvatarImageView.isHidden = false
+                    replyAuthorAvatarImageView.kf.setImage(
+                        with: replyAvatarInfo.url,
+                        placeholder: UIImage(systemName: "person.circle.fill"),
+                        options: [
+                            .processor(DownsamplingImageProcessor(size: CGSize(width: 28, height: 28))),
+                            .scaleFactor(UIScreen.main.scale),
+                            .transition(.fade(0.15)),
+                            .cacheOriginalImage
+                        ]
+                    )
+                    if !replyAvatarInfo.isAvatarSet {
+                        replyAuthorAvatarImageView.backgroundColor = UIColor(
+                            hue: CGFloat(replyAuthorName.hashValue % 100) / 100.0,
+                            saturation: 0.8,
+                            brightness: 0.8,
+                            alpha: 1.0
+                        )
+                    } else {
+                        replyAuthorAvatarImageView.backgroundColor = .clear
+                    }
                     
                     // Set the message content (truncated if needed)
                     if let content = replyMessage.content, !content.isEmpty {
                         // Process both channel and user mentions in reply content
                         var processedContent = processChannelMentionsSimple(in: content, viewState: viewState)
                         processedContent = replaceMentionsWithUsernames(in: processedContent, viewState: viewState)
-                        let truncatedContent = processedContent.count > 30 ? String(processedContent.prefix(30)) + "..." : processedContent
-                        replyContentLabel.text = truncatedContent
+                        // Let UILabel truncate based on available width instead of fixed character count.
+                        replyContentLabel.text = processedContent
                         replyContentLabel.font = UIFont.systemFont(ofSize: 12) // Reset to normal font
                     } else if !(replyMessage.attachments?.isEmpty ?? true) {
                         let attachmentCount = replyMessage.attachments?.count ?? 0
@@ -1149,6 +1182,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                     replyContentLabel.textColor = UIColor(named: "textGray06") ?? .systemGray // Reset color
                 } else {
                     // Fallback if author not found
+                    replyAuthorAvatarImageView.kf.cancelDownloadTask()
+                    replyAuthorAvatarImageView.image = nil
+                    replyAuthorAvatarImageView.isHidden = true
+                    replyAuthorAvatarImageView.backgroundColor = .clear
                     replyAuthorLabel.text = ""
                     replyContentLabel.text = ""
                     replyContentLabel.textColor = UIColor(named: "textGray06") ?? .systemGray // Reset color
@@ -1158,6 +1195,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                 // CRITICAL: Only show loading indicator if we expect the message to be loadable
                 // For deleted messages, we should show an error state instead of infinite loading
                 replyLoadingIndicator.startAnimating() // Show loading indicator
+                replyAuthorAvatarImageView.kf.cancelDownloadTask()
+                replyAuthorAvatarImageView.image = nil
+                replyAuthorAvatarImageView.isHidden = true
+                replyAuthorAvatarImageView.backgroundColor = .clear
                 replyAuthorLabel.isHidden = true
                 replyContentLabel.isHidden = true
                 replyAuthorLabel.text = ""
@@ -1188,6 +1229,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
                                 // Show "message deleted" placeholder
                                 self.replyAuthorLabel.isHidden = false
                                 self.replyContentLabel.isHidden = false
+                                self.replyAuthorAvatarImageView.kf.cancelDownloadTask()
+                                self.replyAuthorAvatarImageView.image = nil
+                                self.replyAuthorAvatarImageView.isHidden = true
+                                self.replyAuthorAvatarImageView.backgroundColor = .clear
                                 self.replyAuthorLabel.text = "Deleted Message"
                                 self.replyContentLabel.text = "This message was deleted"
                                 self.replyContentLabel.textColor = UIColor(named: "textGray08") ?? .systemGray2
@@ -1399,7 +1444,19 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         guard let imageView = gesture.view as? UIImageView,
               let image = imageView.image else { return }
         
-        onImageTapped?(image)
+        // Default fallback: still open preview if URL resolution fails
+        var originalURL: URL? = nil
+        var sessionToken: String? = nil
+        
+        
+        if let viewState = viewState,
+           let attachmentId = imageView.accessibilityIdentifier {
+            let urlString = viewState.formatUrl(fromId: attachmentId, withTag: "attachments")
+            originalURL = URL(string: urlString)
+            sessionToken = viewState.sessionToken
+        }
+        
+        onImageTapped?(image, originalURL, sessionToken)
     }
     
 
@@ -1604,281 +1661,15 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
     
     // MARK: - Markdown Processing Helpers
     
-    // Store temp video URLs for cleanup
-    private var tempVideoURLs: Set<URL> = []
-    
-    private func createLoadingView() -> UIView {
-        let loadingView = UIView()
-        loadingView.translatesAutoresizingMaskIntoConstraints = false
-        loadingView.backgroundColor = UIColor.black.withAlphaComponent(0.7)
-        loadingView.layer.cornerRadius = 10
-        
-        let activityIndicator = UIActivityIndicatorView(style: .large)
-        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
-        activityIndicator.color = .white
-        activityIndicator.startAnimating()
-        
-        let label = UILabel()
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "Loading video..."
-        label.textColor = .white
-        label.font = UIFont.systemFont(ofSize: 14)
-        
-        loadingView.addSubview(activityIndicator)
-        loadingView.addSubview(label)
-        
-        NSLayoutConstraint.activate([
-            activityIndicator.centerXAnchor.constraint(equalTo: loadingView.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: loadingView.centerYAnchor, constant: -15),
-            
-            label.centerXAnchor.constraint(equalTo: loadingView.centerXAnchor),
-            label.topAnchor.constraint(equalTo: activityIndicator.bottomAnchor, constant: 10)
-        ])
-        
-        return loadingView
-    }
-    
-    private func removeLoadingView(from viewController: UIViewController) {
-        // Remove loading view by tag
-        if let loadingView = viewController.view.viewWithTag(99999) {
-            loadingView.removeFromSuperview()
-        }
-        
-        // Also check in all windows
-        if #available(iOS 13.0, *) {
-            // iOS 13+ - use scenes
-            for scene in UIApplication.shared.connectedScenes {
-                if let windowScene = scene as? UIWindowScene {
-                    for window in windowScene.windows {
-                        if let loadingView = window.viewWithTag(99999) {
-                            loadingView.removeFromSuperview()
-                        }
-                    }
-                }
-            }
-        } else {
-            // iOS 12 and below
-            for window in UIApplication.shared.windows {
-                if let loadingView = window.viewWithTag(99999) {
-                    loadingView.removeFromSuperview()
-                }
-            }
-        }
-    }
+    internal static var videoWindow: UIWindow?
 
     internal func playVideo(at urlString: String) {
-        // print("🎬 playVideo called with URL: \(urlString)")
-        
-        guard let url = URL(string: urlString) else {
-            // print("❌ Failed to create URL from: \(urlString)")
-            return
-        }
-        
-        guard let viewController = findParentViewController() else {
-            // print("❌ Failed to find parent view controller")
-            return
-        }
-        
-        // Show loading indicator
-        let loadingView = createLoadingView()
-        loadingView.tag = 99999 // Tag for identification
-        
-        // Make sure we're adding to the right view
-        let targetView = viewController.view ?? UIApplication.shared.windows.first?.rootViewController?.view
-        targetView?.addSubview(loadingView)
-        
-        NSLayoutConstraint.activate([
-            loadingView.centerXAnchor.constraint(equalTo: targetView?.centerXAnchor ?? loadingView.centerXAnchor),
-            loadingView.centerYAnchor.constraint(equalTo: targetView?.centerYAnchor ?? loadingView.centerYAnchor),
-            loadingView.widthAnchor.constraint(equalToConstant: 120),
-            loadingView.heightAnchor.constraint(equalToConstant: 120)
-        ])
-        
-        // Download video to temp file first
-        Task {
-            do {
-                // print("📥 Starting video download task...")
-                let videoData = try await downloadVideo(from: urlString)
-                // print("📥 Video data received: \(videoData.count) bytes")
-                
-                // Save to temp file
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_video_\(UUID().uuidString).mp4")
-                // print("📥 Saving to temp file: \(tempURL.path)")
-                try videoData.write(to: tempURL)
-                // print("✅ Video saved successfully")
-                
-                await MainActor.run {
-                    // Store URL for cleanup
-                    self.tempVideoURLs.insert(tempURL)
-                    
-                    // Remove loading view safely
-                    self.removeLoadingView(from: viewController)
-                    
-                    // Play from local file
-                    self.playLocalVideo(at: tempURL, from: viewController)
-                }
-            } catch {
-                // print("❌ Failed to download video: \(error)")
-                await MainActor.run {
-                    // Remove loading view safely
-                    self.removeLoadingView(from: viewController)
-                    
-                    // Show error
-                    let errorMessage = error.localizedDescription
-                    let errorAlert = UIAlertController(
-                        title: "Error",
-                        message: "Failed to load video: \(errorMessage)",
-                        preferredStyle: .alert
-                    )
-                    errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
-                    viewController.present(errorAlert, animated: true)
-                }
-            }
-        }
+        AttachmentVideoPlayback.play(
+            from: self,
+            urlString: urlString,
+            sessionToken: viewState?.sessionToken
+        )
     }
-    
-    private func downloadVideo(from urlString: String) async throws -> Data {
-        // print("📥 Starting video download from: \(urlString)")
-        
-        guard let url = URL(string: urlString) else {
-            throw URLError(.badURL)
-        }
-        
-        var request = URLRequest(url: url)
-        
-        // Add auth header
-        if let viewState = self.viewState, let token = viewState.sessionToken {
-            request.setValue(token, forHTTPHeaderField: "x-session-token")
-            // print("📥 Added auth token to request")
-        } else {
-            // print("⚠️ No auth token available")
-        }
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            // print("❌ Invalid response type")
-            throw URLError(.badServerResponse)
-        }
-        
-        // print("📥 Response status code: \(httpResponse.statusCode)")
-        // print("📥 Response headers: \(httpResponse.allHeaderFields)")
-        
-        // Check content type
-        if let contentType = httpResponse.allHeaderFields["Content-Type"] as? String {
-            // print("📥 Content-Type: \(contentType)")
-        }
-        
-        guard httpResponse.statusCode == 200 else {
-            // print("❌ Bad status code: \(httpResponse.statusCode)")
-            
-            // If we get a 401, it's likely an auth issue
-            if httpResponse.statusCode == 401 {
-                // print("❌ Authentication failed - token might be invalid")
-            }
-            
-            // Try to read error body
-            if let errorString = String(data: data, encoding: .utf8) {
-                // print("❌ Error response: \(errorString)")
-            }
-            
-            throw URLError(.badServerResponse)
-        }
-        
-        // print("✅ Downloaded \(data.count) bytes")
-        return data
-    }
-    
-    // Store reference to video window
-    internal static var videoWindow: UIWindow?
-    
-    private func playLocalVideo(at url: URL, from viewController: UIViewController) {
-        // print("🎬 Playing local video from: \(url)")
-        
-        // Verify file exists
-        if FileManager.default.fileExists(atPath: url.path) {
-            // print("✅ Video file exists at path")
-            
-            // Check file size
-            if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-               let fileSize = attributes[.size] as? NSNumber {
-                // print("📊 Video file size: \(fileSize.intValue) bytes")
-            }
-        } else {
-            // print("❌ Video file does NOT exist at path!")
-            return
-        }
-        
-        // Create AVPlayer with local file
-        let player = AVPlayer(url: url)
-        
-        // Create AVPlayerViewController
-        let playerViewController = AVPlayerViewController()
-        playerViewController.player = player
-        
-        // Clean up temp file when done
-        playerViewController.delegate = self
-        
-        // Set modal presentation style to full screen
-        playerViewController.modalPresentationStyle = .fullScreen
-        
-        // Enable standard video player features
-        playerViewController.showsPlaybackControls = true
-        playerViewController.allowsPictureInPicturePlayback = false // Disable PiP to avoid issues
-        playerViewController.entersFullScreenWhenPlaybackBegins = true
-        playerViewController.exitsFullScreenWhenPlaybackEnds = true
-        
-        // print("🎬 Creating separate window for video player...")
-        
-        // Create a new window for the video player
-        let window: UIWindow
-        
-        if #available(iOS 13.0, *) {
-            // For iOS 13+, get the proper window scene
-            if let windowScene = UIApplication.shared.connectedScenes
-                .filter({ $0.activationState == .foregroundActive })
-                .first as? UIWindowScene {
-                window = UIWindow(windowScene: windowScene)
-            } else {
-                window = UIWindow(frame: UIScreen.main.bounds)
-            }
-        } else {
-            window = UIWindow(frame: UIScreen.main.bounds)
-        }
-        
-        // Set window level to be above normal windows
-        window.windowLevel = .statusBar + 1
-        
-        // Create a simple root view controller to present from
-        let rootVC = UIViewController()
-        rootVC.view.backgroundColor = .black
-        window.rootViewController = rootVC
-        
-        // Store window reference
-        MessageCell.videoWindow = window
-        
-        // Make window visible
-        window.makeKeyAndVisible()
-        
-        // Present player from the window's root view controller
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            rootVC.present(playerViewController, animated: true) {
-                // print("✅ Video player presented in separate window, starting playback...")
-                // Start playback
-                player.play()
-                
-                // Check player status after a delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    if let error = player.currentItem?.error {
-                        // print("❌ Player error: \(error)")
-                    } else {
-                        // print("✅ Player seems to be working")
-                    }
-                }
-            }
-        }
-    }
-    
 
     
     private func configureMessageContent(message: Message, viewState: ViewState) {
@@ -1887,7 +1678,6 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             contentLabel.isSelectable = false
             return
         }
-
         let cacheKey = message.id as NSString
         let hasMentions = content.contains("<@") || content.contains("<#")
 
@@ -1896,7 +1686,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             let mutableCopy = NSMutableAttributedString(attributedString: cached)
             processCustomEmojis(in: mutableCopy, textView: contentLabel)
             contentLabel.attributedText = mutableCopy
-            contentLabel.isSelectable = hasMentions
+            contentLabel.isSelectable = false
+            refreshContentTextViewLayout()
             return
         }
 
@@ -1917,7 +1708,40 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         let mutableAttributedText = NSMutableAttributedString(attributedString: baseAttributedString)
         processCustomEmojis(in: mutableAttributedText, textView: contentLabel)
         contentLabel.attributedText = mutableAttributedText
-        contentLabel.isSelectable = hasMentions
+        contentLabel.isSelectable = false
+        refreshContentTextViewLayout()
+    }
+    
+    private func refreshContentTextViewLayout() {
+        // UITextView can keep a stale one-line frame/contentSize in reused cells
+        // when isScrollEnabled is false. Toggle to force layout manager refresh.
+        contentLabel.isScrollEnabled = true
+        contentLabel.isScrollEnabled = false
+        contentLabel.layoutIfNeeded()
+        contentLabel.invalidateIntrinsicContentSize()
+    }
+    
+    internal func enforceVisibleTextHeightIfNeeded() -> (old: CGFloat, fitted: CGFloat, after: CGFloat, updated: Bool) {
+        let width = max(1, contentLabel.bounds.width)
+        let fitted = contentLabel.sizeThatFits(
+            CGSize(width: width, height: .greatestFiniteMagnitude)
+        ).height
+        let old = contentLabel.bounds.height
+        
+        // Only enforce when we are clearly showing fewer lines than needed.
+        if fitted - old > 6 {
+            contentLabelMinHeightConstraint?.constant = ceil(fitted)
+            contentLabel.textContainer.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+            contentLabel.isScrollEnabled = true
+            contentLabel.isScrollEnabled = false
+            contentLabel.setNeedsLayout()
+            contentView.setNeedsLayout()
+            contentView.layoutIfNeeded()
+            let after = contentLabel.bounds.height
+            return (old, fitted, after, true)
+        }
+        
+        return (old, fitted, old, false)
     }
     
     private func configureAvatar(author: User, member: Member?, message: Message, viewState: ViewState) {
@@ -2011,13 +1835,16 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
         } else {
             // Reactions become the bottomost element, so remove "bottom pinned" contraints
             // from embeds/images/files that currently fight with reactions
+            clearContentLabelBottomConstraints()
             removeBottomConstraintsForReactions()
         }
         
         // Minimum height constraint
+        contentViewMinHeightConstraint?.isActive = false
         let minHeightConstraint = contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 50)
         minHeightConstraint.priority = UILayoutPriority.defaultLow
         minHeightConstraint.isActive = true
+        contentViewMinHeightConstraint = minHeightConstraint
     }
     
     private func removeBottomConstraintsForReactions() {
@@ -2044,6 +1871,12 @@ class MessageCell: UITableViewCell, UITextViewDelegate, AVPlayerViewControllerDe
             if let embedContainer,
                (constraint.firstItem === embedContainer && constraint.firstAttribute == .bottom && constraint.secondItem === contentView) ||
                (constraint.secondItem === embedContainer && constraint.secondAttribute == .bottom && constraint.firstItem === contentView) {
+                constraintsToRemove.append(constraint)
+            }
+
+            // Content label pinned to contentView.bottom -> remove when reactions exist.
+            if (constraint.firstItem === contentLabel && constraint.firstAttribute == .bottom && constraint.secondItem === contentView) ||
+               (constraint.secondItem === contentLabel && constraint.secondAttribute == .bottom && constraint.firstItem === contentView) {
                 constraintsToRemove.append(constraint)
             }
         }

@@ -79,6 +79,11 @@ class MessageTableViewDataSource: NSObject, UITableViewDataSource {
                 
                 let member = viewModel.getMember(message: message).wrappedValue
                 let isContinuation = viewController?.shouldGroupWithPreviousMessage(at: indexPath) ?? false
+
+                // Set async callback BEFORE configure() so cache-hit embed loads can still invalidate row height.
+                cell.onAsyncContentLoaded = { [weak viewController] messageId in
+                    viewController?.invalidateHeightForMessage(messageId)
+                }
                 
                 cell.configure(with: message, 
                              author: author, 
@@ -90,12 +95,12 @@ class MessageTableViewDataSource: NSObject, UITableViewDataSource {
                     viewController?.handleMessageAction(action, message: message)
                 }
 
-                cell.onImageTapped = { [weak viewController] image in
-                    viewController?.showFullScreenImage(image)
-                }
-
-                cell.onAsyncContentLoaded = { [weak viewController] messageId in
-                    viewController?.invalidateHeightForMessage(messageId)
+                cell.onImageTapped = { [weak viewController] image, originalURL, sessionToken in
+                    viewController?.showFullScreenImage(
+                        image,
+                        originalImageURL: originalURL,
+                        sessionToken: sessionToken
+                    )
                 }
 
                 if let viewController = viewController {
@@ -198,6 +203,11 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                 
                 let member = viewModelRef.getMember(message: message).wrappedValue
                 let isContinuation = viewControllerRef?.shouldGroupWithPreviousMessage(at: indexPath) ?? false
+
+                // Set async callback BEFORE configure() so cache-hit embed loads can still invalidate row height.
+                cell.onAsyncContentLoaded = { [weak viewControllerRef] messageId in
+                    viewControllerRef?.invalidateHeightForMessage(messageId)
+                }
                 
                 cell.configure(with: message, 
                              author: author, 
@@ -214,14 +224,14 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                     viewControllerRef?.handleMessageAction(action, message: message)
                 }
 
-                cell.onImageTapped = { [weak viewControllerRef] image in
-                    viewControllerRef?.showFullScreenImage(image)
+                cell.onImageTapped = { [weak viewControllerRef] image, originalURL, sessionToken in
+                    viewControllerRef?.showFullScreenImage(
+                        image,
+                        originalImageURL: originalURL,
+                        sessionToken: sessionToken
+                    )
                 }
 
-                cell.onAsyncContentLoaded = { [weak viewControllerRef] messageId in
-                    viewControllerRef?.invalidateHeightForMessage(messageId)
-                }
-                
                 // Present user sheet on avatar tap
                 cell.onAvatarTap = { [weak viewControllerRef] in
                     guard let viewControllerRef = viewControllerRef else { return }

@@ -73,6 +73,14 @@ extension ViewState {
                                 self.sessionToken = success.token
                                 self.http.token = success.token
                                 
+                                // Ensure custom server ordering is available before first READY render.
+                                do {
+                                    let orderingOnly = try await self.http.fetchSettings(keys: ["ordering"]).get()
+                                    self.userSettingsStore.storeFetchData(settingsValues: orderingOnly)
+                                } catch {
+                                    // Non-fatal: if this fails, regular settings sync will retry shortly.
+                                }
+                                
                                 await self.promptForNotifications()
                                 
                                 // If we already have a device notification token, try to upload it
@@ -100,10 +108,18 @@ extension ViewState {
                                         self.isOnboarding = false
                                         callback(.Success)
                                         self.state = .connecting
+                                        Task { [weak self] in
+                                            await self?.backgroundWsTask()
+                                        }
+                                        self.userSettingsStore.createFetchTask()
                                     }
                                 } catch {
                                     self.isOnboarding = false
                                     self.state = .connecting
+                                    Task { [weak self] in
+                                        await self?.backgroundWsTask()
+                                    }
+                                    self.userSettingsStore.createFetchTask()
                                     return callback(.Success) // if the onboard check dies, just try to go for it
                                 }
                             }
@@ -184,5 +200,6 @@ extension ViewState {
         
         userSettingsStore.isLoggingOut()
         self.ws = nil
+        readyHasBeenProcessed = false
     }
 }

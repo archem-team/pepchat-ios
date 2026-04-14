@@ -26,6 +26,17 @@ extension MessageableChannelViewController: UITableViewDelegate {
         }
 
         if let currentCell = cell as? MessageCell {
+            let currentMessageId = localMessages[indexPath.row]
+            let currentMessage = viewModel.viewState.messages[currentMessageId]
+            let currentHasReply = !(currentMessage?.replies?.isEmpty ?? true)
+            let nextHasReply: Bool = {
+                let nextIndex = indexPath.row + 1
+                guard nextIndex < localMessages.count else { return false }
+                let nextMessageId = localMessages[nextIndex]
+                let nextMessage = viewModel.viewState.messages[nextMessageId]
+                return !(nextMessage?.replies?.isEmpty ?? true)
+            }()
+            
             if indexPath.row < localMessages.count - 1 {
                 let nextMessageId = localMessages[indexPath.row + 1]
                 let currentMessageId = localMessages[indexPath.row]
@@ -42,6 +53,53 @@ extension MessageableChannelViewController: UITableViewDelegate {
             // Link preview overlap fix: finish layout before first draw (docs/Fix/LinkPreviewImage.md)
             currentCell.contentView.setNeedsLayout()
             currentCell.contentView.layoutIfNeeded()
+            var finalHeight = currentCell.bounds.height
+            let textWidth = max(1, currentCell.contentLabel.bounds.width)
+            let fittedTextHeight = currentCell.contentLabel.sizeThatFits(
+                CGSize(width: textWidth, height: .greatestFiniteMagnitude)
+            ).height
+            
+            
+            // Runtime-proven fix: textView can render with stale (too small) visible height on reused cells.
+            // If fitted text height is larger, force min-height to fitted size and re-layout the row.
+            let enforcement = currentCell.enforceVisibleTextHeightIfNeeded()
+            if enforcement.updated {
+                currentCell.contentView.setNeedsLayout()
+                currentCell.contentView.layoutIfNeeded()
+                let measuredHeight = currentCell.contentView.systemLayoutSizeFitting(
+                    CGSize(width: tableView.bounds.width, height: UIView.layoutFittingCompressedSize.height),
+                    withHorizontalFittingPriority: .required,
+                    verticalFittingPriority: .fittingSizeLevel
+                ).height
+                finalHeight = max(currentCell.bounds.height, measuredHeight)
+                
+                // Invalidate stale cached height for this message and reload row.
+                // This prevents keeping a too-small cached cell height after text expansion.
+                invalidateHeightForMessage(currentMessageId)
+            }
+
+            // PERF: Only run second layout pass for cells with complex content
+            // (embeds, image/file attachments) where attributed text may need
+            // multiple passes to settle. Plain text cells are correct after one pass.
+            let hasComplexContent =
+                (currentCell.imageAttachmentsContainer != nil && !currentCell.imageAttachmentsContainer!.isHidden) ||
+                (currentCell.fileAttachmentsContainer != nil && !currentCell.fileAttachmentsContainer!.isHidden) ||
+                currentCell.contentView.viewWithTag(2000) != nil
+
+            if hasComplexContent {
+                let firstHeight = finalHeight
+                currentCell.contentView.setNeedsLayout()
+                currentCell.contentView.layoutIfNeeded()
+                finalHeight = currentCell.bounds.height
+
+                // If height changed between passes, first pass was premature — trigger re-query
+                if abs(finalHeight - firstHeight) > 1.0 {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.tableView.beginUpdates()
+                        self?.tableView.endUpdates()
+                    }
+                }
+            }
 
             // PERF Issue #9: Cache the measured height after layout
             let messageId = localMessages[indexPath.row]
@@ -51,7 +109,7 @@ extension MessageableChannelViewController: UITableViewDelegate {
                 isContinuation: isContinuation,
                 tableWidth: Int(tableView.bounds.width)
             )
-            cellHeightCache.store(height: currentCell.bounds.height, for: key)
+            cellHeightCache.store(height: finalHeight, for: key)
         }
 
         loadMoreMessagesIfNeeded(for: indexPath)
@@ -69,7 +127,9 @@ extension MessageableChannelViewController: UITableViewDelegate {
             isContinuation: isContinuation,
             tableWidth: Int(tableView.bounds.width)
         )
-        return cellHeightCache.height(for: key) ?? UITableView.automaticDimension
+        let cachedHeight = cellHeightCache.height(for: key)
+        
+        return cachedHeight ?? UITableView.automaticDimension
     }
 
     func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {

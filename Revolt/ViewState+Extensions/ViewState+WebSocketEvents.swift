@@ -404,6 +404,15 @@ extension ViewState {
                     reactions[e.emoji_id] = users
                     message.reactions = reactions
                     messages[e.id] = message
+                    if let userId = currentUser?.id, let baseURL = baseURL {
+                        MessageCacheWriter.shared.enqueueUpdateMessageReactions(
+                            id: e.id,
+                            reactions: message.reactions,
+                            channelId: e.channel_id,
+                            userId: userId,
+                            baseURL: baseURL
+                        )
+                    }
                     
                     // print("🔥 VIEWSTATE: Added reaction \(e.emoji_id) from user \(e.user_id) to message \(e.id) in channel \(e.channel_id)")
                     
@@ -434,6 +443,15 @@ extension ViewState {
                         }
                         message.reactions = reactions
                         messages[e.id] = message
+                        if let userId = currentUser?.id, let baseURL = baseURL {
+                            MessageCacheWriter.shared.enqueueUpdateMessageReactions(
+                                id: e.id,
+                                reactions: message.reactions,
+                                channelId: e.channel_id,
+                                userId: userId,
+                                baseURL: baseURL
+                            )
+                        }
                         
                         // print("🔥 VIEWSTATE: Removed reaction \(e.emoji_id) from user \(e.user_id) on message \(e.id) in channel \(e.channel_id)")
                         

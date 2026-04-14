@@ -73,7 +73,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     let cellHeightCache = CellHeightCache()
     /// Memoizes shouldGroupWithPreviousMessage() results to avoid repeated dictionary
     /// lookups and date arithmetic on the hot heightForRowAt/estimatedHeightForRowAt path.
-    private var continuationCache: [String: Bool] = [:]
+    internal var continuationCache: [String: Bool] = [:]
     private var lastKnownTableWidth: CGFloat = 0
 
     // CRITICAL: Add flag to protect against scrolling during data source updates
@@ -95,7 +95,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     var networkErrorCooldown: TimeInterval = 5.0
     var maxLogMessages = 20
     var minimumAPICallInterval: TimeInterval = 3.0
-
+    
     // Replies view properties
     internal var repliesView: RepliesContainerView?
 
@@ -343,6 +343,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             name: NSNotification.Name("MessageDeletedLocally"),
             object: nil
         )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppBecameActiveForRealtimeSync),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWebSocketReconnectedForRealtimeSync),
+            name: NSNotification.Name("WebSocketReconnected"),
+            object: nil
+        )
     }
 
     @objc private func handleMessageDeletedLocally(_ notification: Notification) {
@@ -353,6 +367,28 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         cellHeightCache.invalidateAll()
         continuationCache.removeAll()
         refreshMessagesAfterLocalDelete()
+    }
+
+    @objc private func handleWebSocketReconnectedForRealtimeSync() {
+        // Allow websocket auth/ready processing to settle before catch-up.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.handleAppBecameActiveForRealtimeSync()
+        }
+    }
+
+    @objc private func handleAppBecameActiveForRealtimeSync() {
+        guard UIApplication.shared.applicationState == .active else { return }
+        guard !isViewDisappearing else { return }
+        guard messageLoadingState != .loading, !isLoadingMore else { return }
+
+        // Catch up any missed foreground-gap messages using existing "after" pagination path.
+        if let lastMessageId = localMessages.last ?? viewModel.messages.last {
+            throttledAPICall(for: lastMessageId)
+        } else {
+            Task { [weak self] in
+                await self?.loadInitialMessages()
+            }
+        }
     }
 
     @objc internal func newMessageButtonTapped() {
@@ -1066,17 +1102,18 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         }
         cellHeightCache.invalidate(messageId: messageId)
         continuationCache.removeValue(forKey: messageId)
-        tableView.beginUpdates()
-        tableView.endUpdates()
+        guard let row = localMessages.firstIndex(of: messageId),
+              tableView.dataSource != nil,
+              row < tableView.numberOfRows(inSection: 0) else { return }
+        let indexPath = IndexPath(row: row, section: 0)
+        guard tableView.indexPathsForVisibleRows?.contains(indexPath) == true else { return }
+        UIView.performWithoutAnimation {
+            tableView.reloadRows(at: [indexPath], with: .none)
+        }
     }
 
     // SUPER FAST: Simplified message change handler
     @objc internal func messagesDidChange(_ notification: Notification) {
-        // Debounce rapid notifications
-        let now = Date()
-        guard now.timeIntervalSince(lastMessageChangeNotificationTime) >= 0.1 else { return }
-        lastMessageChangeNotificationTime = now
-
         // Check if this is a reaction update
         var isReactionUpdate = false
         var reactionChannelId: String? = nil
@@ -1087,6 +1124,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             reactionMessageId = notificationData["messageId"] as? String
             let updateType = notificationData["type"] as? String
             isReactionUpdate = updateType == "reaction_added" || updateType == "reaction_removed"
+        }
+
+        // Debounce only non-reaction updates.
+        // Reaction updates can arrive in bursts from websocket and should not be dropped.
+        if !isReactionUpdate {
+            let now = Date()
+            guard now.timeIntervalSince(lastMessageChangeNotificationTime) >= 0.1 else { return }
+            lastMessageChangeNotificationTime = now
         }
 
         // For reaction updates, handle them immediately without blocking conditions
@@ -1141,10 +1186,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                         // print("🔥 FORCE CHECK: Message \(messageId) not found in ViewState!")
                     }
 
-                    self.tableView.reloadRows(at: [indexPath], with: .none)
-                    self.tableView.beginUpdates()
-                    self.tableView.endUpdates()
-                    self.tableView.layoutIfNeeded()
+                    UIView.performWithoutAnimation {
+                        self.tableView.reloadRows(at: [indexPath], with: .none)
+                        self.tableView.beginUpdates()
+                        self.tableView.endUpdates()
+                        self.tableView.layoutIfNeeded()
+                    }
 
                     // CRITICAL FIX: Don't auto-scroll if target message was recently highlighted
                     if let highlightTime = self.lastTargetMessageHighlightTime,
@@ -1475,8 +1522,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     }
 
     // MARK: - Image Handling
-    func showFullScreenImage(_ image: UIImage) {
-        let imageViewController = FullScreenImageViewController(image: image)
+    func showFullScreenImage(_ image: UIImage, originalImageURL: URL?, sessionToken: String?) {
+        let imageViewController = FullScreenImageViewController(
+            image: image,
+            originalImageURL: originalImageURL,
+            sessionToken: sessionToken
+        )
         imageViewController.modalPresentationStyle = .overFullScreen
         present(imageViewController, animated: true, completion: nil)
     }
@@ -1872,6 +1923,29 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                 messageCell.configure(
                     with: message, author: author, member: member,
                     viewState: viewModelRef.viewState, isContinuation: isContinuation)
+                
+                // First-paint fix: enforce text height before initial display so rows don't
+                // appear cropped until they scroll offscreen/reload.
+                messageCell.contentView.setNeedsLayout()
+                messageCell.contentView.layoutIfNeeded()
+                let preDisplayEnforcement = messageCell.enforceVisibleTextHeightIfNeeded()
+                if preDisplayEnforcement.updated {
+                    let measuredHeight = messageCell.contentView.systemLayoutSizeFitting(
+                        CGSize(
+                            width: tableView.bounds.width,
+                            height: UIView.layoutFittingCompressedSize.height
+                        ),
+                        withHorizontalFittingPriority: .required,
+                        verticalFittingPriority: .fittingSizeLevel
+                    ).height
+                    let finalMeasuredHeight = max(messageCell.bounds.height, measuredHeight)
+                    let key = CellHeightCacheKey(
+                        messageId: messageId,
+                        isContinuation: isContinuation,
+                        tableWidth: Int(tableView.bounds.width)
+                    )
+                    viewControllerRef?.cellHeightCache.store(height: finalMeasuredHeight, for: key)
+                }
 
                 // PERFORMANCE: Set delegates efficiently
                 messageCell.textViewContent.delegate = viewControllerRef
@@ -1882,8 +1956,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                     viewController?.handleMessageAction(action, message: message)
                 }
 
-                messageCell.onImageTapped = { [weak viewController = viewControllerRef] image in
-                    viewController?.showFullScreenImage(image)
+                messageCell.onImageTapped = { [weak viewController = viewControllerRef] image, originalURL, sessionToken in
+                    viewController?.showFullScreenImage(
+                        image,
+                        originalImageURL: originalURL,
+                        sessionToken: sessionToken
+                    )
                 }
 
                 messageCell.onAvatarTap = { [weak viewModel = viewModelRef] in
@@ -3232,7 +3310,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 extension MessageCell {
     @objc func handleImageTap(_ gesture: UITapGestureRecognizer) {
         if let imageView = gesture.view as? UIImageView, let image = imageView.image {
-            onImageTapped?(image)
+            onImageTapped?(image, nil, nil)
         }
     }
 }

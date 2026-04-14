@@ -32,6 +32,7 @@ class LinkPreviewView: UIView {
     // MARK: - Properties
     private var embed: Embed = .none
     private var viewState: ViewState?
+    internal var onAsyncLayoutAffectingContentLoaded: (() -> Void)?
     
     // MARK: - Initialization
     
@@ -320,7 +321,17 @@ class LinkPreviewView: UIView {
         guard let url = URL(string: image.url) else { return false }
         
         previewImageView.isHidden = false
-        previewImageView.kf.setImage(with: url)
+        previewImageView.kf.setImage(with: url) { [weak self] result in
+            guard let self = self else { return }
+            switch result {
+            case .success:
+                self.setNeedsLayout()
+                self.layoutIfNeeded()
+                self.onAsyncLayoutAffectingContentLoaded?()
+            case .failure(let error):
+                _ = error
+            }
+        }
         contentStackView.addArrangedSubview(previewImageView)
         
         let aspectRatio = CGFloat(image.width) / CGFloat(image.height)
@@ -432,4 +443,5 @@ class LinkPreviewView: UIView {
         
         return UIColor(red: red, green: green, blue: blue, alpha: 1.0)
     }
+
 } 

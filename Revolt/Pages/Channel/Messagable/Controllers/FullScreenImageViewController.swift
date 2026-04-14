@@ -6,6 +6,7 @@
 
 import UIKit
 import Photos
+import Kingfisher
 
 // MARK: - FullScreenImageViewController
 class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
@@ -19,8 +20,13 @@ class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
     private var minZoomScale: CGFloat = 1.0
     private var maxZoomScale: CGFloat = 5.0
     private var hasSetInitialZoom = false
+    private let originalImageURL: URL?
+    private let sessionToken: String?
+    private var originalImageData: Data?
     
-    init(image: UIImage) {
+    init(image: UIImage, originalImageURL: URL?, sessionToken: String?) {
+        self.originalImageURL = originalImageURL
+        self.sessionToken = sessionToken
         super.init(nibName: nil, bundle: nil)
         imageView.image = image
         modalPresentationStyle = .fullScreen
@@ -39,6 +45,7 @@ class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
         setupImageView()
         setupButtons()
         setupGestures()
+        loadOriginalImageIfAvailable()
     }
     
     override func viewDidLayoutSubviews() {
@@ -47,11 +54,7 @@ class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // Set initial zoom scale when view appears
-        if !hasSetInitialZoom {
-            hasSetInitialZoom = true
-            setInitialZoomScale()
-        }
+        // Keep this as an observability point only; initial scale is set from setInitialZoomScale itself.
     }
     
     private func setupScrollView() {
@@ -63,7 +66,7 @@ class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
         scrollView.decelerationRate = UIScrollView.DecelerationRate.fast
         scrollView.bouncesZoom = true
         scrollView.bounces = true
-        scrollView.contentInsetAdjustmentBehavior = .automatic
+        scrollView.contentInsetAdjustmentBehavior = .never
         
         view.addSubview(scrollView)
         
@@ -142,6 +145,7 @@ class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
     
     private func setInitialZoomScale() {
         guard let image = imageView.image else { return }
+        hasSetInitialZoom = true
         
         let scrollViewSize = scrollView.bounds.size
         guard scrollViewSize.width > 0 && scrollViewSize.height > 0 else { return }
@@ -186,15 +190,6 @@ class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
             bottom: verticalInset,
             right: horizontalInset
         )
-        
-        // Debug logging
-        print("🖼️ CenterImageView Debug:")
-        print("   ScrollView size: \(scrollViewSize)")
-        print("   ImageView size: \(imageViewSize)")
-        print("   Vertical inset: \(verticalInset)")
-        print("   Horizontal inset: \(horizontalInset)")
-        print("   ContentOffset: \(scrollView.contentOffset)")
-        print("   ContentSize: \(scrollView.contentSize)")
     }
     
     @objc private func handleSingleTap() {
@@ -225,14 +220,18 @@ class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
     }
     
     @objc private func downloadImage() {
+        // Prefer original bytes from network for best quality.
+        if let data = originalImageData {
+            saveImageDataToPhotoLibrary(data)
+            return
+        }
+
         guard let image = imageView.image else {
             showAlert(title: "Error", message: "No image available for download")
             return
         }
-        
-        // Check photo library access permission
+
         let status = PHPhotoLibrary.authorizationStatus()
-        
         switch status {
         case .authorized, .limited:
             saveImageToPhotoLibrary(image)
@@ -252,9 +251,81 @@ class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
             showAlert(title: "Error", message: "Unknown permission status")
         }
     }
+
+    private func loadOriginalImageIfAvailable() {
+        guard let originalImageURL else { return }
+        fetchOriginalImageData(from: originalImageURL)
+
+        var options: KingfisherOptionsInfo = [
+            .cacheOriginalImage,
+            .transition(.fade(0.2))
+        ]
+
+        if let token = sessionToken, !token.isEmpty {
+            let modifier = AnyModifier { request in
+                var req = request
+                req.setValue(token, forHTTPHeaderField: "x-session-token")
+                return req
+            }
+            options.append(.requestModifier(modifier))
+        }
+
+        imageView.kf.setImage(
+            with: originalImageURL,
+            placeholder: imageView.image,
+            options: options
+        ) { [weak self] result in
+            guard let self = self else { return }
+            if case .success(let value) = result {
+                // Keep fallback data even when raw-bytes fetch fails.
+                if self.originalImageData == nil {
+                    self.originalImageData = value.image.pngData() ?? value.image.jpegData(compressionQuality: 1.0)
+                }
+                self.setInitialZoomScale()
+            }
+        }
+    }
+
+    private func fetchOriginalImageData(from url: URL) {
+        var request = URLRequest(url: url)
+        if let token = sessionToken, !token.isEmpty {
+            request.setValue(token, forHTTPHeaderField: "x-session-token")
+        }
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, _ in
+            guard let self = self, let data = data, !data.isEmpty else { return }
+            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                return
+            }
+            self.originalImageData = data
+        }.resume()
+    }
     
     private func saveImageToPhotoLibrary(_ image: UIImage) {
         UIImageWriteToSavedPhotosAlbum(image, self, #selector(image(_:didFinishSavingWithError:contextInfo:)), nil)
+    }
+
+    private func saveImageDataToPhotoLibrary(_ data: Data) {
+        let status = PHPhotoLibrary.authorizationStatus()
+        if status != .authorized && status != .limited {
+            showPermissionDeniedAlert()
+            return
+        }
+
+        PHPhotoLibrary.shared().performChanges({
+            let request = PHAssetCreationRequest.forAsset()
+            request.addResource(with: .photo, data: data, options: nil)
+        }) { [weak self] success, error in
+            DispatchQueue.main.async {
+                if let error {
+                    self?.showAlert(title: "Error", message: "Failed to save image: \(error.localizedDescription)")
+                } else if success {
+                    self?.showSuccessMessage()
+                } else {
+                    self?.showAlert(title: "Error", message: "Failed to save image")
+                }
+            }
+        }
     }
     
     @objc private func image(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer) {

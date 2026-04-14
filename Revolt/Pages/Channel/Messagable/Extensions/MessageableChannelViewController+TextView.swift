@@ -31,6 +31,7 @@ extension MessageableChannelViewController: UITextViewDelegate {
             
             // Then forward to the original MessageInputView's method
             messageInputView.textViewDidChange(textView)
+            messageInputView.refreshMentionStylingAfterTextChange()
             // Draft: debounced save (step 2b)
             draftSaveWorkItem?.cancel()
             let channelId = viewModel.channel.id
