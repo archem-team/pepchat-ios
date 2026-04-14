@@ -128,4 +128,19 @@ final class MessageCacheWriter {
             MessageCacheManager.shared.deleteCachedMessage(id: messageId, channelId: channelId, userId: userId, baseURL: baseURL)
         }
     }
+
+    /// Persist reaction map updates so cache does not briefly show stale reactions
+    /// before websocket reconciliation when reopening a channel.
+    func enqueueUpdateMessageReactions(id messageId: String, reactions: [String: [String]]?, channelId: String, userId: String, baseURL: String) {
+        enqueue { [weak self] in
+            guard self?.sessionMatches(userId: userId, baseURL: baseURL) == true else { return }
+            MessageCacheManager.shared.updateCachedMessageReactions(
+                id: messageId,
+                reactions: reactions,
+                channelId: channelId,
+                userId: userId,
+                baseURL: baseURL
+            )
+        }
+    }
 }

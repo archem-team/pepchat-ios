@@ -52,6 +52,14 @@ extension MessageableChannelViewController {
         return result
     }
 
+    private func reactionSignature(_ message: Message?) -> String {
+        guard let reactions = message?.reactions, !reactions.isEmpty else { return "" }
+        return reactions
+            .map { key, users in "\(key):\(users.sorted().joined(separator: ","))" }
+            .sorted()
+            .joined(separator: "|")
+    }
+
     /// When loading from cache, prefer ViewState over cached if ViewState has a newer edit (e.g. from a message_update WebSocket event) so edits from other users are not overwritten by stale cache.
     private func isViewStateMessageNewerThanCached(existing: Message, cached: Message) -> Bool {
         guard existing.edited != nil else { return false }
@@ -553,6 +561,22 @@ extension MessageableChannelViewController {
             }
         }
 
+        // Snapshot old reaction state before applying fresh API messages.
+        let oldReactionSignatureById = await MainActor.run { () -> [String: String] in
+            var map: [String: String] = [:]
+            for id in fetchResult.messages.map(\.id) {
+                map[id] = self.reactionSignature(self.viewModel.viewState.messages[id])
+            }
+            return map
+        }
+        let oldAttachmentCountById = await MainActor.run { () -> [String: Int] in
+            var map: [String: Int] = [:]
+            for id in fetchResult.messages.map(\.id) {
+                map[id] = self.viewModel.viewState.messages[id]?.attachments?.count ?? 0
+            }
+            return map
+        }
+
         // Process messages
         for message in fetchResult.messages {
             viewModel.viewState.messages[message.id] = message
@@ -618,6 +642,16 @@ extension MessageableChannelViewController {
         }
 
         let idsUnchanged = previousLocalMessages == filteredIds
+        let changedReactionIds = fetchResult.messages.compactMap { message -> String? in
+            let oldSig = oldReactionSignatureById[message.id] ?? ""
+            let newSig = reactionSignature(message)
+            return oldSig == newSig ? nil : message.id
+        }
+        let changedAttachmentIds = fetchResult.messages.compactMap { message -> String? in
+            let oldCount = oldAttachmentCountById[message.id] ?? 0
+            let newCount = message.attachments?.count ?? 0
+            return oldCount == newCount ? nil : message.id
+        }
 
         // Update UI
         DispatchQueue.main.async { [weak self] in
@@ -628,6 +662,42 @@ extension MessageableChannelViewController {
 
             // Skip full reload if message IDs haven't changed (cache and API returned same set)
             if idsUnchanged && self.tableView.alpha >= 1.0 {
+                print("[IMGDBG][H3] idsUnchangedBranch channel=\(channelId) changedReactionIds=\(changedReactionIds.count) changedAttachmentIds=\(changedAttachmentIds.count)")
+                // #region agent log
+                do {
+                    let payload: [String: Any] = [
+                        "sessionId": "aa0c93",
+                        "runId": "pre-fix-image",
+                        "hypothesisId": "H3",
+                        "location": "MessageableChannelViewController+MessageLoading.swift:idsUnchangedBranch",
+                        "message": "Reconcile idsUnchanged branch reached",
+                        "data": [
+                            "channelId": channelId,
+                            "changedReactionIdsCount": changedReactionIds.count,
+                            "changedAttachmentIdsCount": changedAttachmentIds.count
+                        ],
+                        "timestamp": Int(Date().timeIntervalSince1970 * 1000)
+                    ]
+                    if let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
+                       let line = String(data: data, encoding: .utf8)?.appending("\n").data(using: .utf8) {
+                        let url = URL(fileURLWithPath: "/Users/akshatsrivastava/Desktop/pepchat-ios/.cursor/debug-aa0c93.log")
+                        if let h = FileHandle(forWritingAtPath: url.path) { h.seekToEndOfFile(); h.write(line); h.closeFile() } else { try? line.write(to: url) }
+                    }
+                }
+                // #endregion
+                if !changedReactionIds.isEmpty {
+                    self.cellHeightCache.invalidateAll()
+                    self.continuationCache.removeAll()
+                    self.tableView.reloadData()
+                    UIView.performWithoutAnimation {
+                        self.tableView.beginUpdates()
+                        self.tableView.endUpdates()
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        self.adjustTableInsetsForMessageCount()
+                    }
+                    return
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     self.adjustTableInsetsForMessageCount()
                 }
@@ -636,12 +706,20 @@ extension MessageableChannelViewController {
 
             self.isDataSourceUpdating = true
 
+            // API reconcile can change reaction layout while message IDs stay stable.
+            // Reset row-height cache before reload so UITableView does not reuse undersized heights.
+            self.cellHeightCache.invalidateAll()
+            self.continuationCache.removeAll()
             self.dataSource = LocalMessagesDataSource(
                 viewModel: self.viewModel,
                 viewController: self,
                 localMessages: self.localMessages)
             self.tableView.dataSource = self.dataSource
             self.tableView.reloadData()
+            UIView.performWithoutAnimation {
+                self.tableView.beginUpdates()
+                self.tableView.endUpdates()
+            }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                 self?.isDataSourceUpdating = false

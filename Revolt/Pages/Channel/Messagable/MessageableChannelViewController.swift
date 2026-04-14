@@ -73,7 +73,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     let cellHeightCache = CellHeightCache()
     /// Memoizes shouldGroupWithPreviousMessage() results to avoid repeated dictionary
     /// lookups and date arithmetic on the hot heightForRowAt/estimatedHeightForRowAt path.
-    private var continuationCache: [String: Bool] = [:]
+    internal var continuationCache: [String: Bool] = [:]
     private var lastKnownTableWidth: CGFloat = 0
 
     // CRITICAL: Add flag to protect against scrolling during data source updates
@@ -1114,11 +1114,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
     // SUPER FAST: Simplified message change handler
     @objc internal func messagesDidChange(_ notification: Notification) {
-        // Debounce rapid notifications
-        let now = Date()
-        guard now.timeIntervalSince(lastMessageChangeNotificationTime) >= 0.1 else { return }
-        lastMessageChangeNotificationTime = now
-
         // Check if this is a reaction update
         var isReactionUpdate = false
         var reactionChannelId: String? = nil
@@ -1129,6 +1124,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             reactionMessageId = notificationData["messageId"] as? String
             let updateType = notificationData["type"] as? String
             isReactionUpdate = updateType == "reaction_added" || updateType == "reaction_removed"
+        }
+
+        // Debounce only non-reaction updates.
+        // Reaction updates can arrive in bursts from websocket and should not be dropped.
+        if !isReactionUpdate {
+            let now = Date()
+            guard now.timeIntervalSince(lastMessageChangeNotificationTime) >= 0.1 else { return }
+            lastMessageChangeNotificationTime = now
         }
 
         // For reaction updates, handle them immediately without blocking conditions
@@ -1183,10 +1186,12 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                         // print("🔥 FORCE CHECK: Message \(messageId) not found in ViewState!")
                     }
 
-                    self.tableView.reloadRows(at: [indexPath], with: .none)
-                    self.tableView.beginUpdates()
-                    self.tableView.endUpdates()
-                    self.tableView.layoutIfNeeded()
+                    UIView.performWithoutAnimation {
+                        self.tableView.reloadRows(at: [indexPath], with: .none)
+                        self.tableView.beginUpdates()
+                        self.tableView.endUpdates()
+                        self.tableView.layoutIfNeeded()
+                    }
 
                     // CRITICAL FIX: Don't auto-scroll if target message was recently highlighted
                     if let highlightTime = self.lastTargetMessageHighlightTime,

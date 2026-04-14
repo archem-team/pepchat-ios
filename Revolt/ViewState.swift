@@ -640,6 +640,12 @@ public class ViewState: ObservableObject {
             self.loadPendingNotificationToken()
             self.startPeriodicMemoryCleanup()
             self.cleanupStaleUnreads()
+            
+            // Ensure push registration is refreshed for restored sessions
+            // (e.g. after reinstall/new TestFlight build) without re-prompting denied users.
+            if self.sessionToken != nil {
+                await self.syncNotificationPermissionWithSystem(promptIfNotDetermined: true)
+            }
 
             // If Ready already provided authoritative state, skip stale cache
             guard !self.readyHasBeenProcessed else { return }
@@ -1088,15 +1094,41 @@ public class ViewState: ObservableObject {
         return true
     }
     
-    func promptForNotifications() async {
-        let notificationsGranted = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound, .providesAppNotificationSettings])
-        if notificationsGranted != nil && notificationsGranted! {
-            ViewState.application?.registerForRemoteNotifications()
+    func syncNotificationPermissionWithSystem(promptIfNotDetermined: Bool) async {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
             self.userSettingsStore.store.notifications.rejectedRemoteNotifications = false
-        } else {
+            DispatchQueue.main.async {
+                ViewState.application?.registerForRemoteNotifications()
+            }
+        case .denied:
             self.userSettingsStore.store.notifications.rejectedRemoteNotifications = true
+        case .notDetermined:
+            guard promptIfNotDetermined else {
+                break
+            }
+            
+            let notificationsGranted = try? await center.requestAuthorization(options: [.alert, .badge, .sound, .providesAppNotificationSettings])
+            if notificationsGranted == true {
+                self.userSettingsStore.store.notifications.rejectedRemoteNotifications = false
+                DispatchQueue.main.async {
+                    ViewState.application?.registerForRemoteNotifications()
+                }
+            } else {
+                self.userSettingsStore.store.notifications.rejectedRemoteNotifications = true
+            }
+        @unknown default:
+            break
         }
+        
         self.userSettingsStore.writeStoreToFile()
+    }
+    
+    func promptForNotifications() async {
+        await syncNotificationPermissionWithSystem(promptIfNotDetermined: true)
     }
     
     func formatUrl(with: File) -> String {
