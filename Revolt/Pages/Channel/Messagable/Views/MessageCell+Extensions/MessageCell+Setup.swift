@@ -151,6 +151,9 @@ extension MessageCell {
         contentLabel.setContentHuggingPriority(.defaultLow, for: .vertical)
         contentLabel.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
         contentLabelMinHeightConstraint = contentLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 18)
+        // Allow temporary compression during UITableView's encapsulated estimated-height pass.
+        // Final row measurement in willDisplay expands this to the correct fitted height.
+        contentLabelMinHeightConstraint?.priority = UILayoutPriority(999)
         contentLabelMinHeightConstraint?.isActive = true
         
         // Configure link colors

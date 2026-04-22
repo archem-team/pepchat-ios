@@ -84,7 +84,8 @@ extension MessageableChannelViewController: UITableViewDelegate {
             let hasComplexContent =
                 (currentCell.imageAttachmentsContainer != nil && !currentCell.imageAttachmentsContainer!.isHidden) ||
                 (currentCell.fileAttachmentsContainer != nil && !currentCell.fileAttachmentsContainer!.isHidden) ||
-                currentCell.contentView.viewWithTag(2000) != nil
+                currentCell.contentView.viewWithTag(2000) != nil ||
+                !currentCell.reactionsContainerView.isHidden
 
             if hasComplexContent {
                 let firstHeight = finalHeight
@@ -94,6 +95,28 @@ extension MessageableChannelViewController: UITableViewDelegate {
 
                 // If height changed between passes, first pass was premature — trigger re-query
                 if abs(finalHeight - firstHeight) > 1.0 {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.tableView.beginUpdates()
+                        self?.tableView.endUpdates()
+                    }
+                }
+            }
+
+            // Measure true Auto Layout height from contentView. This allows cache correction in
+            // both directions (grow and shrink), preventing persistent oversized gaps.
+            if hasComplexContent || enforcement.updated {
+                let measuredHeight = currentCell.contentView.systemLayoutSizeFitting(
+                    CGSize(width: tableView.bounds.width, height: UIView.layoutFittingCompressedSize.height),
+                    withHorizontalFittingPriority: .required,
+                    verticalFittingPriority: .fittingSizeLevel
+                ).height
+                let normalizedMeasuredHeight = max(44, measuredHeight)
+                if abs(normalizedMeasuredHeight - finalHeight) > 1.0 {
+                    finalHeight = normalizedMeasuredHeight
+                }
+
+                // If the visible cell height differs from measured height, request table re-query.
+                if abs(normalizedMeasuredHeight - currentCell.bounds.height) > 1.0 {
                     DispatchQueue.main.async { [weak self] in
                         self?.tableView.beginUpdates()
                         self?.tableView.endUpdates()
