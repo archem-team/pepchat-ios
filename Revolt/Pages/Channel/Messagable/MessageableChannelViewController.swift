@@ -290,8 +290,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         // Configure UI based on permissions
         permissionsManager.configureUIBasedOnPermissions()
 
-        // Initialize message count tracking
-        lastKnownMessageCount = localMessages.count
+        // Initialize message change tracking (count + ID set/order)
+        let initialMessageIds = viewModel.viewState.channelMessages[viewModel.channel.id] ?? localMessages
+        lastKnownMessageCount = initialMessageIds.count
+        lastKnownMessageIds = initialMessageIds
         // print("🚀 INIT: Set initial lastKnownMessageCount to \(lastKnownMessageCount)")
 
         // CRITICAL FIX: Reset empty response time for new channel
@@ -1231,10 +1233,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             return
         }
 
-        // Skip if no actual change (for regular message updates)
-        let newCount = viewModel.viewState.channelMessages[viewModel.channel.id]?.count ?? 0
-        guard newCount != lastKnownMessageCount else { return }
+        // Skip only when neither count nor IDs changed.
+        // This avoids stale UI when reconciliation swaps IDs but keeps the same total count.
+        let newMessageIds = viewModel.viewState.channelMessages[viewModel.channel.id] ?? []
+        let newCount = newMessageIds.count
+        let hasCountChanged = newCount != lastKnownMessageCount
+        let hasIdsChanged = newMessageIds != lastKnownMessageIds
+        guard hasCountChanged || hasIdsChanged else { return }
         lastKnownMessageCount = newCount
+        lastKnownMessageIds = newMessageIds
 
         // Skip if user is scrolling (for regular message updates)
         guard !tableView.isDragging, !tableView.isDecelerating else { return }
@@ -2825,6 +2832,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     internal var lastMessageUpdateTime = Date()
     internal let minimumUpdateInterval: TimeInterval = 5.0  // Minimum seconds between updates
     private var lastKnownMessageCount: Int = 0  // Track last known message count
+    private var lastKnownMessageIds: [String] = []  // Track last known message IDs snapshot
 
     // Helper method to check if we should update messages
     private func shouldUpdateMessages() -> Bool {
