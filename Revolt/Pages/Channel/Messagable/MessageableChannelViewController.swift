@@ -1632,9 +1632,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             return
         }
 
-        // Normal sync path: only update and reload when the list actually changed
-        guard localMessages != channelMessages else {
-
+        // Normal sync path: only skip when IDs are unchanged and this is not a forced metadata refresh.
+        if !forceUpdate && localMessages == channelMessages {
             return
         }
 

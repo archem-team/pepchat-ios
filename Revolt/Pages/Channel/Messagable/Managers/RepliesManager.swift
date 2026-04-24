@@ -571,7 +571,7 @@ class RepliesManager: NSObject {
                             viewState.messages[message.id] = updatedMessage
                         }
                         viewState.showAlert(message: "Message pinned", icon: .peptidePin)
-                        viewController.refreshMessages()
+                        viewController.refreshMessages(forceUpdate: true)
                     case .failure(let error):
                         // print("❌ Failed to pin message: \(error)")
                         viewController.showErrorAlert(message: "Failed to pin message")
@@ -594,7 +594,7 @@ class RepliesManager: NSObject {
                             viewState.messages[message.id] = updatedMessage
                         }
                         viewState.showAlert(message: "Message unpinned", icon: .peptidePin)
-                        viewController.refreshMessages()
+                        viewController.refreshMessages(forceUpdate: true)
                     case .failure(let error):
                         // print("❌ Failed to unpin message: \(error)")
                         viewController.showErrorAlert(message: "Failed to unpin message")
