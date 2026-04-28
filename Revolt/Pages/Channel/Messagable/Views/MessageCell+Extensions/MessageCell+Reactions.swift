@@ -127,8 +127,12 @@ extension MessageCell {
         guard !buttons.isEmpty else { return }
         
         let measuredWidth = reactionsContainerView.bounds.width
-        let fallbackWidth = contentView.bounds.width - 32 - 50 // Account for margins and avatar
-        let containerWidth: CGFloat = max(120, measuredWidth > 0 ? measuredWidth : fallbackWidth)
+        // Prefer the content label width for first render because reaction constraints are aligned to it.
+        // This avoids over-wrapping reactions when the container has not been laid out yet.
+        let contentLabelWidth = contentLabel.bounds.width
+        let fallbackWidth = contentView.bounds.width - 66 // Account for avatar + message paddings
+        let preferredWidth = measuredWidth > 0 ? measuredWidth : (contentLabelWidth > 0 ? contentLabelWidth : fallbackWidth)
+        let containerWidth: CGFloat = max(120, preferredWidth)
         let spacing: CGFloat = 8
         let lineSpacing: CGFloat = 8
         
@@ -173,9 +177,13 @@ extension MessageCell {
             }
         }
 
-        // Set container height based on total rows
+        // Set container height based on total rows.
+        // Use a near-required priority to avoid unsatisfiable warnings during UITableView's
+        // temporary encapsulated-height estimation pass (e.g. 44pt), while preserving final layout.
         let totalHeight = currentY + maxHeightInRow
-        reactionsContainerView.heightAnchor.constraint(equalToConstant: totalHeight).isActive = true
+        let heightConstraint = reactionsContainerView.heightAnchor.constraint(equalToConstant: totalHeight)
+        heightConstraint.priority = UILayoutPriority(999)
+        heightConstraint.isActive = true
     }
     
     private func setupReactionsContainerConstraints() {
@@ -211,7 +219,9 @@ extension MessageCell {
         
         // Set bottom constraint to contentView to properly define cell height
         let bottomConstraint = reactionsContainerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16)
-        bottomConstraint.priority = .required
+        // Near-required to avoid noisy "Unable to simultaneously satisfy constraints" during
+        // estimated-height fitting while still pinning reactions in normal layout.
+        bottomConstraint.priority = UILayoutPriority(999)
         reactionsBottomToContentViewConstraint = bottomConstraint
         
         NSLayoutConstraint.activate([
