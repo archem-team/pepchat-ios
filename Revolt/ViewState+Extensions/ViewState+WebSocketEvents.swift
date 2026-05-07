@@ -610,12 +610,16 @@ extension ViewState {
                 self.channels[channel.id] = channel
                 self.channelMessages[channel.id] = []
                 self.dms.insert(channel, at: 0)
+                self.allDmChannelIds.removeAll { $0 == channel.id }
+                self.allDmChannelIds.insert(channel.id, at: 0)
 
             case .group_dm_channel(_):
                 // Group DMs are always loaded immediately
                 self.channels[channel.id] = channel
                 self.channelMessages[channel.id] = []
                 self.dms.insert(channel, at: 0)
+                self.allDmChannelIds.removeAll { $0 == channel.id }
+                self.allDmChannelIds.insert(channel.id, at: 0)
 
             case .text_channel(let textChannel):
                 // Server channels: only load if server is currently active
