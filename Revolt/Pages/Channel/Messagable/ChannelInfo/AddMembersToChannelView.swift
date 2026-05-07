@@ -59,10 +59,10 @@ struct AddMembersToChannelView: View {
             users = [UserMaybeMember(user: viewState.currentUser!)]
             
         case .dm_channel(let dMChannel):
-            users =  dMChannel.recipients.map { UserMaybeMember(user: viewState.users[$0]!) }
+            users =  dMChannel.recipients.map { UserMaybeMember(user: viewState.resolveDmRecipientUser($0)) }
             
         case .group_dm_channel(let groupDMChannel):
-            users =  groupDMChannel.recipients.map { UserMaybeMember(user: viewState.users[$0]!) }
+            users =  groupDMChannel.recipients.map { UserMaybeMember(user: viewState.resolveDmRecipientUser($0)) }
             
         case .text_channel(_), .voice_channel(_):
             users =  viewState.members[channel.server!]!.values.compactMap {

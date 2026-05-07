@@ -2273,6 +2273,37 @@ public class ViewState: ObservableObject {
         }
         return placeholderUser
     }
+
+    func resolveDmRecipientUser(_ userId: String) -> Types.User {
+        if let user = users[userId] {
+            return user
+        }
+
+        if let user = allEventUsers[userId] {
+            DispatchQueue.main.async { [weak self] in
+                self?.users[userId] = user
+            }
+            return user
+        }
+
+        if let currentUser, currentUser.id == userId {
+            return currentUser
+        }
+
+        let placeholderUser = Types.User(
+            id: userId,
+            username: "Unknown User",
+            discriminator: "0000",
+            relationship: .None
+        )
+
+        DispatchQueue.main.async { [weak self] in
+            self?.users[userId] = placeholderUser
+            self?.allEventUsers[userId] = placeholderUser
+        }
+
+        return placeholderUser
+    }
     
     /// Checks if the current user has a friendship with the specified user
     /// - Parameter userId: The ID of the target user

@@ -356,7 +356,10 @@ extension ViewState {
         
         // print("🚀 VIEWSTATE: Processing \(dmChannels.count) DM channels with lazy loading")
         
-        // Sort all DM channels
+        let originalOrder = Dictionary(uniqueKeysWithValues: dmChannels.enumerated().map { ($0.element.id, $0.offset) })
+
+        // Sort all DM channels. When two channels have the same/missing last_message_id,
+        // keep the Ready payload order so the tail of the list matches other clients.
         let sortedDmChannels = dmChannels.sorted { first, second in
             let firstLast = first.last_message_id
             let secondLast = second.last_message_id
@@ -372,9 +375,11 @@ extension ViewState {
                 return true
             } else if !firstIsUnread && secondIsUnread {
                 return false
-            } else {
+            } else if (firstLast ?? "") != (secondLast ?? "") {
                 return (firstLast ?? "") > (secondLast ?? "")
             }
+
+            return (originalOrder[first.id] ?? Int.max) < (originalOrder[second.id] ?? Int.max)
         }
         
         // Store all DM IDs in order
