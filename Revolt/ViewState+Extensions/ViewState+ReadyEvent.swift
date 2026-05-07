@@ -138,7 +138,7 @@ extension ViewState {
         processMembers(data.members)
         
         // Process DMs
-        processDMs(channels: Array(channels.values))
+        processDMs(channels: data.channels)
         
         // Process emojis
         for emoji in data.emojis {

@@ -37,23 +37,24 @@ extension MessageCell {
        
        // Show custom option sheet instead of UIAlertController
        if let viewController = findViewController() {
-           // Capture the message to avoid nil references
-           let capturedMessage = message
+           // Use the latest message snapshot from ViewState so options reflect fresh metadata
+           // (e.g. pinned/unpinned) even if the cell has not yet been reconfigured.
+           let latestMessage = viewState.messages[message.id] ?? message
            
            // Check if user has permission to send messages (for reply option)
            let canReply = checkCanReply()
            
            let optionSheet = MessageOptionViewController(
-               message: message,
+               message: latestMessage,
                isMessageAuthor: isCurrentUserAuthor(),
                canDeleteMessage: canDeleteMessage(),
                canReply: canReply,
                onOptionSelected: { [weak self] action in
                    if let strongSelf = self {
-                       strongSelf.onMessageAction?(action, capturedMessage)
+                       strongSelf.onMessageAction?(action, latestMessage)
                    }
                }, canPinMessage: canPinMessage(),
-               isMessagePinned: message.pinned == true
+               isMessagePinned: latestMessage.pinned == true
            )
            
            // Present as a modal with custom style
