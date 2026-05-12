@@ -451,6 +451,17 @@ extension MessageableChannelViewController {
 
         // Initial reload
         refreshMessages()
+        
+        // Keep UIKit typing indicator in sync with ViewState typing state.
+        viewModel.viewState.$currentlyTyping
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.refreshTypingIndicatorFromViewState()
+            }
+            .store(in: &cancellables)
+        
+        // Seed indicator immediately for already-active typing sessions.
+        refreshTypingIndicatorFromViewState()
     }
     
     // Additional helper to force scroll after a message is added
@@ -513,6 +524,31 @@ extension MessageableChannelViewController {
             name: NSNotification.Name("VideoPlayerDidDismiss"),
             object: nil
         )
+    }
+    
+    internal func refreshTypingIndicatorFromViewState() {
+        let channelId = viewModel.channel.id
+        let currentUserId = viewModel.viewState.currentUser?.id
+        let typingIds = viewModel.viewState.currentlyTyping[channelId] ?? []
+        
+        let users: [(Types.User, Types.Member?)] = typingIds.compactMap { userId in
+            guard userId != currentUserId, let user = viewModel.viewState.users[userId] else {
+                return nil
+            }
+            
+            var member: Types.Member?
+            if let serverId = viewModel.channel.server {
+                member = viewModel.viewState.members[serverId]?[userId]
+            }
+            
+            return (user, member)
+        }
+        
+        if users.isEmpty {
+            typingIndicatorManager.hideTypingIndicator()
+        } else {
+            typingIndicatorManager.showTypingIndicator(for: users)
+        }
     }
     
 }
