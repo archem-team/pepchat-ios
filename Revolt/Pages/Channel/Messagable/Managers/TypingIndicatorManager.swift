@@ -39,7 +39,7 @@ class TypingIndicatorManager {
         NSLayoutConstraint.activate([
             typingIndicator.leadingAnchor.constraint(equalTo: viewController.view.leadingAnchor),
             typingIndicator.trailingAnchor.constraint(equalTo: viewController.view.trailingAnchor),
-            typingIndicator.bottomAnchor.constraint(equalTo: viewController.view.safeAreaLayoutGuide.bottomAnchor),
+            typingIndicator.bottomAnchor.constraint(equalTo: viewController.messageInputView.topAnchor),
             typingIndicator.heightAnchor.constraint(equalToConstant: 30)
         ])
         

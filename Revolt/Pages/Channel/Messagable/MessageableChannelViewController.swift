@@ -33,7 +33,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     var viewModel: MessageableChannelViewModel
     // Change the type of dataSource to accept both MessageTableViewDataSource and its subclasses
     var dataSource: UITableViewDataSource!
-    private var cancellables = Set<AnyCancellable>()
+     var cancellables = Set<AnyCancellable>()
 
     // IMPORTANT NEW PROPERTY: Local copy of messages that we control completely
     var localMessages: [String] = []
@@ -181,7 +181,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     // MARK: - Managers
     lazy var permissionsManager = PermissionsManager(viewModel: viewModel, viewController: self)
     private lazy var repliesManager = RepliesManager(viewModel: viewModel, viewController: self)
-    private lazy var typingIndicatorManager = TypingIndicatorManager(
+    internal lazy var typingIndicatorManager = TypingIndicatorManager(
         viewModel: viewModel, viewController: self)
     internal lazy var scrollPositionManager = ScrollPositionManager(viewController: self)
     internal lazy var messageInputHandler = MessageInputHandler(
