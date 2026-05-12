@@ -262,6 +262,7 @@ extension MessageableChannelViewController {
         super.viewWillDisappear(animated)
 
         isViewDisappearing = true
+        typingIndicatorManager.hideTypingIndicator()
         
         scrollToBottomWorkItem?.cancel()
         scrollToBottomWorkItem = nil

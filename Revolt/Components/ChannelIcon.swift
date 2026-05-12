@@ -370,8 +370,16 @@ struct ChannelIconDM: View {
                 }
                 
                 VStack(alignment: .leading, spacing: .zero){
-                    PeptideText(text: recipient?.username ?? "Unknown User",
-                                font: font, textColor: .textDefaultGray01)
+                    HStack(spacing: .spacing4) {
+                        PeptideText(text: recipient?.username ?? "Unknown User",
+                                    font: font, textColor: .textDefaultGray01)
+                        
+                        if recipient?.hasVerifiedBadge() == true {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.yellow)
+                        }
+                    }
                     
                     if let recipient = recipient {
                         let isOnline = recipient.online == true
