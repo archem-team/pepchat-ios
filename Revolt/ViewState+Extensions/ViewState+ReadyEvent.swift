@@ -158,6 +158,7 @@ extension ViewState {
         if let uid = currentUser?.id, let url = baseURL {
             MessageCacheWriter.shared.setSession(userId: uid, baseURL: url)
             loadDraftsFromUserDefaults(userId: uid, baseURL: url)
+            ShareStorage.saveSessionMetadata(userId: uid, baseURL: url)
         }
         
         await verifyStateIntegrity()
@@ -193,6 +194,7 @@ extension ViewState {
         }
         saveChannelCacheAsync()
         saveServersCacheAsync()
+        saveShareRecipientIndexAsync()
         
         // Check for stale messages
         for channel in channels.values {

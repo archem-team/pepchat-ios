@@ -91,6 +91,7 @@ public class ViewState: ObservableObject {
     @Published var sessionToken: String? = nil {
         didSet {
             keychain["sessionToken"] = sessionToken
+            SharedKeychain.writeSessionToken(sessionToken)
         }
     }
     var users: [String: Types.User] {
@@ -596,7 +597,7 @@ public class ViewState: ObservableObject {
         let decoder = JSONDecoder()
         
         // Read token from keychain before any self access
-        let token = Keychain(service: "chat.peptide.app")["sessionToken"]
+        let token = SharedKeychain.readSessionToken() ?? Keychain(service: "chat.peptide.app")["sessionToken"]
 
         // === FAST PATH: Minimum needed for first frame ===
         self.http = HTTPClient(token: nil, baseURL: "https://peptide.chat/api", viewState: nil)

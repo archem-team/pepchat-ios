@@ -954,6 +954,28 @@ extension ViewState {
             }
             
         }
+
+        if shouldRefreshShareRecipientIndex(after: event) {
+            saveShareRecipientIndexAsync()
+        }
         
+    }
+
+    private func shouldRefreshShareRecipientIndex(after event: WsMessage) -> Bool {
+        switch event {
+        case .ready,
+             .server_create,
+             .server_delete,
+             .server_update,
+             .channel_create,
+             .channel_update,
+             .channel_delete,
+             .channel_group_join,
+             .channel_group_leave,
+             .user_relationship:
+            return true
+        default:
+            return false
+        }
     }
 }
