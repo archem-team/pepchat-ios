@@ -63,7 +63,8 @@ class MessageTableViewDataSource: NSObject, UITableViewDataSource {
                 
                 // Try to get author, or create a placeholder if not found
                 let author: User
-                if let foundAuthor = viewModel.viewState.users[message.author] {
+                if let foundAuthor = viewModel.viewState.users[message.author],
+                   !MessageableChannelViewController.isPlaceholderUser(foundAuthor) {
                     author = foundAuthor
                 } else {
                     // print("⚠️ Could not find author for messageId: \(messageId), creating placeholder")
@@ -187,7 +188,8 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                 
                 // Try to get author, or create a placeholder if not found
                 let author: User
-                if let foundAuthor = viewModelRef.viewState.users[message.author] {
+                if let foundAuthor = viewModelRef.viewState.users[message.author],
+                   !MessageableChannelViewController.isPlaceholderUser(foundAuthor) {
                     author = foundAuthor
                 } else {
                     // print("⚠️ Could not find author for messageId: \(messageId), creating placeholder")
@@ -255,4 +257,3 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
         }
     }
 }
-

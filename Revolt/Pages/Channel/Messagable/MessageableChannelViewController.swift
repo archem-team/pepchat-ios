@@ -311,7 +311,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         } else {
             // Force an initial load of messages only if no target message
             // print("📜 VIEW_DID_LOAD: No target message, loading regular messages")
-            Task {
+            loadingTask = Task { [weak self] in
+                guard let self else { return }
                 await loadInitialMessages()
             }
         }
@@ -442,6 +443,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        isViewDisappearing = false
 
         // Hide navigation bar if presented in a navigation controller
         navigationController?.setNavigationBarHidden(true, animated: animated)
@@ -498,8 +500,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
         // print("⚡ INSTANT_CLEANUP: Removed \(messagesToRemove.count) message objects immediately")
 
-        // 4. IMMEDIATE: Clear table view and data source
-        self.dataSource = nil
+        // 4. Release table-owned message references after this VC has been marked
+        // inactive. All late table mutations are gated by canMutateTableView().
+        releaseTableResourcesForDisappearingView()
 
         // 5. IMMEDIATE: Reset all state variables
         isInTargetMessagePosition = false
@@ -970,6 +973,32 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
         // print("🗑️ DEINIT: Cleanup completed - freed \(messageCount) messages from memory")
     }
+
+    internal func canMutateTableView() -> Bool {
+        guard isViewLoaded, !isViewDisappearing, let tableView = tableView else {
+            return false
+        }
+
+        return tableView.dataSource != nil
+    }
+
+    internal func canApplyLoadResult(for channelId: String) -> Bool {
+        !isViewDisappearing && viewModel.channel.id == channelId && activeChannelId == channelId
+    }
+
+    internal func releaseTableResourcesForDisappearingView() {
+        guard isViewLoaded, let tableView = tableView else { return }
+
+        tableView.layer.removeAllAnimations()
+        tableView.tableFooterView = nil
+        tableView.tableHeaderView = nil
+        tableView.prefetchDataSource = nil
+        tableView.dataSource = nil
+        tableView.delegate = nil
+        dataSource = nil
+        skeletonView?.removeFromSuperview()
+        skeletonView = nil
+    }
     
     private func presentServerInfoSheet(for server: Server) {
         // Create the ServerInfoSheet with required parameters
@@ -1076,7 +1105,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
               let channelId = userInfo["channelId"] as? String,
               let messageId = userInfo["messageId"] as? String,
               channelId == viewModel.channel.id else { return }
-        guard let row = localMessages.firstIndex(of: messageId),
+        guard canMutateTableView(),
+              let row = localMessages.firstIndex(of: messageId),
               tableView.dataSource != nil,
               row < tableView.numberOfRows(inSection: 0) else { return }
         let messageIdToInvalidate = messageId
@@ -1085,6 +1115,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         cellHeightCache.invalidate(messageId: messageIdToInvalidate)
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            guard self.canMutateTableView() else { return }
             (self.dataSource as? LocalMessagesDataSource)?.invalidateMessageCache(forMessageId: messageIdToInvalidate)
             let indexPath = IndexPath(row: rowToReload, section: 0)
             if indexPath.row < self.tableView.numberOfRows(inSection: 0) {
@@ -1104,7 +1135,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         }
         cellHeightCache.invalidate(messageId: messageId)
         continuationCache.removeValue(forKey: messageId)
-        guard let row = localMessages.firstIndex(of: messageId),
+        guard canMutateTableView(),
+              let row = localMessages.firstIndex(of: messageId),
               tableView.dataSource != nil,
               row < tableView.numberOfRows(inSection: 0) else { return }
         let indexPath = IndexPath(row: row, section: 0)
@@ -1176,6 +1208,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
+                    guard self.canMutateTableView() else { return }
                     // print(
                         // "🔥 RELOADING ROW: Reloading row \(indexPath.row) for message \(messageId)")
 
@@ -1189,9 +1222,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                     }
 
                     UIView.performWithoutAnimation {
+                        guard indexPath.row < self.tableView.numberOfRows(inSection: 0) else { return }
                         self.tableView.reloadRows(at: [indexPath], with: .none)
-                        self.tableView.beginUpdates()
-                        self.tableView.endUpdates()
                         self.tableView.layoutIfNeeded()
                     }
 
@@ -1204,7 +1236,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
                     // Only if last message and user is at bottom, check if it went under keyboard
                     if isLastMessage && wasNearBottom {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                            guard let self = self, self.canMutateTableView() else { return }
                             guard let cellRect = self.tableView.cellForRow(at: indexPath)?.frame
                             else { return }
                             let visibleHeight =
@@ -1902,12 +1935,15 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
                 // OPTIMIZED: Author lookup with cache and fallback
                 let author: User
-                if let cachedAuthor = userCache[message.author] {
+                if let cachedAuthor = userCache[message.author],
+                   !MessageableChannelViewController.isPlaceholderUser(cachedAuthor) {
                     author = cachedAuthor
-                } else if let foundAuthor = viewModelRef.viewState.users[message.author] {
+                } else if let foundAuthor = viewModelRef.viewState.users[message.author],
+                          !MessageableChannelViewController.isPlaceholderUser(foundAuthor) {
                     author = foundAuthor
                     userCache[message.author] = foundAuthor  // Cache for future use
                 } else {
+                    userCache.removeValue(forKey: message.author)
                     // print("⚠️ AUTHOR_NOT_FOUND: Creating fallback author for messageId=\(messageId)")
                     let fallbackAuthor = User(
                         id: message.author,
@@ -1917,7 +1953,6 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                         relationship: .None
                     )
                     author = fallbackAuthor
-                    userCache[message.author] = fallbackAuthor  // Cache fallback too
                 }
 
                 // Safe continuation check
@@ -2160,6 +2195,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     private var ongoingReplyFetches = Set<String>()
     /// Reply IDs that returned 404 — skip re-fetching them to avoid endless retry loops.
     internal var failedReplyIds = Set<String>()
+    private static let maxReplyFetchesPerPass = 24
+    private static let maxConcurrentReplyFetches = 6
 
     /// Fetch reply message content for messages that have replies
     internal func fetchReplyMessagesContent(for messages: [Types.Message]) async {
@@ -2217,51 +2254,59 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             return
         }
 
-        // print("🔗 FETCH_REPLIES: Need to fetch \(replyIdsToFetch.count) reply messages")
-        // print("🌐 FETCH_REPLIES: About to start API calls for replies!")
+        let cappedReplyIds = Array(replyIdsToFetch.prefix(Self.maxReplyFetchesPerPass))
+        let replyIdsArray = cappedReplyIds
+        let skippedReplyIds = replyIdsToFetch.subtracting(Set(cappedReplyIds))
+        if !skippedReplyIds.isEmpty {
+            await MainActor.run {
+                for replyId in skippedReplyIds {
+                    ongoingReplyFetches.remove(replyId)
+                }
+            }
+        }
 
-        // Fetch reply messages concurrently for better performance
-        // print(
-            // "🌐 FETCH_REPLIES: Starting concurrent fetch of \(replyIdsToFetch.count) reply messages")
-        // Fetch all reply messages concurrently (without per-reply user fetches)
-        await withTaskGroup(of: Void.self) { group in
-            for replyId in replyIdsToFetch {
-                group.addTask { [weak self] in
-                    guard let self = self,
-                        let channelId = replyChannelMap[replyId]
-                    else { return }
-                    if let _ = await self.fetchMessageForReply(
-                        messageId: replyId, channelId: channelId)
-                    {
-                        // Message stored in viewState.messages by fetchMessageForReply
-                    } else {
-                        print("❌ FETCH_REPLIES: Failed to fetch reply \(replyId)")
+        for chunkStart in stride(from: 0, to: replyIdsArray.count, by: Self.maxConcurrentReplyFetches) {
+            let chunkEnd = min(chunkStart + Self.maxConcurrentReplyFetches, replyIdsArray.count)
+            let chunk = Array(replyIdsArray[chunkStart..<chunkEnd])
+            await withTaskGroup(of: Void.self) { group in
+                for replyId in chunk {
+                    group.addTask { [weak self] in
+                        guard let self = self,
+                            let channelId = replyChannelMap[replyId]
+                        else { return }
+                        if await self.fetchMessageForReply(
+                            messageId: replyId, channelId: channelId) == nil {
+                            print("❌ FETCH_REPLIES: Failed to fetch reply \(replyId)")
+                        }
                     }
                 }
             }
         }
 
-        // Batch-fetch all missing reply authors after all replies are collected
         let replyAuthorIds: Set<String> = await MainActor.run {
-            let fetched = replyIdsToFetch.compactMap { viewModel.viewState.messages[$0]?.author }
+            let fetched = replyIdsArray.compactMap { viewModel.viewState.messages[$0]?.author }
             return Set(fetched).filter {
                 viewModel.viewState.users[$0] == nil
                 && viewModel.viewState.allEventUsers[$0] == nil
             }
         }
         if !replyAuthorIds.isEmpty {
-            await withTaskGroup(of: Void.self) { group in
-                for userId in replyAuthorIds {
-                    group.addTask { [weak self] in
-                        await self?.fetchUserForMessage(userId: userId)
+            let authorList = Array(replyAuthorIds.prefix(Self.maxReplyFetchesPerPass))
+            for chunkStart in stride(from: 0, to: authorList.count, by: Self.maxConcurrentReplyFetches) {
+                let chunkEnd = min(chunkStart + Self.maxConcurrentReplyFetches, authorList.count)
+                let chunk = Array(authorList[chunkStart..<chunkEnd])
+                await withTaskGroup(of: Void.self) { group in
+                    for userId in chunk {
+                        group.addTask { [weak self] in
+                            await self?.fetchUserForMessage(userId: userId)
+                        }
                     }
                 }
             }
         }
 
-        // Clear ongoing fetch tracking
         await MainActor.run {
-            for replyId in replyIdsToFetch {
+            for replyId in cappedReplyIds {
                 ongoingReplyFetches.remove(replyId)
             }
         }
@@ -2567,6 +2612,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     /// Call after a message is deleted locally (API success) so the table view updates immediately.
     /// Syncs localMessages from ViewState, updates the data source, and reloads the table.
     internal func refreshMessagesAfterLocalDelete() {
+        guard canMutateTableView() else { return }
         syncLocalMessagesWithViewState()
         if let localDataSource = dataSource as? LocalMessagesDataSource {
             localDataSource.updateMessages(localMessages)

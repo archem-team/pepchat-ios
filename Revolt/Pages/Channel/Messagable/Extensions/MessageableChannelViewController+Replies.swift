@@ -74,7 +74,22 @@ extension MessageableChannelViewController {
 
     /// Fetch user data if not in cache
     func fetchUserForMessage(userId: String) async {
-        guard viewModel.viewState.users[userId] == nil else { return }
+        let cachedUser = await MainActor.run {
+            viewModel.viewState.users[userId]
+        }
+        if let cachedUser, !Self.isPlaceholderUser(cachedUser) {
+            return
+        }
+
+        let storedUser = await MainActor.run {
+            viewModel.viewState.allEventUsers[userId]
+        }
+        if let storedUser, !Self.isPlaceholderUser(storedUser) {
+            await MainActor.run {
+                viewModel.viewState.users[userId] = storedUser
+            }
+            return
+        }
 
         do {
             // print("👥 FETCH_USER: Fetching user \(userId) for reply message")
@@ -82,6 +97,7 @@ extension MessageableChannelViewController {
 
             await MainActor.run {
                 viewModel.viewState.users[user.id] = user
+                viewModel.viewState.allEventUsers[user.id] = user
                 // print("✅ FETCH_USER: Successfully cached user \(user.username)")
             }
         } catch {
@@ -89,6 +105,10 @@ extension MessageableChannelViewController {
 
             // Create a placeholder user to prevent crashes
             await MainActor.run {
+                if let existingUser = viewModel.viewState.users[userId],
+                   !Self.isPlaceholderUser(existingUser) {
+                    return
+                }
                 let placeholder = Types.User(
                     id: userId,
                     username: "Unknown User",

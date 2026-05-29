@@ -147,9 +147,9 @@ public class ViewState: ObservableObject {
         }
         didSet {
             if _batchDepth == 0 {
-                let channelMessagesSnapshot = self.channelMessages
-                debouncedSave(key: "channelMessages") {
-                    try? JSONEncoder().encode(channelMessagesSnapshot)
+                debouncedSave(key: "channelMessages") { [weak self] in
+                    guard let self else { return nil }
+                    return try? JSONEncoder().encode(self.channelMessagesPersistenceSnapshot())
                 }
             }
             // Loading state check (lightweight, runs always)
@@ -421,7 +421,7 @@ public class ViewState: ObservableObject {
     @Published var isLoadingChannelMessages: Bool = false
     
     // CRITICAL FIX: Flag to prevent memory cleanup during older message loading
-    private var isLoadingOlderMessages: Bool = false
+    internal var isLoadingOlderMessages: Bool = false
     
     var userSettingsStore: UserSettingsData
     
@@ -690,6 +690,7 @@ public class ViewState: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            guard let self, self.enableAutomaticPreloading else { return }
             Task { [weak self] in
                 await self?.preloadImportantChannels()
             }
@@ -820,32 +821,14 @@ public class ViewState: ObservableObject {
             // print("   - Servers: \(self.servers.count)")
             // print("   - Channel messages lists: \(self.channelMessages.count)")
             
-            // COMPLETE PROTECTION for DM View - NO CLEANUP at all
-            if currentSelection == .dms {
-                // print("🔄 VIRTUAL_DM: DM view active - ALL automatic memory management DISABLED")
-                return // Skip all cleanup when in DM view
-            }
-            
-            // CRITICAL FIX: Skip cleanup when loading older messages
-            if isLoadingOlderMessages {
-                // print("🔄 LOADING_PROTECTION: Loading older messages - skipping cleanup")
-                return
-            }
-            
-            // DISABLED: No immediate user cleanup to prevent black messages
-            if users.count > maxUsersInMemory {
-                // print("⚠️ MEMORY WARNING: \(users.count) users exceed limit of \(maxUsersInMemory), but cleanup is disabled")
-                // Don't call smartUserCleanup() to prevent black messages
-            }
-            
-            // Warning if memory usage is high (only for non-DM views)
-            if memoryUsage > 1500 { // Increased threshold to 1.5GB for better performance
-                // print("⚠️ MEMORY WARNING: High memory usage detected!")
-                
-                // Force immediate aggressive cleanup
+            if isLoadingOlderMessages { return }
+
+            if memoryUsage > 1000 {
                 enforceMemoryLimits()
                 smartUserCleanup()
-                smartChannelCleanup()
+                if currentSelection != .dms {
+                    smartChannelCleanup()
+                }
             }
         }
     }
@@ -870,22 +853,13 @@ public class ViewState: ObservableObject {
         }
     }
     
-    // DISABLED: Add proactive cleanup when adding new messages/users
     @MainActor
     func checkAndCleanupIfNeeded() {
-        // CRITICAL FIX: Disable all proactive cleanup to prevent black messages
-        // print("🧠 MEMORY: Proactive cleanup DISABLED to prevent black messages")
-        
-        // Only log warnings if approaching limits
-        if messages.count > Int(Double(maxMessagesInMemory) * 0.9) {
-            // print("⚠️ MEMORY WARNING: Approaching message limit (\(messages.count)/\(maxMessagesInMemory))")
+        if isLoadingOlderMessages { return }
+        if messages.count > Int(Double(maxMessagesInMemory) * 0.9)
+            || users.count > Int(Double(maxUsersInMemory) * 0.9) {
+            enforceMemoryLimits()
         }
-        
-        if users.count > Int(Double(maxUsersInMemory) * 0.9) {
-            // print("⚠️ MEMORY WARNING: Approaching user limit (\(users.count)/\(maxUsersInMemory))")
-        }
-        
-        return // Exit early, no cleanup
     }
     
     // Helper function to extract timestamp from ULID
@@ -1760,28 +1734,8 @@ public class ViewState: ObservableObject {
                 }
             }
             
-            // Sort DM channels
-            let sortedDmChannels = dmChannels.sorted { first, second in
-                let firstLast = first.last_message_id
-                let secondLast = second.last_message_id
-                
-                let firstUnreadLast = unreads[first.id]?.last_id
-                let secondUnreadLast = unreads[second.id]?.last_id
-                
-                let firstIsUnread = firstLast != nil && firstLast != firstUnreadLast
-                let secondIsUnread = secondLast != nil && secondLast != secondUnreadLast
-                
-                // Show unread DMs first
-                if firstIsUnread && !secondIsUnread {
-                    return true
-                } else if !firstIsUnread && secondIsUnread {
-                    return false
-                } else {
-                    return (firstLast ?? "") > (secondLast ?? "")
-                }
-            }
-            
-            allDmChannelIds = sortedDmChannels.map { $0.id }
+            allDmChannelIds = dmChannels.map(\.id)
+            applyServerDmListOrder()
             // print("🔄 DM_REINIT: Rebuilt \(allDmChannelIds.count) DM channel IDs")
         }
         
@@ -1995,7 +1949,15 @@ public class ViewState: ObservableObject {
             case .success(let openedChannel):
                 channel = openedChannel
                 await MainActor.run {
-                    dms.append(openedChannel)
+                    channels[openedChannel.id] = openedChannel
+                    if !allDmChannelIds.contains(openedChannel.id) {
+                        allDmChannelIds.append(openedChannel.id)
+                    }
+                    if loadedDmBatches.isEmpty {
+                        dms.append(openedChannel)
+                    } else {
+                        applyServerDmListOrder()
+                    }
                 }
             case .failure(let error):
                 // Log and show a safe error to the user instead of crashing
@@ -2353,34 +2315,24 @@ public class ViewState: ObservableObject {
             serverMembersCount = nil
         }
         
-        let serverMembers = await self.http.fetchServerMembers(target: target)
+        // Online members only for sidebar count — avoids loading tens of thousands into memory.
+        let serverMembers = await self.http.fetchServerMembers(target: target, excludeOffline: true)
         
-        // OPTIMIZED: Process data in background, then update UI on main thread
         switch serverMembers {
             case .success(let success):
-                // Process data in background
-                var newUsers = self.users
-                var newMembers = self.members
-
-                for user in success.users {
-                    newUsers[user.id] = user
-                }
-
-                for member in success.members {
-                    let serverId = member.id.server
-                    let userId = member.id.user
-
-                    if newMembers[serverId] == nil {
-                        newMembers[serverId] = [:]
-                    }
-                    newMembers[serverId]?[userId] = member
-                }
-                
-                // FAST: Update UI on main thread
                 await MainActor.run {
                     self.serverMembersCount = success.members.count.formattedWithSeparator()
-                    self.users = newUsers
-                    self.members = newMembers
+                    for user in success.users {
+                        self.users[user.id] = user
+                    }
+                    for member in success.members {
+                        let serverId = member.id.server
+                        let userId = member.id.user
+                        if self.members[serverId] == nil {
+                            self.members[serverId] = [:]
+                        }
+                        self.members[serverId]?[userId] = member
+                    }
                 }
             
             case .failure(_):

@@ -16,6 +16,7 @@ import ULID
 extension MessageableChannelViewController {
     // Update handleNewMessages to only scroll if user is near bottom
     @objc internal func handleNewMessages(_ notification: Notification) {
+        guard canMutateTableView() else { return }
         let notifChannel = notification.userInfo?["channelId"] as? String
 
         // If notification includes channelId, only refresh when the new message is for this channel (e.g. message from another device).
@@ -57,9 +58,11 @@ extension MessageableChannelViewController {
         // Only auto-scroll if user is already near bottom and not actively reading older messages.
         if isUserNearBottom() && !hasManuallyScrolledUp {
             scrollToBottom(animated: true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self = self, self.canMutateTableView() else { return }
                 self.scrollToBottom(animated: true)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                    guard let self = self, self.canMutateTableView() else { return }
                     self.scrollToBottom(animated: false)
                 }
             }
@@ -94,7 +97,8 @@ extension MessageableChannelViewController {
         // print("🔍 SEARCH_CLOSED: Channel search closed for channel \(channelId), setting flag to prevent scroll")
 
         // Reset the flag after a short delay to ensure it doesn't interfere with future navigation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            guard let self = self, !self.isViewDisappearing else { return }
             self.isReturningFromSearch = false
         }
     }
@@ -111,7 +115,8 @@ extension MessageableChannelViewController {
         view.layoutIfNeeded()
 
         // Double-check after a short delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self = self, !self.isViewDisappearing else { return }
             self.navigationController?.setNavigationBarHidden(true, animated: false)
         }
     }

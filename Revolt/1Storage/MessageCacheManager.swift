@@ -196,6 +196,19 @@ class MessageCacheManager {
         let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
         sqlite3_bind_text(statement, index, (value as NSString).utf8String, -1, SQLITE_TRANSIENT)
     }
+
+    private func isPlaceholderUser(_ user: User) -> Bool {
+        guard user.discriminator == "0000",
+              user.relationship == .None,
+              user.display_name == nil,
+              user.avatar == nil else {
+            return false
+        }
+
+        return user.username == "Unknown User"
+            || user.username == "Loading..."
+            || user.username.hasPrefix("User ")
+    }
     
     // MARK: - Message Operations
     
@@ -529,6 +542,7 @@ class MessageCacheManager {
         let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
         for user in users {
+            guard !isPlaceholderUser(user) else { continue }
             guard let userData = try? JSONEncoder().encode(user) else { continue }
             sqlite3_reset(statement)
             sqlite3_clear_bindings(statement)
@@ -586,7 +600,8 @@ class MessageCacheManager {
             if let blob = sqlite3_column_blob(stmt, 1) {
                 let size = sqlite3_column_bytes(stmt, 1)
                 let data = Data(bytes: blob, count: Int(size))
-                if let user = try? decoder.decode(User.self, from: data) {
+                if let user = try? decoder.decode(User.self, from: data),
+                   !isPlaceholderUser(user) {
                     users[uid] = user
                 }
             }

@@ -2728,7 +2728,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1.3;
+				MARKETING_VERSION = 2.2.1;
 				NEW_SETTING = "";
 				NEW_SETTING1 = "";
 				ON_DEMAND_RESOURCES_INITIAL_INSTALL_TAGS = Resources;
@@ -2790,7 +2790,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1.3;
+				MARKETING_VERSION = 2.2.1;
 				NEW_SETTING = "";
 				NEW_SETTING1 = "";
 				ON_DEMAND_RESOURCES_INITIAL_INSTALL_TAGS = Resources;
