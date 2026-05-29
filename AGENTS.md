@@ -6,6 +6,8 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 
 - `Revolt/` contains the main iOS app (Swift/SwiftUI views, networking, and app entry points).
 - `notificationservice/` is the Notification Service Extension.
+- `ShareExtension/` is the iOS Share Extension target (`ShareViewController.swift`, SwiftUI picker UI) for sharing photos, videos, and files from other apps into a channel.
+- `Shared/AttachmentSharing/` holds code compiled into both the main app and Share Extension (`ShareExtensionShared.swift`: `ShareRecipientIndex`, `ShareStorage`, App Group I/O, shared Keychain session read).
 - `Types/` holds shared model types.
 - `RevoltTests/`, `RevoltUITests/`, and `Tests/` contain unit/UI tests (XCTest).
 - `Revolt/Resources/` stores assets, xcassets catalogs, and localized strings (`Localizable.xcstrings`).
@@ -22,7 +24,7 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
   - `Utils/` - Utility functions and helpers
   - `DataSources/` - UITableView data source implementations
   - `Controllers/` - View controllers (e.g., FullScreenImageViewController)
-  - `Attachments/`, `ChannelInfo/`, `Mention/` - Feature-specific subdirectories
+  - `Attachments/` - In-composer attachment picker (`AttachmentsSheet.swift`); `ChannelInfo/`, `Mention/` - Other feature-specific subdirectories
 - `Revolt/Pages/Channel/Messagable/ChannelInfo/` contains channel member-management surfaces: `ChannelInfo` (member list/search, group DM owner transfer, server kick/ban sheets) and `AddMembersToChannelView` (friend picker with existing-member disabling and batched invite flow).
 - `Package.swift` and `Revolt.xcworkspace` define SwiftPM and Xcode workspace configuration. The workspace also includes CocoaPods (`Pods/`) for some dependencies (e.g., Down).
 
@@ -32,7 +34,7 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 - Feature screens live under `Revolt/Pages/`, while reusable UI is under `Revolt/Components/`.
 - Networking and realtime behavior live in `Revolt/Api/` (HTTP + websocket).
 - Shared domain models live in `Types/` and are used across UI and networking layers.
-- Key flows: auth screens under `Revolt/Pages/Login/`, channel + message UI under `Revolt/Pages/Channel/` (primary list UI is UIKit `MessageableChannelViewController`; SwiftUI `MessageableChannel` also exists), settings under `Revolt/Pages/Settings/`, and Discover servers under `Revolt/Components/Home/Discover/` (CSV-backed server list with membership cache for peptide.chat).
+- Key flows: auth screens under `Revolt/Pages/Login/`, channel + message UI under `Revolt/Pages/Channel/` (primary list UI is UIKit `MessageableChannelViewController`; SwiftUI `MessageableChannel` also exists), settings under `Revolt/Pages/Settings/`, Discover servers under `Revolt/Components/Home/Discover/` (CSV-backed server list with membership cache for peptide.chat), and system share-sheet attachment sharing via the `ShareExtension` target (recipient index written by the main app; see Share Extension section below).
 - DM list virtual scrolling: `ViewState` tracks visible DM batches (`visibleStartBatch` / `visibleEndBatch`, `loadedDmBatches`, `dmBatchSize`) to limit in-memory DM rows while keeping smooth scrolling.
 - Data flow: `Revolt/Api/` → `Types/` → view models (ex: `Revolt/Pages/.../*ViewModel.swift`) → views (`Revolt/Pages/`, `Revolt/Components/`).
 
@@ -49,7 +51,7 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
   - `ViewState+UsersAndDms.swift` - User/DM loading (`processUsers`, `loadUsersForDmBatch`, `processDMs`, etc.). User preloading prioritizes self plus relationship states (`Friend`, `Incoming`, `Outgoing`, `Blocked`, `BlockedOther`) and lazy-loads additional DM/message authors from `allEventUsers` (placeholder fallback only as last resort).
   - `ViewState+Navigation.swift` - Selection and navigation (`selectServer`, `selectChannel`, `selectDm`, `handleChannelChange`)
   - `ViewState+Unreads.swift` - Unread counts and badges (`getUnreadCountFor`, `cleanupStaleUnreads`, `forceMarkAllAsRead`)
-  - `ViewState+Auth.swift` - Authentication (`signIn`, `signOut`, `destroyCache`). `signOut()` calls `clearAllDraftsForCurrentAccount()` before setting `state = .signedOut`; `destroyCache()` calls it again at the very start, then flushes `MessageCacheWriter` with bounded timeout and clears message cache and in-memory state.
+  - `ViewState+Auth.swift` - Authentication (`signIn`, `signOut`, `destroyCache`). `signOut()` clears share-extension App Group data (`clearShareExtensionData()`) and channel cache at the start, then `clearAllDraftsForCurrentAccount()` before `state = .signedOut`; `destroyCache()` repeats draft/share clears and flushes `MessageCacheWriter` with bounded timeout before clearing message cache and in-memory state.
   - `ViewState+ServerCache.swift` - Server cache persistence (`loadServersCacheSync`, `saveServersCacheAsync`)
   - `ViewState+ReadyEvent.swift` - Ready event processing (`extractNeededDataFromReadyEvent`, `processReadyData`). Binds message cache session via `MessageCacheWriter.shared.setSession(userId:baseURL:)` when connected; also loads draft storage via `loadDraftsFromUserDefaults(userId:baseURL:)` so drafts are session-bound. Ready reconciliation is authoritative for server membership/channels (prunes removed channels, resets `loadedServerChannels`, and persists channel/server caches).
   - `ViewState+Notifications.swift` - Push tokens and app badge (`updateAppBadgeCount`, `retryUploadNotificationToken`)
@@ -58,6 +60,16 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
   - `ViewState+DMChannel.swift` - DM channel operations (`deactivateDMChannel`, `closeDMGroup`, `removeChannel`)
   - `ViewState+MembershipCache.swift` - Discover server membership cache (`loadMembershipCacheSync`, `saveMembershipCacheAsync`, `updateMembershipCache`) for instant Discover UI on launch and sync across devices via WebSocket
   - `ViewState+ChannelCache.swift` - Server channel list cache: persist per-server text/voice channels for restore; cleared on sign-out/destroyCache
+  - `ViewState+ShareIndex.swift` - Share Extension recipient index (`saveShareRecipientIndexAsync`, `clearShareExtensionData`). Builds `ShareRecipientIndex` from DMs, group DMs, friends without an existing DM, and server text channels; persists via `ShareStorage` to the App Group. Called after `processReadyData`, on WebSocket events that change channels/servers/relationships (`shouldRefreshShareRecipientIndex`), and cleared at the start of `signOut()` / `destroyCache()`.
+
+### Share Extension (Attachment Sharing)
+
+- **Targets**: Main app + `ShareExtension/` + shared module `Shared/AttachmentSharing/ShareExtensionShared.swift`.
+- **App Group**: `group.pepchat.shared.data` (`AttachmentSharingConstants.appGroupIdentifier`) — recipient index JSON, session metadata, and temporary attachment copies. Configured in `Revolt.entitlements` and `ShareExtension/ShareExtension.entitlements`.
+- **Shared Keychain**: Extension reads session token via `ShareKeychain` / `keychain-access-groups` (`chat.zeko.app.shared`); main app writes session metadata in `processReadyData` via `ShareStorage.saveSessionMetadata`.
+- **Main app writer**: After Ready and on relevant WebSocket events, `ViewState+ShareIndex` builds and saves `ShareRecipientIndex` (DMs, group DMs, server text channels, recent channel IDs). Extension cannot use live `ViewState`; it loads the persisted index and token only.
+- **Extension sender**: `ShareViewController.swift` hosts SwiftUI (`ShareExtensionViewModel`, destination picker, upload + `/channels/{id}/messages`). Runs in a separate process with limited memory/time; no offline queue across termination.
+- **Provisioning**: App Group and Keychain Sharing capabilities must match in Xcode and Apple Developer (see `docs/Feature/AttachmentSharing.md` for setup, activation rules, and debugging notes).
 
 ### View Model Pattern
 
@@ -68,7 +80,8 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 ### Local Caching
 
 - **MessageCacheWriter** (`Revolt/1Storage/MessageCacheWriter.swift`): Single serialized, session-scoped cache write path. All cache writes from ViewModel, WebSocket events, MessageInputHandler, RepliesManager, and MessageContentsView go through this writer to prevent races and cross-account leakage. Session is bound via `setSession(userId:baseURL:)` (called from `ViewState+ReadyEvent` when connected); on sign-out, `ViewState.destroyCache()` calls `invalidate(flushFirst: true)` to flush pending writes with a bounded timeout (e.g. 4s) then clear caches. When adding new cache write call sites, use the writer’s `enqueue`* methods rather than writing directly to `MessageCacheManager`.
-- **MessageCacheManager** (`Revolt/1Storage/MessageCacheManager.swift`): SQLite-based local message cache. Handles reads (`loadCachedMessages`, `loadCachedUsers`, `cachedMessageCount`, `hasCachedMessages`) and internal write implementation; all persistent writes are invoked via `MessageCacheWriter`. Schema v2 is multi-tenant (messages, users, channel_info, tombstones keyed by `channel_id` + `user_id` + `base_url`); soft deletes use a tombstones table. Caches messages, users, and channel metadata with automatic cleanup and preloading of frequently accessed channels. **Server reconciliation**: When the first API page is fetched after opening a channel (`loadRegularMessages` in `MessageableChannelViewController+MessageLoading.swift`), any message ID we had locally (e.g. from cache) in that page’s time window but not in the API response is treated as deleted (e.g. another user deleted while app was closed); those IDs are added to `deletedMessageIds` and tombstoned via `MessageCacheWriter.enqueueDeleteMessage` so the UI and cache stay in sync after app reopen.
+- **MessageCacheManager** (`Revolt/1Storage/MessageCacheManager.swift`): SQLite-based local message cache. Handles reads (`loadCachedMessages`, `loadCachedUsers`, `cachedMessageCount`, `hasCachedMessages`) and internal write implementation; all persistent writes are invoked via `MessageCacheWriter`. Schema v2 is multi-tenant (messages, users, channel_info, tombstones keyed by `channel_id` + `user_id` + `base_url`); soft deletes use a tombstones table. Caches messages, users, and channel metadata with automatic cleanup and preloading of frequently accessed channels. **Server reconciliation**: When API history is merged after opening a channel (`MessageableChannelViewController+MessageLoading.swift`), message IDs present locally (e.g. from cache) in the fetched page’s time window but absent from the API response are treated as deleted. Reconciliation runs only when the API returns a **full page** (limit 100); a short page means end-of-history, so missing older IDs are not tombstoned. Deleted IDs go to `deletedMessageIds` and `MessageCacheWriter.enqueueDeleteMessage` so UI and cache stay in sync after reopen.
+- **UserDefaults channel message IDs**: `ViewState+Memory.channelMessagesPersistenceSnapshot()` caps each channel’s persisted ID list to 200 (`channelMessagesPersistenceCapPerChannel`) to avoid huge JSON encodes; in-memory `channelMessages` is not capped by this.
 - **Draft messages** (`ViewState+Drafts.swift`, `ViewState.channelDrafts`): Per-channel composer text only; stored in UserDefaults under `channelDrafts_\(userId)_\(baseURL)`. Not part of the message cache. Session-bound: loaded in `processReadyData` after `setSession`; cleared in `signOut()` and at the start of `destroyCache()`. Saved on leave (viewDidDisappear before cleanup) and via debounced typing; cleared at commit-to-send (offline and online) in `MessageInputHandler`. Restored in `viewWillAppear` when non-empty; when nil/empty the composer is not cleared (preserves same-channel return and return-from-search). See `docs/Feature/DraftMessage.md` for full plan and implementation notes.
 
 ### Manager Pattern
@@ -101,7 +114,7 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 - `docs/ForceUnwrap.md` - Force unwrap audit (`!`, `as!`, `try!`) by risk level and file location; use when hardening crash-prone paths.
 - `docs/Implementation.md` - Auto-generated per-file Swift / SwiftUI / UIKit stack map across the repo (high-level orientation, not a substitute for reading source).
 - `docs/claude-code-setup.md` - Local tooling setup notes for Claude Code workflows.
-- **Feature logs** (`docs/Feature/`): `PinMessage.md`, `VerifiedBadges.md`, `DraftMessage.md`, `Channel.md`, `MentionIndicator.md` (mention counts / unread styling in channel and DM lists, `UnreadMentionsView`, etc.).
+- **Feature logs** (`docs/Feature/`): `PinMessage.md`, `VerifiedBadges.md`, `DraftMessage.md`, `Channel.md`, `MentionIndicator.md` (mention counts / unread styling in channel and DM lists, `UnreadMentionsView`, etc.), `AttachmentSharing.md` (iOS Share Extension, App Group recipient index, shared Keychain, extension UI and upload flow).
 - **Fix / investigation logs** (`docs/Fix/`): `DeleteMessagesIssue.md`, `ContactMessage.md`, `MessageReaction.md`, `ChatSynchronization.md`, `ChatOrdering.md`, `DuplicateMessage.md`, `ProfilePicture.md`, `ReplyMessageLoadingCrash.md`, `LoadingMessagePlaceholder.md`, `MultilineMessage.md`, `LinkPreviewImage.md`, `BrokenInvites.md`, and related notes.
 - `docs/TestCases.md` - Rules and template for AI agents to derive and write test cases: user POV, step-by-step format, expected outcome/result, edge-case coverage, and feature-area mapping; use when preparing manual or automated test cases for a feature or flow.
 - `docs/UIKitImplementation.md` - UIKit channel architecture and implementation notes.
@@ -138,7 +151,8 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 
 - Avoid committing secrets (tokens, API keys). Use environment variables or Xcode build settings for local overrides.
 - When modifying entitlements or provisioning (`Revolt/Revolt.entitlements`), document the reason in the PR.
-- Session tokens are stored in Keychain via `KeychainAccess` library.
+- Session tokens are stored in Keychain via `KeychainAccess` library (`chat.peptide.app` service). The Share Extension reads the same session via a **Keychain Access Group** (`chat.zeko.app.shared`); do not duplicate token storage in UserDefaults.
+- App Group `group.pepchat.shared.data` holds share-extension recipient index and temp files only; treat as session-scoped and clear via `clearShareExtensionData()` on sign-out / `destroyCache()`.
 - UserDefaults is used for non-sensitive app state persistence (with debounced saves for performance).
 
 ## Performance Considerations
@@ -146,7 +160,7 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 - Message caching: `MessageCacheManager` provides instant message loading from SQLite cache. All cache writes go through `MessageCacheWriter` for serialization and session safety; sign-out flushes pending writes with a bounded timeout before clearing caches.
 - Discover membership cache: `ViewState+MembershipCache` persists server join/leave state to disk for instant Discover UI on launch; updated on join/leave events (local or via WebSocket).
 - Memory management: ViewState implements automatic cleanup of old messages/users to prevent memory issues.
-- Debounced saves: Large data structures (users, emojis, messages) use debounced UserDefaults saves to prevent UI blocking.
+- Debounced saves: Large data structures (users, emojis, messages) use debounced UserDefaults saves to prevent UI blocking. Persisted `channelMessages` ID lists are capped per channel (200) in `ViewState+Memory` before encode.
 - Background operations: Heavy operations (cache updates, data encoding) are performed on background queues.
 - Channel preloading: Important channels are preloaded in the background for faster access.
 - UITableView message list: `CellHeightCache` avoids repeated height calculation for stable rows; DM sidebar uses batched visible-window loading in `ViewState` to cap loaded DM batches.
@@ -166,4 +180,7 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 - **Verified username badge**: Verified state is derived from user badge bitfield (`Types/User.hasVerifiedBadge()`, currently using `Badges.responsible_disclosure` bit). Username-level verified indicator in message rows is rendered as yellow SF Symbol `checkmark.seal.fill` in both UIKit (`MessageCell`) and SwiftUI (`MessageView`). Keep spacing behavior (collapsed width when hidden) and continuation-row hiding consistent; see `docs/Feature/VerifiedBadges.md`.
 - **Message reactions**: SwiftUI sheet (`MessageReactionsSheet`) and UIKit-oriented wrapper (`MessageReactionsSheetUIKit`) live under `Revolt/Components/MessageRenderer/`; reaction add/remove should stay consistent with ViewState / WebSocket updates (see `docs/Fix/MessageReaction.md` when debugging stale counts or UI).
 - **Mention unread UI**: Server and DM channel rows show mention-aware unread affordances via `UnreadMentionsView` and unread enum cases (`mentions`, `unreadWithMentions`) in components such as `ServerChannelScrollView` and `ChannelIcon`; see `docs/Feature/MentionIndicator.md`.
+- **Attachment sharing (Share Extension)**: Do not read `ViewState` from the extension. Extend `Shared/AttachmentSharing/` for shared models/storage; refresh the recipient index from the main app via `ViewState+ShareIndex`. New share-related persistence must stay session-bound (`userId` + `baseURL`) and be cleared in `signOut()` / `destroyCache()`. See `docs/Feature/AttachmentSharing.md`.
+- **Save attachment to Photos**: `FullScreenImageViewController` (`Messagable/Controllers/`) saves the displayed image (preferring original URL/data with auth when available) via `PHPhotoLibrary` add-only authorization. In-composer pending files remain `PendingAttachmentsManager` / `1PendingAttachmentsManager.swift`.
+- **API history reconcile**: When merging fetched messages in `MessageableChannelViewController+MessageLoading.swift`, only treat cache-only IDs as server-deleted if the API page is full (100 messages); otherwise older local IDs may simply be off the end of the fetched window.
 
