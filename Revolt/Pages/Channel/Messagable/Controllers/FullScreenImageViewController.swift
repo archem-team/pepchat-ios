@@ -231,24 +231,13 @@ class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
             return
         }
 
-        let status = PHPhotoLibrary.authorizationStatus()
-        switch status {
-        case .authorized, .limited:
-            saveImageToPhotoLibrary(image)
-        case .denied, .restricted:
-            showPermissionDeniedAlert()
-        case .notDetermined:
-            PHPhotoLibrary.requestAuthorization { [weak self] newStatus in
-                DispatchQueue.main.async {
-                    if newStatus == .authorized || newStatus == .limited {
-                        self?.saveImageToPhotoLibrary(image)
-                    } else {
-                        self?.showPermissionDeniedAlert()
-                    }
-                }
+        requestPhotoLibrarySaveAuthorization { [weak self] isAuthorized in
+            guard let self else { return }
+            if isAuthorized {
+                self.saveImageToPhotoLibrary(image)
+            } else {
+                self.showPermissionDeniedAlert()
             }
-        @unknown default:
-            showAlert(title: "Error", message: "Unknown permission status")
         }
     }
 
@@ -306,12 +295,17 @@ class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
     }
 
     private func saveImageDataToPhotoLibrary(_ data: Data) {
-        let status = PHPhotoLibrary.authorizationStatus()
-        if status != .authorized && status != .limited {
-            showPermissionDeniedAlert()
-            return
+        requestPhotoLibrarySaveAuthorization { [weak self] isAuthorized in
+            guard let self else { return }
+            if isAuthorized {
+                self.performSaveImageDataToPhotoLibrary(data)
+            } else {
+                self.showPermissionDeniedAlert()
+            }
         }
+    }
 
+    private func performSaveImageDataToPhotoLibrary(_ data: Data) {
         PHPhotoLibrary.shared().performChanges({
             let request = PHAssetCreationRequest.forAsset()
             request.addResource(with: .photo, data: data, options: nil)
@@ -325,6 +319,24 @@ class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
                     self?.showAlert(title: "Error", message: "Failed to save image")
                 }
             }
+        }
+    }
+
+    private func requestPhotoLibrarySaveAuthorization(completion: @escaping (Bool) -> Void) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        switch status {
+        case .authorized, .limited:
+            completion(true)
+        case .denied, .restricted:
+            completion(false)
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
+                DispatchQueue.main.async {
+                    completion(newStatus == .authorized || newStatus == .limited)
+                }
+            }
+        @unknown default:
+            completion(false)
         }
     }
     
@@ -426,4 +438,3 @@ class FullScreenImageViewController: UIViewController, UIScrollViewDelegate {
         // Optional: Add any cleanup or additional behavior after zooming
     }
 }
-

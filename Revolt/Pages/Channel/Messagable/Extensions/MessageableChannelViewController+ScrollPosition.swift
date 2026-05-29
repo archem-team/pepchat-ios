@@ -35,6 +35,7 @@ extension MessageableChannelViewController {
         let indexPaths = (0..<count).map { IndexPath(row: insertionIndex + $0, section: 0) }
 
         if animated {
+            guard canMutateTableView() else { return }
             tableView.performBatchUpdates({
                 self.tableView.insertRows(at: indexPaths, with: .none)
             }) { _ in
@@ -44,6 +45,7 @@ extension MessageableChannelViewController {
                 }
             }
         } else {
+            guard canMutateTableView() else { return }
             // For non-animated updates, we need to handle this more carefully
             CATransaction.begin()
             CATransaction.setDisableActions(true)

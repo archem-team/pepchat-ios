@@ -238,7 +238,11 @@ extension ViewState {
         
         // Process all channels (already filtered)
         for channel in eventChannels {
-            channels[channel.id] = channel
+            if let existing = channels[channel.id] {
+                channels[channel.id] = mergeChannelFromReady(existing: existing, incoming: channel)
+            } else {
+                channels[channel.id] = channel
+            }
             
             // Create message array for messageable channels
             switch channel {

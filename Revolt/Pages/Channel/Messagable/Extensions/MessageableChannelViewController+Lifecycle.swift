@@ -73,7 +73,8 @@ extension MessageableChannelViewController {
                 tableView.tableFooterView = spinner
 
                 // Reload messages from API
-                Task {
+                loadingTask = Task { [weak self] in
+                    guard let self else { return }
                     await loadInitialMessages()
                 }
             }
@@ -124,7 +125,8 @@ extension MessageableChannelViewController {
             positionTableAtBottomBeforeShowing()
 
             // Adjust table insets after positioning
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                guard let self = self, self.canMutateTableView() else { return }
                 self.adjustTableInsetsForMessageCount()
             }
         }
@@ -168,16 +170,19 @@ extension MessageableChannelViewController {
             tableView.tableFooterView = spinner
 
             // Trigger target message loading which will use nearby API
-            Task {
+            loadingTask = Task { [weak self] in
+                guard let self else { return }
                 // print("🎯 VIEW_DID_APPEAR: Triggering target message loading")
                 await loadInitialMessages()
 
                 // Adjust table insets after loading messages
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self, self.canMutateTableView() else { return }
                     self.adjustTableInsetsForMessageCount()
 
                     // CRITICAL FIX: Check for missing reply content after initial load with delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                        guard let self = self, self.canMutateTableView() else { return }
                         Task {
                             // print(
                                 // "🔗 VIEW_APPEARED: Checking for missing replies after delay (first case)"
@@ -202,11 +207,18 @@ extension MessageableChannelViewController {
                 refreshMessages()
 
                 // Adjust table insets and check for missing replies
-                Task {
+                loadingTask = Task { [weak self] in
+                    guard let self else { return }
                     try? await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
+                    guard !Task.isCancelled else { return }
                     await MainActor.run {
+                        guard self.canMutateTableView() else { return }
                         self.adjustTableInsetsForMessageCount()
                     }
+                    let canContinue = await MainActor.run {
+                        self.canMutateTableView()
+                    }
+                    guard canContinue else { return }
                     await self.checkAndFetchMissingReplies()
                 }
             } else if hasActualMessages {
@@ -219,14 +231,17 @@ extension MessageableChannelViewController {
                 // Show skeleton loading view; loadInitialMessages() will hide it when cache or API result is ready
                 showSkeletonView()
 
-                Task {
+                loadingTask = Task { [weak self] in
+                    guard let self else { return }
                     await loadInitialMessages()
 
                     // Same follow-up as target-message path: adjust insets and check missing replies
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self, self.canMutateTableView() else { return }
                         self.adjustTableInsetsForMessageCount()
 
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                            guard let self = self, self.canMutateTableView() else { return }
                             Task {
                                 // print(
                                     // "🔗 VIEW_APPEARED: Checking for missing replies after delay (no-target path)"
@@ -248,6 +263,7 @@ extension MessageableChannelViewController {
         // Apply global fix after view appears to ensure messages are visible
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             guard let self = self else { return }
+            guard self.canMutateTableView() else { return }
             // Only apply fix if table is empty but we have messages, and loading isn't in progress
             if self.messageLoadingState != .loading
                 && self.tableView.numberOfRows(inSection: 0) == 0
@@ -303,6 +319,8 @@ extension MessageableChannelViewController {
         scrollProtectionTimer = nil
         loadingTask?.cancel()
         loadingTask = nil
+        cacheLoadTask?.cancel()
+        cacheLoadTask = nil
         pendingAPICall?.cancel()
         pendingAPICall = nil
 

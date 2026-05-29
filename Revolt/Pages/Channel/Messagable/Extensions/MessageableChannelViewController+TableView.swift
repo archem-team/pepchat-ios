@@ -96,8 +96,8 @@ extension MessageableChannelViewController: UITableViewDelegate {
                 // If height changed between passes, first pass was premature — trigger re-query
                 if abs(finalHeight - firstHeight) > 1.0 {
                     DispatchQueue.main.async { [weak self] in
-                        self?.tableView.beginUpdates()
-                        self?.tableView.endUpdates()
+                        guard let self = self, self.canMutateTableView() else { return }
+                        self.tableView.performBatchUpdates(nil)
                     }
                 }
             }
@@ -118,8 +118,8 @@ extension MessageableChannelViewController: UITableViewDelegate {
                 // If the visible cell height differs from measured height, request table re-query.
                 if abs(normalizedMeasuredHeight - currentCell.bounds.height) > 1.0 {
                     DispatchQueue.main.async { [weak self] in
-                        self?.tableView.beginUpdates()
-                        self?.tableView.endUpdates()
+                        guard let self = self, self.canMutateTableView() else { return }
+                        self.tableView.performBatchUpdates(nil)
                     }
                 }
             }
@@ -209,4 +209,3 @@ extension MessageableChannelViewController: UITableViewDelegate {
         }
     }
 }
-

@@ -269,43 +269,6 @@ extension ViewState {
                 userInfo: ["channelId": m.channel]
             )
             
-            if let index = dms.firstIndex(where: { $0.id == m.channel }) {
-                let dmChannel = dms.remove(at: index)
-
-                let updatedDM: Channel
-                switch dmChannel {
-                    case .dm_channel(var c):
-                        c.last_message_id = m.id
-                        updatedDM = .dm_channel(c)
-                    case .group_dm_channel(var c):
-                        c.last_message_id = m.id
-                        updatedDM = .group_dm_channel(c)
-                    default:
-                        updatedDM = dmChannel
-                }
-
-                dms.insert(updatedDM, at: 0)
-            }
-
-            // Always keep canonical DM order (most recent at top), even when user is not on DMs tab,
-            // so that when they open DMs the list is correct and does not revert on scroll.
-            let isDM: Bool = {
-                if let ch = channels[m.channel] {
-                    if case .dm_channel = ch { return true }
-                    if case .group_dm_channel = ch { return true }
-                }
-                return false
-            }()
-            if isDM {
-                if let idx = allDmChannelIds.firstIndex(of: m.channel) {
-                    allDmChannelIds.remove(at: idx)
-                    allDmChannelIds.insert(m.channel, at: 0)
-                } else {
-                    // New DM (e.g. from another device) or not yet in list
-                    allDmChannelIds.insert(m.channel, at: 0)
-                }
-            }
-
             if var existing = channels[m.channel] {
                 switch existing {
                 case .dm_channel(var c):
@@ -320,6 +283,10 @@ extension ViewState {
                 default:
                     break
                 }
+            }
+
+            if isDmOrGroupDmChannelId(m.channel) {
+                applyServerDmListOrder()
             }
             if var existing = allEventChannels[m.channel], existing.server != nil {
                 if case .text_channel(var c) = existing {
@@ -605,21 +572,13 @@ extension ViewState {
 
             // Handle different channel types
             switch channel {
-            case .dm_channel(_):
-                // DMs are always loaded immediately
+            case .dm_channel(_), .group_dm_channel(_):
                 self.channels[channel.id] = channel
                 self.channelMessages[channel.id] = []
-                self.dms.insert(channel, at: 0)
-                self.allDmChannelIds.removeAll { $0 == channel.id }
-                self.allDmChannelIds.insert(channel.id, at: 0)
-
-            case .group_dm_channel(_):
-                // Group DMs are always loaded immediately
-                self.channels[channel.id] = channel
-                self.channelMessages[channel.id] = []
-                self.dms.insert(channel, at: 0)
-                self.allDmChannelIds.removeAll { $0 == channel.id }
-                self.allDmChannelIds.insert(channel.id, at: 0)
+                if !self.allDmChannelIds.contains(channel.id) {
+                    self.allDmChannelIds.append(channel.id)
+                }
+                self.applyServerDmListOrder()
 
             case .text_channel(let textChannel):
                 // Server channels: only load if server is currently active

@@ -326,7 +326,6 @@ struct DMScrollView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            // Also check when app becomes active
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.checkAndFixMissingDMs()
             }
