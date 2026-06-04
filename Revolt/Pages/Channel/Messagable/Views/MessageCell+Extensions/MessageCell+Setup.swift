@@ -55,6 +55,18 @@ extension MessageCell {
         replyAuthorLabel.setContentHuggingPriority(.required, for: .horizontal)
         replyAuthorLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         replyView.addSubview(replyAuthorLabel)
+
+        replyAuthorBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        replyAuthorBadgeLabel.font = UIFont.boldSystemFont(ofSize: 9)
+        replyAuthorBadgeLabel.textColor = .white
+        replyAuthorBadgeLabel.backgroundColor = UIColor(named: "bgPurple10") ?? .systemPurple
+        replyAuthorBadgeLabel.layer.cornerRadius = 6
+        replyAuthorBadgeLabel.clipsToBounds = true
+        replyAuthorBadgeLabel.textAlignment = .center
+        replyAuthorBadgeLabel.isHidden = true
+        replyView.addSubview(replyAuthorBadgeLabel)
+        replyAuthorBadgeWidthConstraint = replyAuthorBadgeLabel.widthAnchor.constraint(equalToConstant: 0)
+        replyAuthorBadgeWidthConstraint?.isActive = true
         
         // Reply content label
         replyContentLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -128,6 +140,8 @@ extension MessageCell {
         // Add padding to the badge
         bridgeBadgeLabel.layer.masksToBounds = true
         contentView.addSubview(bridgeBadgeLabel)
+        bridgeBadgeWidthConstraint = bridgeBadgeLabel.widthAnchor.constraint(equalToConstant: 0)
+        bridgeBadgeWidthConstraint?.isActive = true
         
         // Content text view - optimized for markdown and performance
         contentLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -201,9 +215,14 @@ extension MessageCell {
             replyAuthorLabel.leadingAnchor.constraint(equalTo: replyAuthorAvatarImageView.trailingAnchor, constant: 4),
             replyAuthorLabel.centerYAnchor.constraint(equalTo: replyView.centerYAnchor),
             replyAuthorLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 110),
+
+            // Reply author badge
+            replyAuthorBadgeLabel.leadingAnchor.constraint(equalTo: replyAuthorLabel.trailingAnchor, constant: 4),
+            replyAuthorBadgeLabel.centerYAnchor.constraint(equalTo: replyView.centerYAnchor),
+            replyAuthorBadgeLabel.heightAnchor.constraint(equalToConstant: 14),
             
             // Reply content label
-            replyContentLabel.leadingAnchor.constraint(equalTo: replyAuthorLabel.trailingAnchor, constant: 4),
+            replyContentLabel.leadingAnchor.constraint(equalTo: replyAuthorBadgeLabel.trailingAnchor, constant: 4),
             replyContentLabel.trailingAnchor.constraint(equalTo: replyView.trailingAnchor),
             replyContentLabel.centerYAnchor.constraint(equalTo: replyView.centerYAnchor),
             
@@ -225,16 +244,15 @@ extension MessageCell {
             usernameVerifiedBadgeImageView.centerYAnchor.constraint(equalTo: usernameLabel.centerYAnchor),
             usernameVerifiedBadgeImageView.heightAnchor.constraint(equalToConstant: 14),
             
-            // Time
-            timeLabel.leadingAnchor.constraint(equalTo: usernameVerifiedBadgeImageView.trailingAnchor, constant: 8),
-            timeLabel.centerYAnchor.constraint(equalTo: usernameLabel.centerYAnchor),
-            
-            // Bridge badge
-            bridgeBadgeLabel.leadingAnchor.constraint(equalTo: timeLabel.trailingAnchor, constant: 8),
+            // Author badge
+            bridgeBadgeLabel.leadingAnchor.constraint(equalTo: usernameVerifiedBadgeImageView.trailingAnchor, constant: 6),
             bridgeBadgeLabel.centerYAnchor.constraint(equalTo: usernameLabel.centerYAnchor),
-            bridgeBadgeLabel.widthAnchor.constraint(equalToConstant: 50),
             bridgeBadgeLabel.heightAnchor.constraint(equalToConstant: 16),
-            bridgeBadgeLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -16),
+            
+            // Time
+            timeLabel.leadingAnchor.constraint(equalTo: bridgeBadgeLabel.trailingAnchor, constant: 8),
+            timeLabel.centerYAnchor.constraint(equalTo: usernameLabel.centerYAnchor),
+            timeLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -16),
             
             // Content trailing — always active regardless of continuation state
             contentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)

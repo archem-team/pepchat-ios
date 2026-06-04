@@ -1008,33 +1008,29 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             onNavigation: { [weak self] route, serverId in
                 guard let self = self else { return }
 
-                // First dismiss the current modal
-                self.dismiss(animated: true) {
-                    // Handle navigation after dismissal
-                    DispatchQueue.main.async {
-                        switch route {
-                        case .overview:
-                            self.viewModel.viewState.path.append(
-                                NavigationDestination.server_overview_settings(serverId))
-                        case .channels:
-                            self.viewModel.viewState.path.append(
-                                NavigationDestination.server_channels(serverId))
-                        case .roles:
-                            self.viewModel.viewState.path.append(
-                                NavigationDestination.server_role_setting(serverId))
-                        case .emojis:
-                            self.viewModel.viewState.path.append(
-                                NavigationDestination.server_emoji_settings(serverId))
-                        case .members:
-                            self.viewModel.viewState.path.append(
-                                NavigationDestination.server_members_view(serverId))
-                        case .invite:
-                            self.viewModel.viewState.path.append(
-                                NavigationDestination.server_invites(serverId))
-                        case .banned:
-                            self.viewModel.viewState.path.append(
-                                NavigationDestination.server_banned_users(serverId))
-                        }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    switch route {
+                    case .overview:
+                        self.viewModel.viewState.path.append(
+                            NavigationDestination.server_overview_settings(serverId))
+                    case .channels:
+                        self.viewModel.viewState.path.append(
+                            NavigationDestination.server_channels(serverId))
+                    case .roles:
+                        self.viewModel.viewState.path.append(
+                            NavigationDestination.server_role_setting(serverId))
+                    case .emojis:
+                        self.viewModel.viewState.path.append(
+                            NavigationDestination.server_emoji_settings(serverId))
+                    case .members:
+                        self.viewModel.viewState.path.append(
+                            NavigationDestination.server_members_view(serverId))
+                    case .invite:
+                        self.viewModel.viewState.path.append(
+                            NavigationDestination.server_invites(serverId))
+                    case .banned:
+                        self.viewModel.viewState.path.append(
+                            NavigationDestination.server_banned_users(serverId))
                     }
                 }
             }

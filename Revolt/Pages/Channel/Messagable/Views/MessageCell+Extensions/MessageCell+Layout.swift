@@ -17,7 +17,7 @@ extension MessageCell {
         usernameLabel.isHidden = isContinuation
         usernameVerifiedBadgeImageView.isHidden = isContinuation || usernameVerifiedBadgeImageView.image == nil
         timeLabel.isHidden = isContinuation
-        bridgeBadgeLabel.isHidden = isContinuation || currentMessage?.masquerade == nil
+        bridgeBadgeLabel.isHidden = isContinuation || (bridgeBadgeLabel.text?.isEmpty ?? true)
 
         // PERF Issue #9: Toggle pre-built constraint sets instead of scanning/removing/recreating.
         // Deactivate all four sets first, then activate the correct one.

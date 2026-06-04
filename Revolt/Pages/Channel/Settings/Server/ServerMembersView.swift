@@ -1,5 +1,6 @@
 import SwiftUI
 import Types
+import ULID
 
 struct ServerMembersView: View {
     @EnvironmentObject var viewState: ViewState
@@ -8,21 +9,25 @@ struct ServerMembersView: View {
     @State private var searchQuery: String = ""
     @State private var searchTextFieldState: PeptideTextFieldState = .default
     @State private var members: [Member] = []
+    @State private var usersById: [String: User] = [:]
+    @State private var displayedMembers: [Member] = []
     @State private var isLoading: Bool = true
-    
-    
-    var filteredMembers: [Member] {
-        if searchQuery.isEmpty {
+
+    private func makeDisplayedMembers() -> [Member] {
+        let trimmedSearch = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSearch.isEmpty else {
             return members
         }
-        
+
+        let query = trimmedSearch.lowercased()
         return members.filter { member in
-            if let user = viewState.users[member.id.user] {
-                return user.username.lowercased().contains(searchQuery.lowercased()) ||
-                       (user.display_name?.lowercased().contains(searchQuery.lowercased()) ?? false)
-            }
-            return false
+            guard let user = user(for: member) else { return false }
+            return searchableText(member: member, user: user).contains(query)
         }
+    }
+
+    private func refreshDisplayedMembers() {
+        displayedMembers = makeDisplayedMembers()
     }
     
     private let toolbarConfig = ToolbarConfig(
@@ -55,33 +60,41 @@ struct ServerMembersView: View {
         PeptideTemplateView(toolbarConfig: toolbarConfig) { _, _ in
             VStack(spacing: .zero) {
                 if isLoading {
-                    // Show loading state
-                    PeptideLoading()
-//                    ProgressView()
+                    VStack {
+                        Spacer(minLength: .zero)
+                        PeptideLoading(
+                            dotSize: .size6,
+                            dotSpacing: .size6,
+                            activeColor: .iconDefaultGray01
+                        )
+                        Spacer(minLength: .zero)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 240)
                 } else {
-                    // Search Bar
-                    
-                        HStack(spacing: .spacing8) {
-                            PeptideTextField(
-                                text: $searchQuery,
-                                state: $searchTextFieldState,
-                                placeholder: "Search in members",
-                                icon: .peptideSearch,
-                                cornerRadius: .radiusLarge,
-                                height: .size40,
-                                keyboardType: .default
-                            )
-                        }
-                        .padding(.top, .padding24)
-                        .padding(.horizontal, .size16)
-                    
-                    
-                    if(!self.filteredMembers.isEmpty)
+                    let currentDisplayedMembers = displayedMembers
+                    let displayedMembersCount = currentDisplayedMembers.count
+                    let canAssignRoles = serverPermissions.contains(.assignRoles)
+
+                    HStack(spacing: .spacing8) {
+                        PeptideTextField(
+                            text: $searchQuery,
+                            state: $searchTextFieldState,
+                            placeholder: "Search in members",
+                            icon: .peptideSearch,
+                            cornerRadius: .radiusLarge,
+                            height: .size40,
+                            keyboardType: .default
+                        )
+                    }
+                    .padding(.top, .padding24)
+                    .padding(.horizontal, .size16)
+
+                    if !currentDisplayedMembers.isEmpty
                     {
                     
                         HStack {
                             PeptideText(
-                                text: "Members - \(filteredMembers.count)",
+                                text: "Members - \(displayedMembersCount)",
                                 font: .peptideHeadline,
                                 textColor: .textDefaultGray01
                             )
@@ -120,11 +133,11 @@ struct ServerMembersView: View {
                         
                     }
                     
-                    if(!self.filteredMembers.isEmpty){
+                    if !currentDisplayedMembers.isEmpty {
                      
                         LazyVStack(spacing: .spacing8) {
-                            ForEach(Array(filteredMembers.enumerated()), id: \.offset) { index, member in
-                                if let user = viewState.users[member.id.user] {
+                            ForEach(Array(currentDisplayedMembers.enumerated()), id: \.element.id.user) { index, member in
+                                if let user = user(for: member) {
                                     Button {
                                         // Open user sheet when tapping on any user
                                         viewState.openUserSheet(user: user, member: member)
@@ -138,11 +151,18 @@ struct ServerMembersView: View {
                                             )
                                             
                                             VStack(alignment: .leading, spacing: .zero) {
-                                                PeptideText(
-                                                    text: user.display_name ?? user.username,
-                                                    font: .peptideCallout,
-                                                    textColor: .textDefaultGray01
-                                                )
+                                                HStack(spacing: .spacing4) {
+                                                    PeptideText(
+                                                        text: user.display_name ?? user.username,
+                                                        font: .peptideCallout,
+                                                        textColor: .textDefaultGray01,
+                                                        lineLimit: 1
+                                                    )
+
+                                                    if let badge = accountBadge(for: user) {
+                                                        MessageBadge(text: badge.text, color: badge.color)
+                                                    }
+                                                }
                                                 
                                                 UserBadgesView(badges: user.getAllBadgesSortedForDisplay(), badgeSize: 12, spacing: 2)
                                                 
@@ -156,7 +176,7 @@ struct ServerMembersView: View {
                                             
                                             Spacer(minLength: .zero)
                                             
-                                            if serverPermissions.contains(.assignRoles){
+                                            if canAssignRoles {
                                                 
                                                 PeptideIcon(
                                                     iconName: .peptideArrowRight,
@@ -172,7 +192,7 @@ struct ServerMembersView: View {
                                     }
                                     .contextMenu {
                                         // Add context menu for role management (for users with permission)
-                                        if serverPermissions.contains(.assignRoles) {
+                                        if canAssignRoles {
                                             Button {
                                                 viewState.path.append(NavigationDestination.member_permissions(serverId, member))
                                             } label: {
@@ -181,7 +201,7 @@ struct ServerMembersView: View {
                                         }
                                     }
                                     
-                                    if index != filteredMembers.count - 1 {
+                                    if index != displayedMembersCount - 1 {
                                         PeptideDivider()
                                             .padding(.horizontal, .padding24)
                                     }
@@ -200,6 +220,9 @@ struct ServerMembersView: View {
         .task {
             await fetchMembers()
         }
+        .onChange(of: searchQuery) { _, _ in
+            refreshDisplayedMembers()
+        }
     }
     
     private func fetchMembers() async {
@@ -209,17 +232,51 @@ struct ServerMembersView: View {
         switch response {
         case .success(let fetchedMembers):
             members = fetchedMembers.members
-            // Update users in viewState if needed
-//            for member in fetchedMembers.members {
-//                if let user = member {
-//                    viewState.users[user.id] = user
-//                }
-//            }
+            usersById = Dictionary(uniqueKeysWithValues: fetchedMembers.users.map { ($0.id, $0) })
+            refreshDisplayedMembers()
         case .failure(_):
             viewState.showAlert(message: "Failed to load members", icon: .peptideInfo)
         }
         isLoading = false
     }
+
+    private func user(for member: Member) -> User? {
+        usersById[member.id.user] ?? viewState.users[member.id.user]
+    }
+
+    private func searchableText(member: Member, user: User) -> String {
+        [
+            user.username,
+            user.display_name,
+            member.nickname,
+            user.usernameWithDiscriminator()
+        ]
+        .compactMap { $0?.lowercased() }
+        .joined(separator: " ")
+    }
+
+    private func accountBadge(for user: User) -> (text: String, color: Color)? {
+        if user.bot != nil {
+            return (String(localized: "BOT"), .bgPurple10)
+        }
+
+        if isNewAccount(user) {
+            return (String(localized: "NEW"), .bgGreen07)
+        }
+
+        return nil
+    }
+
+    private func isNewAccount(_ user: User) -> Bool {
+        guard user.id != String(repeating: "0", count: 26),
+              let ulid = ULID(ulidString: user.id) else {
+            return false
+        }
+
+        let accountAge = Calendar.current.dateComponents([.day], from: ulid.timestamp, to: Date()).day ?? Int.max
+        return accountAge <= 14
+    }
+
 }
 
 #Preview {

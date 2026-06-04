@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Types
+import ULID
 
 /// `MessageReplyView` is a SwiftUI view that displays a reply to a message.
 /// It dynamically loads the message if it's not already present in the app's state.
@@ -74,6 +75,30 @@ struct InnerMessageReplyView: View {
     func formatName(message: Message, author: User, member: Member?) -> String {
         (mentions?.contains(message.author) == true ? "@" : "") + (message.masquerade?.name ?? member?.nickname ?? author.display_name ?? author.username)
     }
+
+    func authorBadge(message: Message, author: User) -> (text: String, color: Color)? {
+        if author.bot != nil {
+            return message.masquerade == nil
+                ? (String(localized: "BOT"), .bgPurple10)
+                : (String(localized: "BRIDGE"), .bgRed07)
+        }
+
+        if isNewAccount(author) {
+            return (String(localized: "NEW"), .bgGreen07)
+        }
+
+        return nil
+    }
+
+    private func isNewAccount(_ user: User) -> Bool {
+        guard user.id != String(repeating: "0", count: 26),
+              let ulid = ULID(ulidString: user.id) else {
+            return false
+        }
+
+        let accountAge = Calendar.current.dateComponents([.day], from: ulid.timestamp, to: Date()).day ?? Int.max
+        return accountAge <= 14
+    }
     
     var body: some View {
         if let message = message {
@@ -100,6 +125,10 @@ struct InnerMessageReplyView: View {
                                     textColor: .textDefaultGray01,
                                     lineLimit: 1)
                         .truncationMode(.tail)
+
+                        if let badge = authorBadge(message: message, author: author) {
+                            MessageBadge(text: badge.text, color: badge.color)
+                        }
                         
                         //.foregroundStyle(member?.displayColour(theme: viewState.theme, server: server!) ?? AnyShapeStyle(viewState.theme.foreground.color))
                         //.font(.caption)
@@ -171,5 +200,4 @@ struct InnerMessageReplyView: View {
         }
     }
 }
-
 
