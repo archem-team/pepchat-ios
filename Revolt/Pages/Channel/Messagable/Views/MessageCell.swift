@@ -6,6 +6,7 @@
 import UIKit
 import Types
 import Kingfisher
+import ULID
 
 // MARK: - MessageCell
 class MessageCell: UITableViewCell, UITextViewDelegate {
@@ -24,6 +25,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
     internal let contentLabel = UITextView() // Changed from UILabel to UITextView
     internal let timeLabel = UILabel()
     internal let bridgeBadgeLabel = UILabel() // Badge for bridged messages
+    internal var bridgeBadgeWidthConstraint: NSLayoutConstraint?
     internal var imageAttachmentsContainer: UIView?
     internal var imageAttachmentViews: [UIImageView] = []
     internal var fileAttachmentsContainer: UIView?
@@ -38,6 +40,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
     internal let replyIndicatorImageView = UIImageView()
     internal let replyAuthorAvatarImageView = UIImageView()
     internal let replyAuthorLabel = UILabel()
+    internal let replyAuthorBadgeLabel = UILabel()
+    internal var replyAuthorBadgeWidthConstraint: NSLayoutConstraint?
     internal let replyContentLabel = UILabel()
     internal var currentReplyId: String? // Store the ID of the message being replied to
     internal let replyLoadingIndicator = UIActivityIndicatorView(style: .medium)
@@ -160,6 +164,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         timeLabel.text = nil
         
         // Hide bridge badge
+        bridgeBadgeLabel.text = nil
+        bridgeBadgeWidthConstraint?.constant = 0
         bridgeBadgeLabel.isHidden = true
         
         // Reset reply view
@@ -168,11 +174,15 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         replyAuthorAvatarImageView.isHidden = true
         replyAuthorAvatarImageView.backgroundColor = .clear
         replyAuthorLabel.text = nil
+        replyAuthorBadgeLabel.text = nil
+        replyAuthorBadgeLabel.isHidden = true
+        replyAuthorBadgeWidthConstraint?.constant = 0
         replyContentLabel.text = nil
         replyView.isHidden = true
         currentReplyId = nil // Reset reply ID
         replyLoadingIndicator.stopAnimating() // Stop loading indicator
         replyAuthorLabel.isHidden = false // Reset visibility
+        replyAuthorBadgeLabel.isHidden = true
         replyContentLabel.isHidden = false // Reset visibility
         replyContentLabel.font = UIFont.systemFont(ofSize: 12) // Reset font
         replyContentLabel.textColor = UIColor(named: "textGray06") ?? .systemGray // Reset color
@@ -247,6 +257,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         avatarImageView.isHidden = false
         usernameLabel.isHidden = false
         timeLabel.isHidden = false
+        bridgeBadgeLabel.text = nil
+        bridgeBadgeWidthConstraint?.constant = 0
         bridgeBadgeLabel.isHidden = true
         
         // PERFORMANCE: Reset properties to defaults (avoid retain cycles)
@@ -431,8 +443,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         usernameVerifiedBadgeImageView.isHidden = !showVerified
         usernameVerifiedBadgeWidthConstraint?.constant = showVerified ? 14 : 0
         
-        // Show bridge badge if message has masquerade (indicating it's bridged)
-        bridgeBadgeLabel.isHidden = message.masquerade == nil
+        configureAuthorBadge(bridgeBadgeLabel, widthConstraint: bridgeBadgeWidthConstraint, for: message, author: author)
         
         // Configure content with improved performance
         // Ensure each message starts from baseline text height; willDisplay can expand if needed.
@@ -480,6 +491,41 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         DispatchQueue.global(qos: .background).async { [weak self] in
             self?.preloadAudioDurations(for: message, viewState: viewState)
         }
+    }
+
+    private func configureAuthorBadge(_ label: UILabel, widthConstraint: NSLayoutConstraint?, for message: Message, author: User) {
+        let badge: (text: String, color: UIColor)?
+
+        if author.bot != nil {
+            badge = message.masquerade == nil
+                ? ("BOT", UIColor(named: "bgPurple10") ?? .systemPurple)
+                : ("BRIDGE", UIColor(named: "bgRed07") ?? .systemPink)
+        } else if isNewAccount(author) {
+            badge = ("NEW", UIColor(named: "bgGreen07") ?? .systemGreen)
+        } else {
+            badge = nil
+        }
+
+        if let badge {
+            label.text = badge.text
+            label.backgroundColor = badge.color
+            widthConstraint?.constant = badge.text == "BRIDGE" ? 50 : 34
+            label.isHidden = false
+        } else {
+            label.text = nil
+            widthConstraint?.constant = 0
+            label.isHidden = true
+        }
+    }
+
+    private func isNewAccount(_ user: User) -> Bool {
+        guard user.id != String(repeating: "0", count: 26),
+              let ulid = ULID(ulidString: user.id) else {
+            return false
+        }
+
+        let accountAge = Calendar.current.dateComponents([.day], from: ulid.timestamp, to: Date()).day ?? Int.max
+        return accountAge <= 14
     }
     
 
@@ -1131,6 +1177,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
                     // Set the author name (prioritize masquerade name, then nickname, then display name)
                     let replyAuthorName = replyMessage.masquerade?.name ?? replyMember?.nickname ?? replyAuthor.display_name ?? replyAuthor.username
                     replyAuthorLabel.text = replyAuthorName
+                    configureAuthorBadge(replyAuthorBadgeLabel, widthConstraint: replyAuthorBadgeWidthConstraint, for: replyMessage, author: replyAuthor)
 
                     // Configure mini avatar for reply author (supports masquerade/server avatars)
                     let replyAvatarInfo = viewState.resolveAvatarUrl(
@@ -1187,6 +1234,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
                     replyAuthorAvatarImageView.isHidden = true
                     replyAuthorAvatarImageView.backgroundColor = .clear
                     replyAuthorLabel.text = ""
+                    replyAuthorBadgeLabel.text = nil
+                    replyAuthorBadgeLabel.isHidden = true
+                    replyAuthorBadgeWidthConstraint?.constant = 0
                     replyContentLabel.text = ""
                     replyContentLabel.textColor = UIColor(named: "textGray06") ?? .systemGray // Reset color
                 }
@@ -1200,8 +1250,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
                 replyAuthorAvatarImageView.isHidden = true
                 replyAuthorAvatarImageView.backgroundColor = .clear
                 replyAuthorLabel.isHidden = true
+                replyAuthorBadgeLabel.isHidden = true
                 replyContentLabel.isHidden = true
                 replyAuthorLabel.text = ""
+                replyAuthorBadgeLabel.text = nil
+                replyAuthorBadgeWidthConstraint?.constant = 0
                 replyContentLabel.text = ""
                 replyContentLabel.font = UIFont.italicSystemFont(ofSize: 12)
                 
@@ -1234,6 +1287,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
                                 self.replyAuthorAvatarImageView.isHidden = true
                                 self.replyAuthorAvatarImageView.backgroundColor = .clear
                                 self.replyAuthorLabel.text = "Deleted Message"
+                                self.replyAuthorBadgeLabel.text = nil
+                                self.replyAuthorBadgeLabel.isHidden = true
+                                self.replyAuthorBadgeWidthConstraint?.constant = 0
                                 self.replyContentLabel.text = "This message was deleted"
                                 self.replyContentLabel.textColor = UIColor(named: "textGray08") ?? .systemGray2
                                 self.replyContentLabel.font = UIFont.italicSystemFont(ofSize: 12)
@@ -1915,4 +1971,3 @@ extension Array {
         return indices.contains(index) ? self[index] : nil
     }
 }
-
