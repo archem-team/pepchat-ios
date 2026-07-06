@@ -295,7 +295,7 @@ extension ViewState {
         }
         
         // Reconcile membership cache: mark as non-member any cached server not in Ready payload
-        for serverId in discoverMembershipCache.keys where !readyServerIds.contains(serverId) {
+        for serverId in Array(discoverMembershipCache.keys) where !readyServerIds.contains(serverId) {
             updateMembershipCache(serverId: serverId, isMember: false)
         }
         

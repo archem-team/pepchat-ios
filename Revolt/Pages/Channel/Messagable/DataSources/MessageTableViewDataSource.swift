@@ -216,6 +216,9 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                              member: member, 
                              viewState: viewModelRef.viewState, 
                              isContinuation: isContinuation)
+                cell.setUnreadSeparatorVisible(
+                    viewControllerRef?.shouldShowUnreadSeparator(for: messageId) ?? false
+                )
                 
                 // Check if this is a pending message and set the state
                 let channelQueuedMessages = viewModelRef.viewState.queuedMessages[message.channel] ?? []

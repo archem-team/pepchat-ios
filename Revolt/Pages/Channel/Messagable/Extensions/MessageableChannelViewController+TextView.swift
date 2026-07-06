@@ -20,7 +20,9 @@ extension MessageableChannelViewController: UITextViewDelegate {
             
             // Handle mention functionality
             let text = textView.text ?? ""
-            if text.contains("@") {
+            if messageInputView.isProgrammaticallySettingText {
+                messageInputView.hideMentionViewImmediately()
+            } else if text.contains("@") {
                 // print("DEBUG: @ character detected in text: \(text)")
                 // Check for mention triggers
                 messageInputView.checkForMention(in: text)
@@ -314,4 +316,3 @@ extension MessageableChannelViewController: UITextViewDelegate {
         }
     }
 }
-

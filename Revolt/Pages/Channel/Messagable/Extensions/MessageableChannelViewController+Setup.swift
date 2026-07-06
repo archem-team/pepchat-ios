@@ -355,53 +355,113 @@ extension MessageableChannelViewController {
         messageInputView.uploadButtonEnabled = permissionsManager.userHasPermission(
             Types.Permissions.uploadFiles)
 
-        // CRITICAL: Configure textView delegate BEFORE setting up mention functionality
-        let textView = messageInputView.textView
-        textView.delegate = self
-        // print("DEBUG: Set textView.delegate to self (MessageableChannelViewController)")
+        configureMessageInputInteractions()
+    }
 
-        // Setup mention functionality AFTER setting delegate
+    internal func configureMessageInputInteractions() {
+        guard let messageInputView else { return }
+
+        messageInputView.delegate = messageInputHandler
+        messageInputView.textView.delegate = self
         messageInputView.setupMentionFunctionality(
             viewState: viewModel.viewState, channel: viewModel.channel, server: viewModel.server)
     }
     
     // Setup new message button for scrolling to bottom
     internal func setupNewMessageButton() {
-        // New message button
         newMessageButton = UIButton(type: .system)
         newMessageButton.translatesAutoresizingMaskIntoConstraints = false
-        newMessageButton.backgroundColor = .systemBlue
-        newMessageButton.layer.cornerRadius = 16
-        newMessageButton.layer.masksToBounds = true
-        newMessageButton.setTitle("New Messages", for: .normal)
-        newMessageButton.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-        newMessageButton.setTitleColor(.white, for: .normal)
-        newMessageButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        newMessageButton.backgroundColor = .clear
+        newMessageButton.layer.cornerRadius = 22
+        newMessageButton.layer.masksToBounds = false
+        newMessageButton.layer.borderWidth = 0.5
+        newMessageButton.layer.borderColor = UIColor.white.withAlphaComponent(0.32).cgColor
+        newMessageButton.setTitle(nil, for: .normal)
+        newMessageButton.setImage(nil, for: .normal)
+        newMessageButton.accessibilityLabel = "Scroll to latest message"
         newMessageButton.addTarget(
             self, action: #selector(newMessageButtonTapped), for: .touchUpInside)
         newMessageButton.layer.shadowColor = UIColor.black.cgColor
-        newMessageButton.layer.shadowOffset = CGSize(width: 0, height: 2)
-        newMessageButton.layer.shadowOpacity = 0.3
-        newMessageButton.layer.shadowRadius = 3
+        newMessageButton.layer.shadowOffset = CGSize(width: 0, height: 6)
+        newMessageButton.layer.shadowOpacity = 0.36
+        newMessageButton.layer.shadowRadius = 18
 
-        // Add an icon to the button
-        let arrowImage = UIImage(systemName: "arrow.down")?.withRenderingMode(.alwaysTemplate)
-        let imageView = UIImageView(image: arrowImage)
-        imageView.tintColor = .white
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        newMessageButton.addSubview(imageView)
+        let glassEffect: UIVisualEffect
+        if #available(iOS 26.0, *) {
+            glassEffect = UIGlassEffect(style: .clear)
+        } else {
+            glassEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
+        }
+        let glassBackgroundView = UIVisualEffectView(effect: glassEffect)
+        glassBackgroundView.translatesAutoresizingMaskIntoConstraints = false
+        glassBackgroundView.isUserInteractionEnabled = false
+        glassBackgroundView.clipsToBounds = true
+        glassBackgroundView.layer.cornerRadius = 22
+        glassBackgroundView.layer.cornerCurve = .continuous
+        glassBackgroundView.contentView.backgroundColor = UIColor.black.withAlphaComponent(0.38)
+        newMessageButton.insertSubview(glassBackgroundView, at: 0)
 
-        // Position the image on the left side of the button
+        let glassHighlightView = UIView()
+        glassHighlightView.translatesAutoresizingMaskIntoConstraints = false
+        glassHighlightView.isUserInteractionEnabled = false
+        glassHighlightView.backgroundColor = UIColor.white.withAlphaComponent(0.10)
+        glassHighlightView.layer.cornerRadius = 22
+        glassHighlightView.layer.cornerCurve = .continuous
+        newMessageButton.insertSubview(glassHighlightView, aboveSubview: glassBackgroundView)
+
+        let arrowImageView = UIImageView(
+            image: UIImage(systemName: "arrow.down")?.withConfiguration(
+                UIImage.SymbolConfiguration(pointSize: 18, weight: .bold))
+        )
+        arrowImageView.translatesAutoresizingMaskIntoConstraints = false
+        arrowImageView.isUserInteractionEnabled = false
+        arrowImageView.tintColor = .white
+        arrowImageView.contentMode = .scaleAspectFit
+        newMessageButton.addSubview(arrowImageView)
+
+        newMessageBadgeView = UIView()
+        newMessageBadgeView.translatesAutoresizingMaskIntoConstraints = false
+        newMessageBadgeView.isUserInteractionEnabled = false
+        newMessageBadgeView.backgroundColor = UIColor.systemRed
+        newMessageBadgeView.layer.cornerRadius = 10
+        newMessageBadgeView.layer.masksToBounds = true
+        newMessageBadgeView.isHidden = true
+
+        newMessageBadgeLabel = UILabel()
+        newMessageBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        newMessageBadgeLabel.isUserInteractionEnabled = false
+        newMessageBadgeLabel.textColor = .white
+        newMessageBadgeLabel.font = .systemFont(ofSize: 11, weight: .bold)
+        newMessageBadgeLabel.textAlignment = .center
+        newMessageBadgeView.addSubview(newMessageBadgeLabel)
+        newMessageButton.addSubview(newMessageBadgeView)
+
         NSLayoutConstraint.activate([
-            imageView.centerYAnchor.constraint(equalTo: newMessageButton.centerYAnchor),
-            imageView.leadingAnchor.constraint(
-                equalTo: newMessageButton.leadingAnchor, constant: 10),
-            imageView.widthAnchor.constraint(equalToConstant: 16),
-            imageView.heightAnchor.constraint(equalToConstant: 16),
-        ])
+            glassBackgroundView.topAnchor.constraint(equalTo: newMessageButton.topAnchor),
+            glassBackgroundView.leadingAnchor.constraint(equalTo: newMessageButton.leadingAnchor),
+            glassBackgroundView.trailingAnchor.constraint(equalTo: newMessageButton.trailingAnchor),
+            glassBackgroundView.bottomAnchor.constraint(equalTo: newMessageButton.bottomAnchor),
 
-        // Adjust button title insets to make room for the image
-        newMessageButton.titleEdgeInsets = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 0)
+            glassHighlightView.topAnchor.constraint(equalTo: newMessageButton.topAnchor),
+            glassHighlightView.leadingAnchor.constraint(equalTo: newMessageButton.leadingAnchor),
+            glassHighlightView.trailingAnchor.constraint(equalTo: newMessageButton.trailingAnchor),
+            glassHighlightView.bottomAnchor.constraint(equalTo: newMessageButton.bottomAnchor),
+
+            arrowImageView.centerXAnchor.constraint(equalTo: newMessageButton.centerXAnchor),
+            arrowImageView.centerYAnchor.constraint(equalTo: newMessageButton.centerYAnchor),
+            arrowImageView.widthAnchor.constraint(equalToConstant: 21),
+            arrowImageView.heightAnchor.constraint(equalToConstant: 21),
+
+            newMessageBadgeView.topAnchor.constraint(equalTo: newMessageButton.topAnchor, constant: -6),
+            newMessageBadgeView.trailingAnchor.constraint(equalTo: newMessageButton.trailingAnchor, constant: 6),
+            newMessageBadgeView.heightAnchor.constraint(equalToConstant: 20),
+            newMessageBadgeView.widthAnchor.constraint(greaterThanOrEqualToConstant: 20),
+
+            newMessageBadgeLabel.topAnchor.constraint(equalTo: newMessageBadgeView.topAnchor, constant: 2),
+            newMessageBadgeLabel.bottomAnchor.constraint(equalTo: newMessageBadgeView.bottomAnchor, constant: -2),
+            newMessageBadgeLabel.leadingAnchor.constraint(equalTo: newMessageBadgeView.leadingAnchor, constant: 5),
+            newMessageBadgeLabel.trailingAnchor.constraint(equalTo: newMessageBadgeView.trailingAnchor, constant: -5),
+        ])
 
         // Hide the button initially
         newMessageButton.alpha = 0
@@ -410,12 +470,15 @@ extension MessageableChannelViewController {
         // Add to view hierarchy
         view.addSubview(newMessageButton)
 
-        // Position at the bottom center of the screen, above the message input
+        // Position at the bottom right of the screen, above the message input
         NSLayoutConstraint.activate([
-            newMessageButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            newMessageButton.trailingAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.trailingAnchor,
+                constant: -20),
             newMessageButton.bottomAnchor.constraint(
                 equalTo: messageInputView.topAnchor, constant: -16),
-            newMessageButton.heightAnchor.constraint(equalToConstant: 36),
+            newMessageButton.widthAnchor.constraint(equalToConstant: 44),
+            newMessageButton.heightAnchor.constraint(equalToConstant: 44),
         ])
     }
     

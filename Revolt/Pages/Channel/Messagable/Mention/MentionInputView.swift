@@ -33,6 +33,21 @@ private class UserCache {
     }
 }
 
+private final class PassthroughMentionWindow: UIWindow {
+    weak var passthroughView: UIView?
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard let hitView = super.hitTest(point, with: event) else { return nil }
+        guard let passthroughView else { return hitView }
+
+        if hitView.isDescendant(of: passthroughView) {
+            return hitView
+        }
+
+        return nil
+    }
+}
+
 protocol MentionInputViewDelegate: AnyObject {
     func mentionInputView(_ mentionView: MentionInputView, didSelectUser user: User, member: Member?)
     func mentionInputViewDidDismiss(_ mentionView: MentionInputView)
@@ -59,6 +74,9 @@ class MentionInputView: UIView {
     
     // Debouncing for search
     private var searchWorkItem: DispatchWorkItem?
+    private var fullRosterTask: Task<Void, Never>?
+    private var fullRosterLoadedServerId: String?
+    private var isDismissed = true
     
     // MARK: - Initialization
     init(viewState: ViewState) {
@@ -109,19 +127,21 @@ class MentionInputView: UIView {
         users.removeAll()
         filteredUsers.removeAll()
         searchText = ""
+        isDismissed = true
+        fullRosterTask?.cancel()
+        fullRosterTask = nil
+        fullRosterLoadedServerId = nil
         
         // Hide the view until user starts typing @
         hidePopup()
     }
     
     func updateSearch(text: String) {
-        print("DEBUG: MentionInputView.updateSearch called with text: '\(text)'")
-        
+        isDismissed = false
         // Cancel previous search
         searchWorkItem?.cancel()
         
         let workItem = DispatchWorkItem { [weak self] in
-            print("DEBUG: Executing search workItem for text: '\(text)'")
             self?.performSearch(text: text)
         }
         
@@ -130,16 +150,26 @@ class MentionInputView: UIView {
         // Debounce search by 300ms
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
     }
+
+    func dismissSearch(animated: Bool = true) {
+        searchWorkItem?.cancel()
+        searchWorkItem = nil
+        searchText = ""
+        isDismissed = true
+        filteredUsers.removeAll()
+        tableView.reloadData()
+        hidePopup(animated: animated)
+    }
     
     private func performSearch(text: String) {
+        guard !isDismissed else { return }
         searchText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        print("DEBUG: performSearch called with text: '\(text)', searchText: '\(searchText)'")
-        print("DEBUG: usersLoaded: \(usersLoaded), total users loaded: \(users.count)")
-        
-        // Only load users when we actually need to search
-        if !usersLoaded {
-            print("DEBUG: Users not loaded, loading lazily...")
+        // Bare "@" should always start from the current channel roster. This avoids
+        // stale cached results after a previous mention was selected and deleted.
+        if searchText.isEmpty {
+            loadUsersLazily(useCache: false)
+        } else if !usersLoaded {
             loadUsersLazily()
         }
         
@@ -161,35 +191,37 @@ class MentionInputView: UIView {
     private var heightConstraint: NSLayoutConstraint?
     
     private func showAsPopup() {
+        guard !isDismissed else { return }
         guard filteredUsers.count > 0 else { 
-            print("DEBUG: showAsPopup called but no filtered users, hiding instead")
             hidePopup()
             return 
         }
         
         // If already visible, just update the height
         if popupWindow != nil { 
-            print("DEBUG: Popup already visible, updating height for \(filteredUsers.count) users")
             updatePopupHeight()
             return 
         }
+
+        resetPopupLayout()
         
         // Create window for the popup
-        let window: UIWindow
+        let window: PassthroughMentionWindow
         if #available(iOS 13.0, *) {
             if let windowScene = UIApplication.shared.connectedScenes
                 .filter({ $0.activationState == .foregroundActive })
                 .first as? UIWindowScene {
-                window = UIWindow(windowScene: windowScene)
+                window = PassthroughMentionWindow(windowScene: windowScene)
             } else {
-                window = UIWindow(frame: UIScreen.main.bounds)
+                window = PassthroughMentionWindow(frame: UIScreen.main.bounds)
             }
         } else {
-            window = UIWindow(frame: UIScreen.main.bounds)
+            window = PassthroughMentionWindow(frame: UIScreen.main.bounds)
         }
         
         window.windowLevel = .alert
         window.backgroundColor = .clear
+        window.passthroughView = self
         window.isHidden = false
         
         // Create container for the mention view
@@ -209,18 +241,13 @@ class MentionInputView: UIView {
         let mentionHeight: CGFloat = max(minHeight, CGFloat(maxVisibleUsers * 48) + 16) // 8px padding top and bottom
         let margin: CGFloat = 20
         
-        print("DEBUG: Creating new popup with height \(mentionHeight) for \(filteredUsers.count) users (maxVisible: \(maxVisibleUsers))")
-        
         // Create height constraint and store it for later updates
         heightConstraint = self.heightAnchor.constraint(equalToConstant: mentionHeight)
         
         // Find actual MessageInputView position
         if let messageInputView = findMessageInputView() {
-            print("DEBUG: Found MessageInputView, using its position")
-            
             // Convert MessageInputView position to window coordinate system
             let inputFrame = messageInputView.convert(messageInputView.bounds, to: nil)
-            print("DEBUG: MessageInputView frame in window: \(inputFrame)")
             
             NSLayoutConstraint.activate([
                 self.leadingAnchor.constraint(equalTo: containerViewController.view.leadingAnchor, constant: margin),
@@ -230,8 +257,6 @@ class MentionInputView: UIView {
                 heightConstraint!
             ])
         } else {
-            print("DEBUG: Could not find MessageInputView, using keyboard-based positioning")
-            
             // Fallback: use keyboard position
             let keyboardHeight: CGFloat = KeyboardHeightObserver.shared.currentKeyboardHeight > 0 ? 
                 KeyboardHeightObserver.shared.currentKeyboardHeight : 300
@@ -267,8 +292,6 @@ class MentionInputView: UIView {
         let minHeight: CGFloat = 64 // Minimum height for 1 user
         let newHeight: CGFloat = max(minHeight, CGFloat(maxVisibleUsers * 48) + 16) // 8px padding top and bottom
         
-        print("DEBUG: Updating popup height from \(heightConstraint.constant) to \(newHeight) for \(filteredUsers.count) users (maxVisible: \(maxVisibleUsers))")
-        
         // Only animate if height actually changes
         if abs(heightConstraint.constant - newHeight) > 1.0 {
             heightConstraint.constant = newHeight
@@ -279,34 +302,48 @@ class MentionInputView: UIView {
         }
     }
     
-    func hidePopup() {
-        guard let window = popupWindow else { return }
+    func hidePopup(animated: Bool = true) {
+        guard let window = popupWindow else {
+            resetPopupLayout()
+            return
+        }
+
+        guard animated else {
+            window.isHidden = true
+            popupWindow = nil
+            resetPopupLayout()
+            return
+        }
         
         UIView.animate(withDuration: 0.2, animations: {
             self.alpha = 0
         }) { _ in
             window.isHidden = true
             self.popupWindow = nil
-            self.heightConstraint = nil // Clear height constraint reference
-            self.removeFromSuperview()
-            self.isHidden = true
+            self.resetPopupLayout()
         }
+    }
+
+    private func resetPopupLayout() {
+        heightConstraint?.isActive = false
+        heightConstraint = nil
+        removeFromSuperview()
+        alpha = 0
+        isHidden = true
     }
     
     // MARK: - Cleanup Methods
     
     // CRITICAL FIX: Cleanup method to clear references and prevent memory leaks
     func cleanup() {
-        print("DEBUG: MentionInputView cleanup called")
-        
         // Cancel any pending search work
         searchWorkItem?.cancel()
         searchWorkItem = nil
+        fullRosterTask?.cancel()
+        fullRosterTask = nil
         
         // Hide and cleanup popup window
-        if popupWindow != nil {
-            hidePopup()
-        }
+        hidePopup(animated: false)
         
         // Clear delegate to break retain cycles
         delegate = nil
@@ -316,11 +353,10 @@ class MentionInputView: UIView {
         currentServer = nil
         users.removeAll()
         filteredUsers.removeAll()
+        isDismissed = true
     }
     
     deinit {
-        print("DEBUG: MentionInputView deinit called")
-        
         // CRITICAL FIX: Ensure popup window is cleaned up
         if let window = popupWindow {
             window.isHidden = true
@@ -330,6 +366,8 @@ class MentionInputView: UIView {
         // Cancel search work item
         searchWorkItem?.cancel()
         searchWorkItem = nil
+        fullRosterTask?.cancel()
+        fullRosterTask = nil
         
         // Clear delegate
         delegate = nil
@@ -408,17 +446,17 @@ class MentionInputView: UIView {
     }
     
     // MARK: - Optimized User Loading
-    private func loadUsersLazily() {
+    private func loadUsersLazily(useCache: Bool = true) {
         guard let channel = currentChannel else { 
-            print("DEBUG: loadUsersLazily - currentChannel is nil!")
             return 
         }
-        
-        print("DEBUG: loadUsersLazily called for channel: \(channel.id)")
+
+        if let server = currentServer {
+            loadCompleteServerRosterIfNeeded(serverId: server.id, channelId: channel.id)
+        }
         
         // Check cache first
-        if let cachedUsers = UserCache.shared.getCachedUsers(for: channel.id) {
-            print("DEBUG: Found \(cachedUsers.count) cached users")
+        if useCache, let cachedUsers = UserCache.shared.getCachedUsers(for: channel.id) {
             self.users = cachedUsers
             self.usersLoaded = true
             DispatchQueue.main.async {
@@ -426,8 +464,6 @@ class MentionInputView: UIView {
             }
             return
         }
-        
-        print("DEBUG: No cached users found, loading fresh...")
         
         // Load users based on channel type with performance optimizations
         var loadedUsers: [(User, Member?)] = []
@@ -458,8 +494,6 @@ class MentionInputView: UIView {
             if let server = currentServer {
                 let memberDict = viewState.members[server.id] ?? [:]
                 
-                print("DEBUG: Server \(server.name) memberDict has \(memberDict.count) entries")
-                
                 // Load ALL members instead of limiting to 200 for better search results
                 loadedUsers = memberDict.values.compactMap { member in
                     if let user = viewState.users[member.id.user] {
@@ -468,14 +502,13 @@ class MentionInputView: UIView {
                     return nil
                 }
                 
-                print("DEBUG: Successfully mapped \(loadedUsers.count) users from \(memberDict.count) members")
-                
                 // Sort by recent activity or alphabetically for better UX
                 loadedUsers.sort { (user1, user2) in
                     let name1 = user1.1?.nickname ?? user1.0.display_name ?? user1.0.username
                     let name2 = user2.1?.nickname ?? user2.0.display_name ?? user2.0.username
                     return name1.lowercased() < name2.lowercased()
                 }
+
             }
             
         default:
@@ -485,11 +518,6 @@ class MentionInputView: UIView {
         self.users = loadedUsers
         self.usersLoaded = true
         
-        print("DEBUG: Loaded \(loadedUsers.count) users for channel \(channel.id)")
-        if let server = currentServer {
-            print("DEBUG: Server \(server.name) has \(viewState.members[server.id]?.count ?? 0) total members")
-        }
-        
         // Cache the results
         UserCache.shared.setCachedUsers(loadedUsers, for: channel.id)
         
@@ -497,10 +525,59 @@ class MentionInputView: UIView {
             self.tableView.reloadData()
         }
     }
+
+    private func loadCompleteServerRosterIfNeeded(serverId: String, channelId: String) {
+        guard fullRosterLoadedServerId != serverId else { return }
+        guard fullRosterTask == nil else { return }
+
+        fullRosterTask = Task { [weak self] in
+            guard let self else { return }
+            let result = await self.viewState.http.fetchServerMembers(
+                target: serverId,
+                excludeOffline: false
+            )
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                defer { self.fullRosterTask = nil }
+                guard !self.isDismissed,
+                      self.currentServer?.id == serverId,
+                      self.currentChannel?.id == channelId else { return }
+                guard case .success(let roster) = result else { return }
+
+                let usersById = Dictionary(
+                    roster.users.map { ($0.id, $0) },
+                    uniquingKeysWith: { _, latest in latest }
+                )
+
+                for user in roster.users {
+                    self.viewState.users[user.id] = user
+                    self.viewState.allEventUsers[user.id] = user
+                }
+                for member in roster.members {
+                    self.viewState.members[serverId, default: [:]][member.id.user] = member
+                }
+
+                self.users = roster.members.compactMap { member in
+                    guard let user = usersById[member.id.user] else { return nil }
+                    return (user, Optional(member))
+                }.sorted { lhs, rhs in
+                    let leftName = lhs.1?.nickname ?? lhs.0.display_name ?? lhs.0.username
+                    let rightName = rhs.1?.nickname ?? rhs.0.display_name ?? rhs.0.username
+                    return leftName.localizedCaseInsensitiveCompare(rightName) == .orderedAscending
+                }
+
+                self.usersLoaded = true
+                self.fullRosterLoadedServerId = serverId
+                UserCache.shared.setCachedUsers(self.users, for: channelId)
+                self.filterUsers()
+            }
+        }
+    }
     
     private func filterUsers() {
         if searchText.isEmpty {
-            filteredUsers = Array(users.prefix(50)) // Show max 50 users when no search
+            filteredUsers = users
         } else {
             let searchLower = searchText.lowercased()
             
@@ -550,35 +627,10 @@ class MentionInputView: UIView {
             // Combine priority matches first, then secondary matches
             filteredUsers = priorityMatches + secondaryMatches
             
-            print("DEBUG: Search '\(searchText)' found \(priorityMatches.count) priority matches and \(secondaryMatches.count) secondary matches")
-            if priorityMatches.count > 0 {
-                let sampleNames = priorityMatches.prefix(3).map { user, member in
-                    member?.nickname ?? user.display_name ?? user.username
-                }
-                print("DEBUG: Priority match examples: \(sampleNames.joined(separator: ", "))")
-            }
-            
-            // Debug: Check if the search term "axis" is in results
-            if searchText.lowercased().contains("axis") {
-                let axisUsers = filteredUsers.filter { user, member in
-                    let username = user.username.lowercased()
-                    let displayName = user.display_name?.lowercased() ?? ""
-                    let nickname = member?.nickname?.lowercased() ?? ""
-                    return username.contains("axis") || displayName.contains("axis") || nickname.contains("axis")
-                }
-                print("DEBUG: Found \(axisUsers.count) users matching 'axis'")
-                axisUsers.forEach { user, member in
-                    print("DEBUG: - User: \(user.username), Display: \(user.display_name ?? "nil"), Nickname: \(member?.nickname ?? "nil")")
-                }
-            }
-            
-            // Limit results for performance - increased limit for better user experience
-            filteredUsers = Array(filteredUsers.prefix(50))
         }
         
-        print("DEBUG: filteredUsers count after filtering: \(filteredUsers.count)")
-        
         DispatchQueue.main.async {
+            guard !self.isDismissed else { return }
             self.tableView.reloadData()
             self.updateEmptyState()
             
@@ -590,10 +642,8 @@ class MentionInputView: UIView {
             
             // Show or hide popup based on filtered results
             if !self.filteredUsers.isEmpty {
-                print("DEBUG: Showing/updating popup with \(self.filteredUsers.count) users")
                 self.showAsPopup()
             } else {
-                print("DEBUG: No filtered users, hiding popup")
                 self.hidePopup()
             }
         }
@@ -695,7 +745,6 @@ class MentionInputView: UIView {
 // MARK: - UITableViewDelegate & UITableViewDataSource
 extension MentionInputView: UITableViewDelegate, UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        print("DEBUG: numberOfRowsInSection returning: \(filteredUsers.count)")
         return filteredUsers.count
     }
     
@@ -947,4 +996,3 @@ extension UIViewController {
         return KeyboardHeightObserver.shared
     }
 }
-

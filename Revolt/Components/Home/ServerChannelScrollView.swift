@@ -411,7 +411,7 @@ struct ServerChannelScrollView: View {
                                             size: .size16,
                                             color: .iconGray07)
                                 
-                                PeptideText(textVerbatim: "\(self.viewState.serverMembersCount ?? "---") members",
+                                PeptideText(textVerbatim: self.viewState.serverMembersLabel(for: server.id),
                                             font: .peptideBody4,
                                             textColor: .textGray07,
                                             lineLimit: 1)

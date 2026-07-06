@@ -39,6 +39,7 @@ extension ViewState {
         clearShareExtensionData()
         channelCacheSaveWorkItem?.cancel()
         channelCacheSaveWorkItem = nil
+        serverMembersCounts.removeAll()
         
         if !afterRemoveSession {
             let status = try? await http.signout().get()
@@ -182,6 +183,7 @@ extension ViewState {
         channels.removeAll()
         messages.removeAll()
         members.removeAll()
+        serverMembersCounts.removeAll()
         emojis.removeAll()
         dms.removeAll()
         clearAllTyping()

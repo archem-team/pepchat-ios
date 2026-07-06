@@ -84,14 +84,58 @@ struct MessageReaction: View {
             // Capture message and channel IDs to prevent wrong message targeting
             let messageId = message.id
             let channelId = channel.id
+            guard let currentUserId = viewState.currentUser?.id else { return }
+            let userAlreadyReacted = users?.contains(currentUserId) ?? false
+            let shouldAddReaction = !userAlreadyReacted
             
-            if users?.contains(viewState.currentUser!.id) ?? false {
-                Task {
-                    await viewState.http.unreactMessage(channel: channelId, message: messageId, emoji: emoji)
+            if shouldAddReaction {
+                var updatedUsers = users ?? []
+                if !updatedUsers.contains(currentUserId) {
+                    updatedUsers.append(currentUserId)
                 }
+                users = updatedUsers
             } else {
-                Task {
-                    await viewState.http.reactMessage(channel: channelId, message: messageId, emoji: emoji)
+                var updatedUsers = users ?? []
+                updatedUsers.removeAll { $0 == currentUserId }
+                users = updatedUsers
+            }
+            viewState.applyLocalReactionUpdate(
+                messageId: messageId,
+                channelId: channelId,
+                emojiId: emoji,
+                userId: currentUserId,
+                isAdding: shouldAddReaction
+            )
+
+            Task {
+                let result: Result<EmptyResponse, RevoltError>
+                if userAlreadyReacted {
+                    result = await viewState.http.unreactMessage(channel: channelId, message: messageId, emoji: emoji)
+                } else {
+                    result = await viewState.http.reactMessage(channel: channelId, message: messageId, emoji: emoji)
+                }
+
+                if case .failure = result {
+                    await MainActor.run {
+                        if userAlreadyReacted {
+                            var updatedUsers = users ?? []
+                            if !updatedUsers.contains(currentUserId) {
+                                updatedUsers.append(currentUserId)
+                            }
+                            users = updatedUsers
+                        } else {
+                            var updatedUsers = users ?? []
+                            updatedUsers.removeAll { $0 == currentUserId }
+                            users = updatedUsers
+                        }
+                        viewState.applyLocalReactionUpdate(
+                            messageId: messageId,
+                            channelId: channelId,
+                            emojiId: emoji,
+                            userId: currentUserId,
+                            isAdding: userAlreadyReacted
+                        )
+                    }
                 }
             }
         }

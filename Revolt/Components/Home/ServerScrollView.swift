@@ -144,7 +144,7 @@ struct ServerScrollView: View {
                                       color: .iconYellow07)
                             .frame(width: buttonSize, height: buttonSize)
                             .background{
-                                if case .discover = viewState.currentSelection {
+                                if case .discover = viewState.currentSelection, viewState.selectedDiscoverTab == .home {
                                     RoundedRectangle(cornerSize: .init(width: .size16, height: .size16))
                                         .fill(.bgPurple07)
                                 }else{
@@ -154,7 +154,38 @@ struct ServerScrollView: View {
                             }
                             .padding(.horizontal, .padding8)
                             
-                            if viewState.currentSelection == .discover {
+                            if case .discover = viewState.currentSelection, viewState.selectedDiscoverTab == .home {
+                                
+                                SlideShape(buttonSize: buttonSize)
+                                
+                            }
+                        }
+                        
+                    }
+                    
+                    Button {
+                        withAnimation(.easeOut(duration: 1.0)){
+                            viewState.selectDiscover(tab: .promos)
+                        }
+                    } label: {
+                        
+                        ZStack(alignment: .leading) {
+                            
+                            PeptideIcon(iconName: .promo,
+                                      color: .iconYellow07)
+                            .frame(width: buttonSize, height: buttonSize)
+                            .background{
+                                if case .discover = viewState.currentSelection, viewState.selectedDiscoverTab == .promos {
+                                    RoundedRectangle(cornerSize: .init(width: .size16, height: .size16))
+                                        .fill(.bgPurple07)
+                                }else{
+                                    Circle().fill(.bgGray11)
+                                }
+                                
+                            }
+                            .padding(.horizontal, .padding8)
+                            
+                            if case .discover = viewState.currentSelection, viewState.selectedDiscoverTab == .promos {
                                 
                                 SlideShape(buttonSize: buttonSize)
                                 

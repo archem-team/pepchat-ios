@@ -277,8 +277,18 @@ extension MessageableChannelViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
 
+        messageInputView?.hideMentionViewImmediately()
         isViewDisappearing = true
         typingIndicatorManager.hideTypingIndicator()
+
+        if shouldPreserveUnreadStateOnDisappear
+            || unreadSeparatorMessageId != nil
+            || unreadAnchorLastReadMessageId != nil
+            || isAutoAcknowledgmentProtectionActive() {
+            shouldPreserveUnreadStateOnDisappear = false
+        } else {
+            clearUnreadMarkerAndAcknowledgeLatest()
+        }
         
         scrollToBottomWorkItem?.cancel()
         scrollToBottomWorkItem = nil

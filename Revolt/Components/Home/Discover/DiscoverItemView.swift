@@ -5,6 +5,7 @@
 //
 
 import SwiftUI
+import Kingfisher
 
 struct DiscoverItemView: View {
     
@@ -16,7 +17,7 @@ struct DiscoverItemView: View {
     // Helper function to determine the display color
     private var displayColor: Color {
         if let colorHex = discoverItem.color, !colorHex.isEmpty, colorHex.hasPrefix("#") {
-            // Parse custom color from CSV
+            // Parse custom color from the Discover server API
             return Color(hex: colorHex) ?? (discoverItem.isNew ? .textYellow07 : .textDefaultGray01)
         } else if discoverItem.isNew {
             // Use yellow for new items
@@ -29,7 +30,7 @@ struct DiscoverItemView: View {
     
     private var iconColor: Color {
         if let colorHex = discoverItem.color, !colorHex.isEmpty, colorHex.hasPrefix("#") {
-            // Parse custom color from CSV
+            // Parse custom color from the Discover server API
             return Color(hex: colorHex) ?? (discoverItem.isNew ? .iconYellow07 : .iconDefaultGray01)
         } else if discoverItem.isNew {
             // Use yellow for new items
@@ -44,13 +45,20 @@ struct DiscoverItemView: View {
         if isMember {
             return .iconGreen07
         } else if let colorHex = discoverItem.color, !colorHex.isEmpty, colorHex.hasPrefix("#") {
-            // Parse custom color from CSV
+            // Parse custom color from the Discover server API
             return Color(hex: colorHex) ?? (discoverItem.isNew ? .iconYellow07 : .iconGray07)
         } else if discoverItem.isNew {
             return .iconYellow07
         } else {
             return .iconGray07
         }
+    }
+
+    private var logoURL: URL? {
+        guard let logo = discoverItem.logo, !logo.isEmpty else { return nil }
+        let autumnURL = viewState.apiInfo?.features.autumn.url ?? "https://peptide.chat/autumn"
+        let autumnBaseURL = autumnURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return URL(string: "\(autumnBaseURL)/icons/\(logo)?max_side=256")
     }
     
     var body: some View {
@@ -66,9 +74,11 @@ struct DiscoverItemView: View {
             HStack(spacing: .spacing12){
                 
                 
-                PeptideIcon(iconName: self.discoverItem.disabled ? .peptideLock : .peptideTeamUsers,
-                            size: .size24,
-                            color: iconColor)
+                DiscoverServerIcon(
+                    logoURL: logoURL,
+                    isDisabled: discoverItem.disabled,
+                    fallbackColor: iconColor
+                )
                 
                 VStack(alignment: .leading, spacing: .spacing2){
                     
@@ -117,7 +127,57 @@ struct DiscoverItemView: View {
     }
 }
 
+private struct DiscoverServerIcon: View {
+    let logoURL: URL?
+    let isDisabled: Bool
+    let fallbackColor: Color
 
+    @State private var didLoadLogo = false
 
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            if let logoURL {
+                KFImage(logoURL)
+                    .cacheOriginalImage()
+                    .placeholder { fallbackIcon }
+                    .onSuccess { _ in didLoadLogo = true }
+                    .onFailure { _ in didLoadLogo = false }
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 32, height: 32)
+                    .clipShape(Circle())
+            } else {
+                fallbackIcon
+            }
+
+            if isDisabled && didLoadLogo {
+                Circle()
+                    .fill(Color.bgGray11)
+                    .frame(width: 14, height: 14)
+                    .overlay {
+                        PeptideIcon(
+                            iconName: .peptideLock,
+                            size: 9,
+                            color: fallbackColor
+                        )
+                    }
+                    .offset(x: 2, y: 2)
+            }
+        }
+        .frame(width: 32, height: 32)
+        .onChange(of: logoURL) { _ in
+            didLoadLogo = false
+        }
+    }
+
+    private var fallbackIcon: some View {
+        PeptideIcon(
+            iconName: isDisabled ? .peptideLock : .peptideTeamUsers,
+            size: .size24,
+            color: fallbackColor
+        )
+        .frame(width: 32, height: 32)
+    }
+}
 
 

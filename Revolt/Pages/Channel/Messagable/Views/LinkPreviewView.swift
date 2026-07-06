@@ -12,6 +12,7 @@ import WebKit
 
 /// A UIView that renders different types of message embeds, such as website previews, images, videos, and text embeds.
 class LinkPreviewView: UIView {
+    private static let fallbackMediaAspectRatio: CGFloat = 16.0 / 9.0
     
     // MARK: - UI Components
     private let containerView = UIView()
@@ -296,7 +297,10 @@ class LinkPreviewView: UIView {
     private func getSpecialEmbedAspectRatio(_ special: WebsiteSpecial, websiteEmbed: WebsiteEmbed) -> CGFloat {
         switch special {
         case .youtube:
-            return CGFloat(websiteEmbed.video?.width ?? 16) / CGFloat(websiteEmbed.video?.height ?? 9)
+            return mediaAspectRatio(
+                width: websiteEmbed.video?.width,
+                height: websiteEmbed.video?.height
+            )
         case .lightspeed, .twitch:
             return 16.0 / 9.0
         case .spotify(let special):
@@ -309,10 +313,26 @@ class LinkPreviewView: UIView {
         case .soundcloud:
             return 480.0 / 460.0
         case .bandcamp:
-            return CGFloat(websiteEmbed.video?.width ?? 16) / CGFloat(websiteEmbed.video?.height ?? 9)
+            return mediaAspectRatio(
+                width: websiteEmbed.video?.width,
+                height: websiteEmbed.video?.height
+            )
         default:
-            return 16.0 / 9.0
+            return Self.fallbackMediaAspectRatio
         }
+    }
+
+    private func mediaAspectRatio(width: Int?, height: Int?) -> CGFloat {
+        guard let width, let height, width > 0, height > 0 else {
+            return Self.fallbackMediaAspectRatio
+        }
+
+        let aspectRatio = CGFloat(width) / CGFloat(height)
+        guard aspectRatio.isFinite, aspectRatio > 0 else {
+            return Self.fallbackMediaAspectRatio
+        }
+
+        return aspectRatio
     }
     
     // MARK: - Image/Video Preview Configuration
@@ -334,7 +354,7 @@ class LinkPreviewView: UIView {
         }
         contentStackView.addArrangedSubview(previewImageView)
         
-        let aspectRatio = CGFloat(image.width) / CGFloat(image.height)
+        let aspectRatio = mediaAspectRatio(width: image.width, height: image.height)
         
         // Remove existing height constraints
         previewImageView.constraints.forEach { constraint in
@@ -360,7 +380,7 @@ class LinkPreviewView: UIView {
         previewImageView.kf.setImage(with: url)
         contentStackView.addArrangedSubview(previewImageView)
         
-        let aspectRatio = CGFloat(video.width) / CGFloat(video.height)
+        let aspectRatio = mediaAspectRatio(width: video.width, height: video.height)
         
         // Remove existing height constraints
         previewImageView.constraints.forEach { constraint in

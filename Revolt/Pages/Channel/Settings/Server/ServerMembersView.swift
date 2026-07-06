@@ -233,6 +233,7 @@ struct ServerMembersView: View {
         case .success(let fetchedMembers):
             members = fetchedMembers.members
             usersById = Dictionary(uniqueKeysWithValues: fetchedMembers.users.map { ($0.id, $0) })
+            viewState.serverMembersCounts[serverId] = fetchedMembers.members.count
             refreshDisplayedMembers()
         case .failure(_):
             viewState.showAlert(message: "Failed to load members", icon: .peptideInfo)

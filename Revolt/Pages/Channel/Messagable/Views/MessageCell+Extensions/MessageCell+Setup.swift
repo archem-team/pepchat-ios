@@ -16,6 +16,53 @@ extension MessageCell {
         backgroundColor = .clear
         contentView.backgroundColor = .clear
         selectionStyle = .none
+
+        unreadSeparatorView.translatesAutoresizingMaskIntoConstraints = false
+        unreadSeparatorView.isHidden = true
+        unreadSeparatorView.backgroundColor = .clear
+        contentView.addSubview(unreadSeparatorView)
+
+        let leadingLine = UIView()
+        leadingLine.translatesAutoresizingMaskIntoConstraints = false
+        leadingLine.backgroundColor = UIColor.systemRed.withAlphaComponent(0.7)
+        unreadSeparatorView.addSubview(leadingLine)
+
+        let trailingLine = UIView()
+        trailingLine.translatesAutoresizingMaskIntoConstraints = false
+        trailingLine.backgroundColor = UIColor.systemRed.withAlphaComponent(0.7)
+        unreadSeparatorView.addSubview(trailingLine)
+
+        unreadSeparatorLabel.translatesAutoresizingMaskIntoConstraints = false
+        unreadSeparatorLabel.text = "NEW MESSAGES"
+        unreadSeparatorLabel.font = UIFont.systemFont(ofSize: 13, weight: .bold)
+        unreadSeparatorLabel.textColor = .systemRed
+        unreadSeparatorLabel.textAlignment = .center
+        unreadSeparatorLabel.backgroundColor = UIColor(named: "bgDefaultPurple13") ?? .clear
+        unreadSeparatorView.addSubview(unreadSeparatorLabel)
+
+        unreadSeparatorHeightConstraint = unreadSeparatorView.heightAnchor.constraint(equalToConstant: 0)
+        unreadSeparatorHeightConstraint?.isActive = true
+
+        NSLayoutConstraint.activate([
+            unreadSeparatorView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            unreadSeparatorView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            unreadSeparatorView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+
+            unreadSeparatorLabel.centerXAnchor.constraint(equalTo: unreadSeparatorView.centerXAnchor),
+            unreadSeparatorLabel.centerYAnchor.constraint(equalTo: unreadSeparatorView.centerYAnchor),
+            unreadSeparatorLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 116),
+            unreadSeparatorLabel.heightAnchor.constraint(equalToConstant: 22),
+
+            leadingLine.leadingAnchor.constraint(equalTo: unreadSeparatorView.leadingAnchor),
+            leadingLine.trailingAnchor.constraint(equalTo: unreadSeparatorLabel.leadingAnchor, constant: -12),
+            leadingLine.centerYAnchor.constraint(equalTo: unreadSeparatorLabel.centerYAnchor),
+            leadingLine.heightAnchor.constraint(equalToConstant: 1),
+
+            trailingLine.leadingAnchor.constraint(equalTo: unreadSeparatorLabel.trailingAnchor, constant: 12),
+            trailingLine.trailingAnchor.constraint(equalTo: unreadSeparatorView.trailingAnchor),
+            trailingLine.centerYAnchor.constraint(equalTo: unreadSeparatorLabel.centerYAnchor),
+            trailingLine.heightAnchor.constraint(equalToConstant: 1)
+        ])
         
         // Reply view setup
         replyView.translatesAutoresizingMaskIntoConstraints = false
@@ -187,10 +234,12 @@ extension MessageCell {
         
         NSLayoutConstraint.activate([
             // Reply view constraints
-            replyView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
             replyView.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 10),
             replyView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
         ])
+
+        replyViewTopConstraint = replyView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4)
+        replyViewTopConstraint?.isActive = true
 
         // Create height constraint with lower priority
         let replyHeightConstraint = replyView.heightAnchor.constraint(equalToConstant: 18)
@@ -232,7 +281,6 @@ extension MessageCell {
             
             // Avatar - increased size
             avatarImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            avatarImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
             avatarImageView.widthAnchor.constraint(equalToConstant: 40), // Increased from 32
             avatarImageView.heightAnchor.constraint(equalToConstant: 40), // Increased from 32
             
@@ -257,6 +305,9 @@ extension MessageCell {
             // Content trailing — always active regardless of continuation state
             contentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
         ])
+
+        avatarTopConstraint = avatarImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8)
+        avatarTopConstraint?.isActive = true
 
         // PERF Issue #9: Pre-build four constraint variants for continuation/reply combinations.
         // These are toggled via isActive in updateAppearanceForContinuation() instead of

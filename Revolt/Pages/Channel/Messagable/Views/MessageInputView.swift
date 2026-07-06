@@ -206,6 +206,7 @@ class MessageInputView: UIView {
     private var mentionTokens: [MentionToken] = []
     private let mentionTextColor = UIColor.systemYellow
     private var isApplyingMentionStyle = false
+    private(set) var isProgrammaticallySettingText = false
     
     private var normalTextViewTopConstraint: NSLayoutConstraint!
     private var editingTextViewTopConstraint: NSLayoutConstraint!
@@ -240,6 +241,8 @@ class MessageInputView: UIView {
         currentViewState = viewState
         currentChannel = channel
         currentServer = server
+
+        mentionInputView?.cleanup()
         
         // Create mention input view
         mentionInputView = MentionInputView(viewState: viewState)
@@ -276,7 +279,11 @@ class MessageInputView: UIView {
     // Hide mention view
     func hideMentionView() {
         // print("DEBUG: hideMentionView called")
-        mentionInputView?.hidePopup()
+        mentionInputView?.dismissSearch()
+    }
+
+    func hideMentionViewImmediately() {
+        mentionInputView?.dismissSearch(animated: false)
     }
 
     func refreshMentionStylingAfterTextChange() {
@@ -288,6 +295,7 @@ class MessageInputView: UIView {
                   token.range.location + token.range.length <= nsText.length else { return false }
             return nsText.substring(with: token.range) == token.displayText
         }
+        removeMentionDataNotPresent(in: text)
 
         applyMentionStyling()
     }
@@ -325,7 +333,7 @@ class MessageInputView: UIView {
         NotificationCenter.default.removeObserver(self, name: UITextView.textDidChangeNotification, object: nil)
         
         // Hide and cleanup mention view
-        mentionInputView?.hidePopup()
+        mentionInputView?.hidePopup(animated: false)
         mentionInputView?.cleanup()
         mentionInputView = nil
         
@@ -349,6 +357,8 @@ class MessageInputView: UIView {
     // Set text in the input field
     func setText(_ text: String?) {
         // UITextView does not reliably update contentSize when isScrollEnabled is false (e.g. restored draft).
+        isProgrammaticallySettingText = true
+        defer { isProgrammaticallySettingText = false }
         textView.isScrollEnabled = true
         textView.text = text
         updateTextViewHeight()
@@ -358,6 +368,7 @@ class MessageInputView: UIView {
         }
         updateSendButtonState()
         refreshMentionStylingAfterTextChange()
+        mentionInputView?.dismissSearch(animated: false)
         NotificationCenter.default.post(name: UITextView.textDidChangeNotification, object: textView)
     }
     
@@ -936,8 +947,8 @@ class MessageInputView: UIView {
         let hasAttachments = pendingAttachmentsManager.hasPendingAttachments
         let canSend = hasText || hasAttachments
         
-        sendButton.isEnabled = canSend
-        if isSendingAttachments && !canSend {
+        sendButton.isEnabled = canSend && !isSendingAttachments
+        if !sendButton.isEnabled {
             sendButton.tintColor = UIColor(named: "iconGray07") ?? .systemGray
         } else {
             sendButton.tintColor = UIColor(named: "iconDefaultPurple05") ?? .systemBlue
@@ -1128,6 +1139,16 @@ extension MessageInputView: MentionInputViewDelegate {
     // Get mention data list
     private func getMentionDataList() -> [MentionData] {
         return objc_getAssociatedObject(self, &MentionKeys.mentionDataList) as? [MentionData] ?? []
+    }
+
+    private func removeMentionDataNotPresent(in text: String) {
+        let validMentionData = getMentionDataList().filter { text.contains($0.displayText) }
+        objc_setAssociatedObject(
+            self,
+            &MentionKeys.mentionDataList,
+            validMentionData.isEmpty ? nil : validMentionData,
+            .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        )
     }
     
     // Convert text for sending (replace @username with <@USER_ID>)

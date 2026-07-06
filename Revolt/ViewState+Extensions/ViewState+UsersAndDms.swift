@@ -337,7 +337,7 @@ extension ViewState {
     
     internal func processMembers(_ eventMembers: [Member]) {
         for member in eventMembers {
-            members[member.id.server]?[member.id.user] = member
+            members[member.id.server, default: [:]][member.id.user] = member
         }
     }
     
