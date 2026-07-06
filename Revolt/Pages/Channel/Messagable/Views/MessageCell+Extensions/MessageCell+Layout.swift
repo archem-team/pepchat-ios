@@ -11,6 +11,25 @@ import Kingfisher
 import AVKit
 
 extension MessageCell {
+    internal func setUnreadSeparatorVisible(_ isVisible: Bool) {
+        let offset: CGFloat = isVisible ? 42 : 0
+        unreadSeparatorView.isHidden = !isVisible
+        unreadSeparatorHeightConstraint?.constant = offset
+        replyViewTopConstraint?.constant = 4 + offset
+        avatarTopConstraint?.constant = 8 + offset
+
+        updateTopConstraintConstants(offset: offset)
+        contentViewMinHeightConstraint?.constant = 50 + offset
+        setNeedsLayout()
+    }
+
+    private func updateTopConstraintConstants(offset: CGFloat) {
+        continuationNoReplyConstraints.first?.constant = 8 + offset
+        continuationWithReplyConstraints.first?.constant = 8
+        nonContinuationNoReplyConstraints.first?.constant = 8 + offset
+        nonContinuationWithReplyConstraints.first?.constant = 8
+    }
+
     internal func updateAppearanceForContinuation() {
         // Hide avatar and username for continuation messages
         avatarImageView.isHidden = isContinuation

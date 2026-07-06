@@ -9,6 +9,7 @@ struct CellHeightCacheKey: Hashable {
     let messageId: String
     let isContinuation: Bool
     let tableWidth: Int
+    let hasUnreadSeparator: Bool
 }
 
 @MainActor

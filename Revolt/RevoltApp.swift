@@ -416,6 +416,9 @@ struct MainApp: View {
                 
             case .discover:
                 Discovery()  // Discovery screen
+
+            case .promos_submit:
+                PromosSubmitView()
                 
             case .server_settings(let id):
                 if let serverValue = viewState.servers[id] {
@@ -721,4 +724,3 @@ func copyUrl(url: URL) {
     UIPasteboard.general.url = url
 #endif
 }
-

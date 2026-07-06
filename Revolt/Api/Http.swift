@@ -1189,6 +1189,48 @@ struct HTTPClient {
     func fetchServerMembers(target: String, excludeOffline: Bool = false) async -> Result<MembersWithUsers, RevoltError> {
         return await req(method: .get,route: "/servers/\(target)/members?exclude_offline=\(excludeOffline)")
     }
+
+    func fetchServerMembersCount(target: String) async -> Result<Int, RevoltError> {
+        guard let url = URL(string: "\(baseURL)/servers/\(target)/members?exclude_offline=false") else {
+            return .failure(.HTTPError("Invalid server members URL", 0))
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 20
+        if let token {
+            request.addValue(token, forHTTPHeaderField: "x-session-token")
+        }
+
+        do {
+            let (bytes, response) = try await URLSession.shared.bytes(for: request)
+            if let httpResponse = response as? HTTPURLResponse,
+               !(200..<300).contains(httpResponse.statusCode) {
+                return .failure(.HTTPError(nil, httpResponse.statusCode))
+            }
+
+            let pattern = Array("\"server\":\"\(target)\"".utf8)
+            guard !pattern.isEmpty else { return .success(0) }
+
+            var count = 0
+            var matched = 0
+            for try await byte in bytes {
+                if byte == pattern[matched] {
+                    matched += 1
+                    if matched == pattern.count {
+                        count += 1
+                        matched = 0
+                    }
+                } else {
+                    matched = byte == pattern[0] ? 1 : 0
+                }
+            }
+
+            return .success(count)
+        } catch {
+            return .failure(.HTTPError(error.localizedDescription, 0))
+        }
+    }
     
     func deleteServer(target : String, leaveSilently : Bool = false) async -> Result<EmptyResponse, RevoltError> {
         return await req(method: .delete, route: "/servers/\(target)?leave_silently=\(leaveSilently)")

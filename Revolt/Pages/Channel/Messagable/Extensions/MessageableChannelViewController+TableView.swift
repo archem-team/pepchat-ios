@@ -21,12 +21,17 @@ extension MessageableChannelViewController: UITableViewDelegate {
             return
         }
 
-        if indexPath.row == localMessages.count - 1 {
+        if indexPath.row == localMessages.count - 1,
+           unreadSeparatorMessageId == nil,
+           unreadAnchorLastReadMessageId == nil,
+           !hasUnreadMessages {
             markLastMessageAsSeen()
         }
 
         if let currentCell = cell as? MessageCell {
             let currentMessageId = localMessages[indexPath.row]
+            animateSlideInIfNeeded(cell: currentCell, messageId: currentMessageId)
+
             let currentMessage = viewModel.viewState.messages[currentMessageId]
             let currentHasReply = !(currentMessage?.replies?.isEmpty ?? true)
             let nextHasReply: Bool = {
@@ -130,7 +135,8 @@ extension MessageableChannelViewController: UITableViewDelegate {
             let key = CellHeightCacheKey(
                 messageId: messageId,
                 isContinuation: isContinuation,
-                tableWidth: Int(tableView.bounds.width)
+                tableWidth: Int(tableView.bounds.width),
+                hasUnreadSeparator: shouldShowUnreadSeparator(for: messageId)
             )
             cellHeightCache.store(height: finalHeight, for: key)
         }
@@ -148,7 +154,8 @@ extension MessageableChannelViewController: UITableViewDelegate {
         let key = CellHeightCacheKey(
             messageId: messageId,
             isContinuation: isContinuation,
-            tableWidth: Int(tableView.bounds.width)
+            tableWidth: Int(tableView.bounds.width),
+            hasUnreadSeparator: shouldShowUnreadSeparator(for: messageId)
         )
         let cachedHeight = cellHeightCache.height(for: key)
         
@@ -166,7 +173,8 @@ extension MessageableChannelViewController: UITableViewDelegate {
         let key = CellHeightCacheKey(
             messageId: messageId,
             isContinuation: isContinuation,
-            tableWidth: Int(tableView.bounds.width)
+            tableWidth: Int(tableView.bounds.width),
+            hasUnreadSeparator: shouldShowUnreadSeparator(for: messageId)
         )
 
         return cellHeightCache.height(for: key) ?? 120

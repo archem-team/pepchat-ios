@@ -20,17 +20,47 @@ struct DiscoverScrollView: View {
     @State private var inviteCache: [String: String] = [:] // Cache for invite code -> server ID mapping
     @State private var membershipCache: [String: Bool] = [:] // Cache for server ID -> membership status
     @State private var checkingInvites: Set<String> = [] // Track ongoing invite checks
+    @State private var searchQuery: String = "" // For search text
+    @State private var searchTextFieldState : PeptideTextFieldState = .default
+    @State private var selectedTab: DiscoverHomeTab = .home
+
+    private var filteredDiscoverItems: [DiscoverItem] {
+        let query = searchQuery
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        guard !query.isEmpty else {
+            return discoverItems
+        }
+
+        return discoverItems.filter { item in
+            item.title.lowercased().contains(query) ||
+            item.description.lowercased().contains(query)
+        }
+    }
 
 
     var body: some View {
         content
             .background(backgroundView)
             .onAppear {
+                selectedTab = viewState.selectedDiscoverTab
                 // Sync from persisted cache for instant UI before any async work
                 membershipCache = viewState.discoverMembershipCache
                 guard !hasLoadedData else { return }
                 hasLoadedData = true
                 loadData()
+            }
+            .onChange(of: viewState.discoverMembershipCache) { newValue in
+                membershipCache = newValue
+            }
+            .onChange(of: viewState.selectedDiscoverTab) { newValue in
+                withAnimation(.bouncy(duration: 0.35, extraBounce: 0.18)) {
+                    selectedTab = newValue
+                }
+            }
+            .onChange(of: selectedTab) { newValue in
+                viewState.selectedDiscoverTab = newValue
             }
     }
     
@@ -40,19 +70,71 @@ struct DiscoverScrollView: View {
         VStack(spacing: .zero){
             headerView
             PeptideDivider(backgrounColor: .borderGray11)
-            discoverList
-            Spacer()
+
+            TabView(selection: $selectedTab) {
+                discoverList
+                    .tag(DiscoverHomeTab.home)
+
+                PromosView()
+                    .tag(DiscoverHomeTab.promos)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .animation(.bouncy(duration: 0.35, extraBounce: 0.18), value: selectedTab)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
     
     private var headerView: some View {
             HStack {
-                PeptideText(text: "Discover Servers", font: .peptideHeadline)
-                    .padding(top: .padding24, bottom: .padding16)
+                Button {
+                    withAnimation(.bouncy(duration: 0.35, extraBounce: 0.18)) {
+                        viewState.selectedDiscoverTab = .home
+                        selectedTab = .home
+                    }
+                } label: {
+                    headerTab(title: "Home", isSelected: selectedTab == .home)
+                }
+                
+                
+                Button {
+                    withAnimation(.bouncy(duration: 0.35, extraBounce: 0.18)) {
+                        viewState.selectedDiscoverTab = .promos
+                        selectedTab = .promos
+                    }
+                } label: {
+                    headerTab(title: "Promos", isSelected: selectedTab == .promos, showsNewBadge: true)
+                }
                 
                 Spacer(minLength: .zero)
             }
             .padding(.horizontal, .padding16)
+    }
+
+    private func headerTab(title: String, isSelected: Bool, showsNewBadge: Bool = false) -> some View {
+        VStack(spacing: .zero) {
+            HStack(spacing: .spacing8) {
+                PeptideText(text: title, font: .peptideHeadline)
+
+                if showsNewBadge {
+                    Text("NEW")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(Color.textDefaultGray01)
+                        .padding(.horizontal, .padding4)
+                        .padding(.vertical, .padding4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5)
+                                .fill(Color.red)
+                        )
+                }
+            }
+                .padding(top: .padding24, bottom: .padding16)
+
+            Capsule()
+                .fill(isSelected ? Color.bgRed07 : Color.clear)
+                .frame(height: .size4)
+        }
+        .padding(.horizontal, .size20)
+        .contentShape(Rectangle())
     }
     
     private var backgroundView: some View {
@@ -69,7 +151,9 @@ struct DiscoverScrollView: View {
     
     private var discoverList: some View {
         List {
-            bannerSection
+//            bannerSection
+            
+            searchSection
             
             if isLoading {
                 loadingSection
@@ -115,6 +199,21 @@ struct DiscoverScrollView: View {
                 .listRowSpacing(0)
                 .listRowBackground(Color.clear)
     }
+    
+    private var searchSection: some View {
+        Section {
+            
+            PeptideTextField(text: $searchQuery,
+                             state: $searchTextFieldState,
+                             placeholder: "Search communities...",
+                             icon: .peptideSearch,
+                             cornerRadius: .radiusLarge,
+                             height: .size40,
+                             keyboardType: .default)
+        }
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+    }
                 
     private var loadingSection: some View {
                     Section {
@@ -133,8 +232,21 @@ struct DiscoverScrollView: View {
                 
     private var serversSection: some View {
                 Section {
-                    ForEach(discoverItems, id: \.id) { item in
-                discoverItemRow(for: item)
+                    if filteredDiscoverItems.isEmpty && !isLoading {
+                        HStack {
+                            Spacer(minLength: .zero)
+                            PeptideText(
+                                text: "No communities found.",
+                                font: .peptideSubhead,
+                                textColor: .textGray07
+                            )
+                            Spacer(minLength: .zero)
+                        }
+                        .padding(.vertical, .padding24)
+                    } else {
+                        ForEach(filteredDiscoverItems, id: \.id) { item in
+                            discoverItemRow(for: item)
+                        }
                     }
                 }
                 .listRowInsets(.init())
@@ -165,17 +277,27 @@ struct DiscoverScrollView: View {
     private func handleItemClick(item: DiscoverItem, isMember: Bool) {
         if isMember {
             navigateToServer(item: item)
-        } else {
+        } else if item.disabled == false, item.code.map({ !$0.isEmpty }) == true {
             navigateToInvite(item: item)
         }
     }
     
     private func navigateToServer(item: DiscoverItem) {
         // print("✅ [DiscoverScrollView] User is already a member of \(item.title), navigating to server")
+
+        if viewState.servers[item.id] != nil {
+            viewState.selectServer(withId: item.id)
+
+            if !viewState.path.isEmpty {
+                viewState.path.removeAll()
+            }
+
+            return
+        }
         
         // First try to find server by cached invite code -> server ID mapping
-        if let serverId = inviteCache[item.code] {
-            if let server = viewState.servers[serverId] {
+        if let inviteCode = item.code, let serverId = inviteCache[inviteCode] {
+            if viewState.servers[serverId] != nil {
                 viewState.selectServer(withId: serverId)
                 
                 // Close the discover view and return to main screen
@@ -203,20 +325,24 @@ struct DiscoverScrollView: View {
         } else {
             // Couldn't find server, show invite screen
             // print("⚠️ [DiscoverScrollView] Couldn't find matching server, showing invite screen")
-            viewState.path.append(NavigationDestination.invite(item.code))
+            navigateToInvite(item: item)
         }
     }
     
     private func navigateToInvite(item: DiscoverItem) {
+        guard item.disabled == false, let inviteCode = item.code, !inviteCode.isEmpty else {
+            return
+        }
+
         // print("🔗 [DiscoverScrollView] User is not a member of \(item.title), showing invite screen")
-        viewState.path.append(NavigationDestination.invite(item.code))
+        viewState.path.append(NavigationDestination.invite(inviteCode))
     }
     
     private func loadData() {
         // Check if we're on peptide.chat domain before loading
         let baseURL = viewState.baseURL ?? viewState.defaultBaseURL
         if !baseURL.contains("peptide.chat") {
-            // print("🌐 [DiscoverScrollView] Not on peptide.chat domain, skipping CSV loading")
+            // print("🌐 [DiscoverScrollView] Not on peptide.chat domain, skipping Discover server API loading")
             self.isLoading = false
             self.discoverItems = [] // Empty list for non-peptide domains
             return
@@ -232,8 +358,8 @@ struct DiscoverScrollView: View {
                                         isNew: $0.isNew,
                                         sortOrder: $0.sortOrder,
                                         disabled: $0.disabled,
-                                        color: $0.color) }
-                    .sorted(by: { $0.sortOrder < $1.sortOrder })
+                                        color: $0.color,
+                                        logo: $0.logo) }
                 DispatchQueue.main.async {
                     // print("📥 Using cached discover: \(items.count) items, updated \(cached.timestamp)")
                     self.discoverItems = items
@@ -241,7 +367,7 @@ struct DiscoverScrollView: View {
             }
         }
         self.isLoading = discoverItems.isEmpty
-        // print("🌐 [DiscoverScrollView] Loading server list from CSV...")
+        // print("🌐 [DiscoverScrollView] Loading server list from public servers API...")
         
         ServerChatDataFetcher.shared.fetchData { result in
                 DispatchQueue.main.async {
@@ -252,7 +378,7 @@ struct DiscoverScrollView: View {
                     switch result {
                     case .success(let fetchedServerChats):
                     
-                    // print("✅ [DiscoverScrollView] Successfully fetched \(fetchedServerChats.count) servers from CSV")
+                    // print("✅ [DiscoverScrollView] Successfully fetched \(fetchedServerChats.count) servers from public servers API")
                         
                         self.discoverItems = fetchedServerChats
                             //.filter { !$0.disabled }
@@ -264,9 +390,9 @@ struct DiscoverScrollView: View {
                                              isNew: $0.isNew,
                                              sortOrder: $0.sortOrder,
                                              disabled: $0.disabled,
-                                             color: $0.color)
+                                             color: $0.color,
+                                             logo: $0.logo)
                             }
-                            .sorted(by: { $0.sortOrder < $1.sortOrder })
                         let cache = ServerChatCache(timestamp: Date(), items: fetchedServerChats)
                         ServerChatDataFetcher.shared.saveCache(cache)
                     
@@ -285,48 +411,51 @@ struct DiscoverScrollView: View {
 
     /// Checks and caches membership for a specific discover item (called per-row on appear)
     private func checkAndCacheMembership(for item: DiscoverItem) async {
-        // Skip if already checking this invite
-        if checkingInvites.contains(item.code) {
-            print("🔍 [Discover] SKIP (in-flight): \(item.title) [\(item.code)]")
+        guard let inviteCode = item.code, !inviteCode.isEmpty else {
             return
         }
 
-        // Skip if we already have membership cached by server ID (from CSV item.id); seed inviteCache so UI uses fast path
-        if viewState.discoverMembershipCache[item.id] != nil || membershipCache[item.id] != nil {
-            print("🔍 [Discover] CACHE HIT: \(item.title) [\(item.code)]")
-            let cached = viewState.discoverMembershipCache[item.id] ?? membershipCache[item.id]!
+        // Skip if already checking this invite
+        if checkingInvites.contains(inviteCode) {
+            print("🔍 [Discover] SKIP (in-flight): \(item.title) [\(inviteCode)]")
+            return
+        }
+
+        // Skip if ViewState already has membership cached by server ID (from API item.id); seed inviteCache so UI uses fast path
+        if let cached = viewState.discoverMembershipCache[item.id] {
+            print("🔍 [Discover] CACHE HIT: \(item.title) [\(inviteCode)]")
             await MainActor.run {
-                inviteCache[item.code] = item.id
+                inviteCache[inviteCode] = item.id
                 membershipCache[item.id] = cached
             }
             return
         }
 
         // Skip if we already have cached membership info (from inviteCache + membershipCache)
-        if let serverId = inviteCache[item.code],
+        if let serverId = inviteCache[inviteCode],
            membershipCache[serverId] != nil {
-            print("🔍 [Discover] CACHE HIT (invite): \(item.title) [\(item.code)]")
+            print("🔍 [Discover] CACHE HIT (invite): \(item.title) [\(inviteCode)]")
             return
         }
 
         await MainActor.run {
-            checkingInvites.insert(item.code)
+            checkingInvites.insert(inviteCode)
         }
 
-        print("🌐 [Discover] FETCHING: \(item.title) [\(item.code)]")
+        print("🌐 [Discover] FETCHING: \(item.title) [\(inviteCode)]")
         do {
-            let inviteResponse = try await viewState.http.fetchInvite(code: item.code).get()
+            let inviteResponse = try await viewState.http.fetchInvite(code: inviteCode).get()
             let extractedServerId = inviteResponse.getServerID()
 
             if let serverId = extractedServerId {
                 await MainActor.run {
-                    inviteCache[item.code] = serverId
+                    inviteCache[inviteCode] = serverId
                 }
 
                 guard let currentUser = viewState.currentUser else {
                     await MainActor.run {
                         membershipCache[serverId] = false
-                        checkingInvites.remove(item.code)
+                        checkingInvites.remove(inviteCode)
                     }
                     return
                 }
@@ -336,16 +465,16 @@ struct DiscoverScrollView: View {
                 await MainActor.run {
                     membershipCache[serverId] = isMember
                     viewState.updateMembershipCache(serverId: serverId, isMember: isMember, persist: false)
-                    checkingInvites.remove(item.code)
+                    checkingInvites.remove(inviteCode)
                 }
             } else {
                 await MainActor.run {
-                    membershipCache[item.code] = false
-                    checkingInvites.remove(item.code)
+                    membershipCache[inviteCode] = false
+                    checkingInvites.remove(inviteCode)
                 }
             }
         } catch {
-            // print("❌ [DiscoverScrollView] Failed to fetch invite \(item.code): \(error)")
+            // print("❌ [DiscoverScrollView] Failed to fetch invite \(inviteCode): \(error)")
 
             // Fallback to name-based matching
             let nameMembership = viewState.servers.values.contains { server in
@@ -353,8 +482,8 @@ struct DiscoverScrollView: View {
             }
 
             await MainActor.run {
-                membershipCache[item.code] = nameMembership
-                checkingInvites.remove(item.code)
+                membershipCache[inviteCode] = nameMembership
+                checkingInvites.remove(inviteCode)
             }
         }
     }
@@ -362,7 +491,7 @@ struct DiscoverScrollView: View {
     // Enhanced membership check: ViewState servers first, then persisted cache, then local/API.
     // Uses inviteCache[item.code] ?? item.id so persisted cache is used on launch (inviteCache empty).
     private func checkIfUserIsMember(item: DiscoverItem) -> Bool {
-        let serverId = inviteCache[item.code] ?? item.id
+        let serverId = item.code.flatMap { inviteCache[$0] } ?? item.id
         // 1) Server in joined list => member (source of truth; stays in sync with web/Android via WebSocket)
         if viewState.servers[serverId] != nil {
             return true
@@ -384,7 +513,7 @@ struct DiscoverScrollView: View {
             return isMember
         }
         // Fallbacks when serverId from item.id had no cache and no currentUser
-        if let cached = membershipCache[item.code] {
+        if let inviteCode = item.code, let cached = membershipCache[inviteCode] {
             return cached
         }
         return viewState.servers.values.contains { server in
@@ -399,15 +528,69 @@ struct ServerChat: Codable {
     let id: String
     let name: String
     let description: String
-    let inviteCode: String
+    let inviteCode: String?
     let disabled: Bool
     let isNew: Bool
-    let sortOrder: Int
-    let chronological: Int
-    let dateAdded: String?
-    let price1: String?
-    let price2: String?
+    let sortOrder: Int?
     let color: String?
+    let logo: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case description
+        case inviteCode
+        case disabled
+        case isNew = "new"
+        case sortOrder = "sortorder"
+        case color = "showcolor"
+        case logo
+    }
+}
+
+struct DirectoryCommunity: Decodable {
+    let serverId: String?
+    let logo: String?
+}
+
+enum DirectoryCommunitiesData: Decodable {
+    case items([DirectoryCommunity])
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let items = try? container.decode([DirectoryCommunity].self) {
+            self = .items(items)
+            return
+        }
+
+        let wrapped = try container.decode(DirectoryCommunitiesItems.self)
+        self = .items(wrapped.items)
+    }
+
+    var items: [DirectoryCommunity] {
+        switch self {
+        case .items(let items):
+            return items
+        }
+    }
+}
+
+struct DirectoryCommunitiesItems: Decodable {
+    let items: [DirectoryCommunity]
+}
+
+struct PublicCommunitiesResponse: Decodable {
+    let data: DirectoryCommunitiesData
+}
+
+struct PublicServersResponse: Decodable {
+    let success: Bool
+    let data: [ServerChat]?
+    let error: PublicServersError?
+}
+
+struct PublicServersError: Decodable, Error {
+    let message: String?
 }
 
 struct ServerChatCache: Codable {
@@ -418,7 +601,9 @@ struct ServerChatCache: Codable {
 class ServerChatDataFetcher {
     static let shared = ServerChatDataFetcher()
     
-    let csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRY41D-NgTE6bC3kTN3dRpisI-DoeHG8Eg7n31xb1CdydWjOLaphqYckkTiaG9oIQSWP92h3NE-7cpF/pub?gid=0&single=true&output=csv"
+    let serversUrl = "https://manageapi.peptide.chat/api/directory/servers"
+    let communitiesUrl = "https://manageapi.peptide.chat/api/directory/communities?limit=200"
+    let csvFallbackUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRY41D-NgTE6bC3kTN3dRpisI-DoeHG8Eg7n31xb1CdydWjOLaphqYckkTiaG9oIQSWP92h3NE-7cpF/pub?gid=0&single=true&output=csv"
     
     private let cacheFileName = "discover_server_cache.json"
     private var cacheURL: URL {
@@ -442,57 +627,117 @@ class ServerChatDataFetcher {
     }
     
     func fetchData(completion: @escaping (Result<[ServerChat], Error>) -> Void) {
-        // print("🌐 [ServerChatDataFetcher] Fetching CSV from URL: \(csvUrl)")
-        AF.request(csvUrl).responseString { response in
+        // print("🌐 [ServerChatDataFetcher] Fetching public servers from URL: \(serversUrl)")
+        AF.request(serversUrl).responseDecodable(of: PublicServersResponse.self) { response in
+            switch response.result {
+            case .success(let publicServersResponse):
+                // print("✅ [ServerChatDataFetcher] Public servers downloaded successfully")
+                guard publicServersResponse.success, let serverChats = publicServersResponse.data else {
+                    self.fetchCSVFallback(completion: completion)
+                    return
+                }
+
+                guard !serverChats.isEmpty else {
+                    self.fetchCSVFallback(completion: completion)
+                    return
+                }
+
+                self.fetchCommunityLogos(for: serverChats, completion: completion)
+
+            case .failure:
+                // print("❌ [ServerChatDataFetcher] Failed to download public servers")
+                self.fetchCSVFallback(completion: completion)
+            }
+        }
+    }
+
+    private func fetchCommunityLogos(
+        for serverChats: [ServerChat],
+        completion: @escaping (Result<[ServerChat], Error>) -> Void
+    ) {
+        AF.request(communitiesUrl).responseDecodable(of: PublicCommunitiesResponse.self) { response in
+            let communities: [DirectoryCommunity]
+            switch response.result {
+            case .success(let payload):
+                communities = payload.data.items
+            case .failure:
+                // The directory remains usable when its optional logo source is unavailable.
+                communities = []
+            }
+
+            var logosByServerId: [String: String] = [:]
+            for community in communities {
+                guard let serverId = community.serverId,
+                      let logo = community.logo,
+                      !logo.isEmpty else {
+                    continue
+                }
+                logosByServerId[serverId] = logo
+            }
+
+            let enrichedServers = serverChats.map { server in
+                ServerChat(
+                    id: server.id,
+                    name: server.name,
+                    description: server.description,
+                    inviteCode: server.inviteCode,
+                    disabled: server.disabled,
+                    isNew: server.isNew,
+                    sortOrder: server.sortOrder,
+                    color: server.color,
+                    logo: logosByServerId[server.id] ?? server.logo
+                )
+            }
+
+            let cache = ServerChatCache(timestamp: Date(), items: enrichedServers)
+            self.saveCache(cache)
+            completion(.success(enrichedServers))
+        }
+    }
+
+    private func fetchCSVFallback(completion: @escaping (Result<[ServerChat], Error>) -> Void) {
+        // print("🌐 [ServerChatDataFetcher] Falling back to CSV URL: \(csvFallbackUrl)")
+        AF.request(csvFallbackUrl).responseString { response in
             switch response.result {
             case .success(let csvString):
-                // print("✅ [ServerChatDataFetcher] CSV downloaded successfully")
                 do {
                     let csv = try CSV<Named>(string: csvString)
-                    
-                    let checkForIDHeader = csv.header.contains("id")
-                    
-                    if !checkForIDHeader {
-                        // print("⚠️ [ServerChatDataFetcher] 'id' header missing, using empty string key")
-                    }
-                    
-                    // print("📊 [ServerChatDataFetcher] Parsing CSV with \(csv.rows.count) rows")
-                    
                     let serverChats = csv.rows.compactMap { row -> ServerChat? in
                         guard let id = row["id"] ?? row[""],
                               let name = row["name"],
                               let description = row["description"],
-                              let inviteCode = row["inviteCode"],
                               let disabled = row["disabled"].map({ $0.lowercased() == "true" }),
-                              let isNew = row["new"].map({ $0.lowercased() == "true" }),
-                              let sortOrder = row["sortorder"].flatMap(Int.init),
-                              let chronological = row["chronological"].flatMap(Int.init) else { return nil }
-                        
+                              let isNew = row["new"].map({ $0.lowercased() == "true" }) else {
+                            return nil
+                        }
+
                         return ServerChat(
                             id: id,
                             name: name,
                             description: description,
-                            inviteCode: inviteCode,
+                            inviteCode: row["inviteCode"],
                             disabled: disabled,
                             isNew: isNew,
-                            sortOrder: sortOrder,
-                            chronological: chronological,
-                            dateAdded: row["dateAdded"],
-                            price1: row[""],
-                            price2: row[""],
-                            color: row["showcolor"]
+                            sortOrder: row["sortorder"].flatMap(Int.init),
+                            color: row["showcolor"],
+                            logo: nil
                         )
                     }
+                    .sorted { ($0.sortOrder ?? Int.max) < ($1.sortOrder ?? Int.max) }
+
+                    guard !serverChats.isEmpty else {
+                        completion(.failure(PublicServersError(message: "CSV fallback returned no discover servers")))
+                        return
+                    }
+
                     let cache = ServerChatCache(timestamp: Date(), items: serverChats)
                     self.saveCache(cache)
                     completion(.success(serverChats))
                 } catch {
-                    // print("❌ [ServerChatDataFetcher] Failed to parse CSV: \(error.localizedDescription)")
                     completion(.failure(error))
                 }
-                
+
             case .failure(let error):
-                // print("❌ [ServerChatDataFetcher] Failed to download CSV: \(error.localizedDescription)")
                 completion(.failure(error))
             }
         }
@@ -503,9 +748,9 @@ class ServerChatDataFetcher {
 
 
 
-
-#Preview {
-    DiscoverScrollView()
-        .applyPreviewModifiers(withState: ViewState.preview())
-        .preferredColorScheme(.dark)
-}
+//
+//#Preview {
+//    DiscoverScrollView()
+//        .applyPreviewModifiers(withState: ViewState.preview())
+//        .preferredColorScheme(.dark)
+//}

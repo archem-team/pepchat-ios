@@ -334,9 +334,10 @@ public class ViewState: ObservableObject {
     
     @Published var alert : (String?,ImageResource?, Color?) = (nil,nil, nil)
     
-    @Published var serverMembersCount : String? = nil
+    @Published var serverMembersCounts: [String: Int] = [:]
     
     @Published var mentionedUser : String? = nil
+    @Published var selectedDiscoverTab: DiscoverHomeTab = .home
     
     
     @Published var currentSelection: MainSelection {
@@ -1107,13 +1108,70 @@ public class ViewState: ObservableObject {
     }
     
     func formatUrl(with: File) -> String {
-        
-        if case .video(_) = with.metadata {
-            return "\(apiInfo!.features.autumn.url)/\(with.tag)/\(with.id)/\(with.filename)"
-        } else {
-            return "\(apiInfo!.features.autumn.url)/\(with.tag)/\(with.id)"
+        let baseUrl = "\(apiInfo!.features.autumn.url)/\(with.tag)/\(with.id)"
+        let filename = filenameWithInferredExtension(for: with)
+
+        guard !filename.isEmpty,
+              let encodedFilename = filename.addingPercentEncoding(withAllowedCharacters: Self.urlPathComponentAllowedCharacters) else {
+            return baseUrl
         }
-        
+
+        return "\(baseUrl)/\(encodedFilename)"
+    }
+
+    private static let urlPathComponentAllowedCharacters = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
+
+    private func filenameWithInferredExtension(for file: File) -> String {
+        var filename = file.filename
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !filename.isEmpty else { return "" }
+
+        if (filename as NSString).pathExtension.isEmpty,
+           let inferredExtension = preferredFilenameExtension(forContentType: file.content_type) {
+            filename += ".\(inferredExtension)"
+        }
+
+        return filename
+    }
+
+    private func preferredFilenameExtension(forContentType contentType: String) -> String? {
+        switch contentType.lowercased().split(separator: ";", maxSplits: 1).first.map(String.init) {
+        case "image/jpeg":
+            return "jpg"
+        case "image/png":
+            return "png"
+        case "image/gif":
+            return "gif"
+        case "image/webp":
+            return "webp"
+        case "video/mp4":
+            return "mp4"
+        case "video/quicktime":
+            return "mov"
+        case "video/webm":
+            return "webm"
+        case "audio/mpeg":
+            return "mp3"
+        case "audio/mp4":
+            return "m4a"
+        case "audio/wav", "audio/x-wav":
+            return "wav"
+        case "audio/ogg", "application/ogg":
+            return "ogg"
+        case "application/pdf":
+            return "pdf"
+        case "text/plain":
+            return "txt"
+        case "application/zip":
+            return "zip"
+        default:
+            return nil
+        }
     }
     
     func formatUrl(fromEmoji emojiId: String) -> String {
@@ -2309,36 +2367,31 @@ public class ViewState: ObservableObject {
     }
     
     
-    func getServerMembers(target : String) async{
-        // FAST: Update UI immediately with loading state
-        await MainActor.run {
-            serverMembersCount = nil
+    func serverMembersCount(for serverId: String) -> String? {
+        if let count = serverMembersCounts[serverId] {
+            return count.formattedWithSeparator()
         }
-        
-        // Online members only for sidebar count — avoids loading tens of thousands into memory.
-        let serverMembers = await self.http.fetchServerMembers(target: target, excludeOffline: true)
-        
-        switch serverMembers {
-            case .success(let success):
-                await MainActor.run {
-                    self.serverMembersCount = success.members.count.formattedWithSeparator()
-                    for user in success.users {
-                        self.users[user.id] = user
-                    }
-                    for member in success.members {
-                        let serverId = member.id.server
-                        let userId = member.id.user
-                        if self.members[serverId] == nil {
-                            self.members[serverId] = [:]
-                        }
-                        self.members[serverId]?[userId] = member
-                    }
-                }
-            
+        return nil
+    }
+
+    func serverMembersLabel(for serverId: String) -> String {
+        if let count = serverMembersCount(for: serverId) {
+            return "\(count) members"
+        }
+        return "Loading members"
+    }
+
+    func getServerMembers(target : String) async{
+        let serverId = target
+
+        let result = await http.fetchServerMembersCount(target: serverId)
+        await MainActor.run {
+            switch result {
+            case .success(let count):
+                self.serverMembersCounts[serverId] = count
             case .failure(_):
-                await MainActor.run {
-                    self.serverMembersCount = nil
-                }
+                break
+            }
         }
     }
     

@@ -117,7 +117,22 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
     // New Message Indicator
     var newMessageButton: UIButton!
+    var newMessageBadgeView: UIView!
+    var newMessageBadgeLabel: UILabel!
+    internal var messageIdsPendingSlideInAnimation = Set<String>()
+    /// Messages received from other users while this chat is open and the user is
+    /// reading above the bottom. This is intentionally separate from the persisted
+    /// unread separator used by the Mark Unread feature.
+    internal var liveUnreadMessageIds = Set<String>()
     var hasUnreadMessages: Bool = false
+    internal var unreadAnchorLastReadMessageId: String?
+    internal var unreadSeparatorMessageId: String?
+    internal var shouldPreserveUnreadStateOnDisappear: Bool = false
+    internal var didPositionAtUnreadSeparator: Bool = false
+    internal var didRequestUnreadContextLoad: Bool = false
+    internal var didRequestUnreadStateRefresh: Bool = false
+    internal var didManuallyMarkUnreadInCurrentSession: Bool = false
+    internal var didRequestLatestPositionFromButton: Bool = false
 
     // Replies container view - now managed by RepliesManager
     var replies: [ReplyMessage] = []  // Made public for Manager access
@@ -395,43 +410,71 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     }
 
     @objc internal func newMessageButtonTapped() {
-        // Function to scroll to new message and hide the button
-        scrollToBottom(animated: true)
+        scrollToLatestMessageFromButton()
+    }
 
-        // Hide the button with animation
-        UIView.animate(withDuration: 0.3) {
+    internal func showNewMessageButton(markUnread: Bool = true) {
+        guard let newMessageButton else { return }
+
+        if markUnread {
+            hasUnreadMessages = true
+        }
+
+        let wasVisible = !newMessageButton.isHidden && newMessageButton.alpha > 0
+        if !wasVisible {
+            newMessageButton.isHidden = false
+            UIView.animate(withDuration: 0.3) {
+                self.newMessageButton.alpha = 1
+            }
+        }
+
+        updateLiveUnreadMessageBadge()
+    }
+
+    internal func hideNewMessageButton() {
+        guard let newMessageButton else { return }
+        guard !didManuallyMarkUnreadInCurrentSession else {
+            updateLiveUnreadMessageBadge()
+            return
+        }
+
+        guard !newMessageButton.isHidden || newMessageButton.alpha > 0 else {
+            hasUnreadMessages = false
+            liveUnreadMessageIds.removeAll()
+            updateLiveUnreadMessageBadge()
+            return
+        }
+
+        UIView.animate(withDuration: 0.25) {
             self.newMessageButton.alpha = 0
         } completion: { _ in
             self.newMessageButton.isHidden = true
             self.hasUnreadMessages = false
+            self.liveUnreadMessageIds.removeAll()
+            self.updateLiveUnreadMessageBadge()
         }
     }
 
-    internal func showNewMessageButton() {
-        // If the button is already displayed, do nothing
-        if !newMessageButton.isHidden && newMessageButton.alpha > 0 {
-            return
-        }
+    internal func liveUnreadMessageCount() -> Int {
+        liveUnreadMessageIds.intersection(localMessages).count
+    }
 
-        // Show button with animation
-        newMessageButton.isHidden = false
-        UIView.animate(withDuration: 0.3) {
-            self.newMessageButton.alpha = 1
-        }
+    internal func updateLiveUnreadMessageBadge() {
+        guard let newMessageBadgeView, let newMessageBadgeLabel else { return }
 
-        hasUnreadMessages = true
+        let count = liveUnreadMessageCount()
+        let shouldShowBadge = count > 0 && hasUnreadMessages
 
-        // If no click on the button for a few seconds, automatically hide it
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
-            guard let self = self else { return }
-            // Only hide if still showing
-            if !self.newMessageButton.isHidden && self.newMessageButton.alpha > 0 {
-                UIView.animate(withDuration: 0.3) {
-                    self.newMessageButton.alpha = 0
-                } completion: { _ in
-                    self.newMessageButton.isHidden = true
-                }
-            }
+        if shouldShowBadge {
+            newMessageBadgeLabel.text = count > 9 ? "9+" : "\(count)"
+            newMessageBadgeView.isHidden = false
+            newMessageButton?.accessibilityLabel =
+                count > 9
+                ? "Scroll to latest message, 9 or more unread"
+                : "Scroll to latest message, \(count) unread"
+        } else {
+            newMessageBadgeView.isHidden = true
+            newMessageButton?.accessibilityLabel = "Scroll to latest message"
         }
     }
 
@@ -444,6 +487,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         isViewDisappearing = false
+        configureMessageInputInteractions()
 
         // Hide navigation bar if presented in a navigation controller
         navigationController?.setNavigationBarHidden(true, animated: animated)
@@ -857,12 +901,14 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         // Set flag to track that we're going to search
         wasInSearch = true
         isReturningFromSearch = false
+        shouldPreserveUnreadStateOnDisappear = true
 
         // Navigate to the channel search page
         viewModel.viewState.path.append(NavigationDestination.channel_search(viewModel.channel.id))
     }
     
     @objc internal func pinnedButtonTapped() {
+        shouldPreserveUnreadStateOnDisappear = true
         viewModel.viewState.path.append(NavigationDestination.channel_pinned_messages(viewModel.channel.id))
     }
 
@@ -1668,8 +1714,13 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
 
         let wasNearBottom = isUserNearBottom()
+        let previousMessages = localMessages
         localMessages = channelMessages
         continuationCache.removeAll()
+        scheduleSlideInAnimationForNewMessages(
+            previousMessages: previousMessages,
+            updatedMessages: localMessages
+        )
 
         // CRITICAL: Mark data source as updating to protect scroll events
         isDataSourceUpdating = true
@@ -1960,6 +2011,9 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                 messageCell.configure(
                     with: message, author: author, member: member,
                     viewState: viewModelRef.viewState, isContinuation: isContinuation)
+                messageCell.setUnreadSeparatorVisible(
+                    viewControllerRef?.shouldShowUnreadSeparator(for: messageId) ?? false
+                )
                 
                 // First-paint fix: enforce text height before initial display so rows don't
                 // appear cropped until they scroll offscreen/reload.
@@ -1979,7 +2033,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                     let key = CellHeightCacheKey(
                         messageId: messageId,
                         isContinuation: isContinuation,
-                        tableWidth: Int(tableView.bounds.width)
+                        tableWidth: Int(tableView.bounds.width),
+                        hasUnreadSeparator: viewControllerRef?.shouldShowUnreadSeparator(for: messageId) ?? false
                     )
                     viewControllerRef?.cellHeightCache.store(height: finalMeasuredHeight, for: key)
                 }
@@ -2046,8 +2101,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         }
 
         func updateMessages(_ messages: [String]) {
-            cacheQueue.async(flags: .barrier) { [weak self] in
-                guard let self = self else { return }
+            cacheQueue.sync(flags: .barrier) {
                 self.localMessages = messages
                 self.cachedMessages = Array(messages)  // Update cache too
                 self.lastReturnedRowCount = messages.count
@@ -2170,7 +2224,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                         }
                     }
                     if !indexPaths.isEmpty {
-                        let wasNearBottom = self.isUserNearBottom()
+                        let wasNearBottom = self.unreadSeparatorMessageId == nil && self.isUserNearBottom()
                         UIView.performWithoutAnimation {
                             tableView.reloadRows(at: indexPaths, with: .none)
                             tableView.layoutIfNeeded()
@@ -2508,9 +2562,7 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
             }
         // print("Mention user from message: \(message.id)")
         case .markUnread:
-            // Handle marking message as unread
-            // print("Mark message as unread: \(message.id)")
-            break
+            markMessageAsUnreadFromContextMenu(message)
         case .copyLink:
             // Copy message link to clipboard
             let channelId = message.channel
@@ -2569,6 +2621,20 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         // Force layout update first to ensure table view size is correct
         self.view.layoutIfNeeded()
         self.tableView.layoutIfNeeded()
+
+        let previousMessages = localMessages
+        syncLocalMessagesWithViewState()
+        scheduleSlideInAnimationForNewMessages(
+            previousMessages: previousMessages,
+            updatedMessages: localMessages
+        )
+        if localMessages != previousMessages {
+            if let localDataSource = dataSource as? LocalMessagesDataSource {
+                localDataSource.updateMessages(localMessages)
+            }
+            tableView.reloadData()
+            updateTableViewBouncing()
+        }
 
         // Wait a moment for the message to be added to the view
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -2640,6 +2706,33 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
         if needsViewModelSync || needsChannelMessagesSync {
             viewModel.messages = localMessages
             viewModel.viewState.channelMessages[viewModel.channel.id] = localMessages
+        }
+    }
+
+    internal func scheduleSlideInAnimationForNewMessages(
+        previousMessages: [String],
+        updatedMessages: [String]
+    ) {
+        guard updatedMessages.count > previousMessages.count else { return }
+        guard Array(updatedMessages.prefix(previousMessages.count)) == previousMessages else { return }
+
+        let appendedMessageIds = updatedMessages.dropFirst(previousMessages.count)
+        messageIdsPendingSlideInAnimation.formUnion(appendedMessageIds)
+    }
+
+    internal func animateSlideInIfNeeded(cell: UITableViewCell, messageId: String) {
+        guard messageIdsPendingSlideInAnimation.remove(messageId) != nil else { return }
+
+        cell.alpha = 0
+        cell.transform = CGAffineTransform(translationX: 0, y: 18)
+
+        UIView.animate(
+            withDuration: 0.24,
+            delay: 0,
+            options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]
+        ) {
+            cell.alpha = 1
+            cell.transform = .identity
         }
     }
 

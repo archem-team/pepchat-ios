@@ -33,8 +33,6 @@ struct ServerInfoSheet: View {
     @State private var isPresentedNotificationSetting : Bool = false
     @State private var isPresentedServerDelete: Bool = false
     @State private var isPresentedIdentitSheet: Bool = false
-    @State private var serverMembersCount : String? = nil
-    
     var onNavigation : (ServerInfoRouteType, String) -> Void
     
     var serverPermissions: Permissions{
@@ -74,7 +72,7 @@ struct ServerInfoSheet: View {
             .background(.bgDefaultPurple13)
         }
         .task {
-            await getMembersCount()
+            await viewState.getServerMembers(target: server.id)
         }
         .sheet(isPresented: $isPresentedInviteSheet) {
             if let inviteSheetUrl {
@@ -118,22 +116,6 @@ struct ServerInfoSheet: View {
         
     }
     
-    private func getMembersCount() async {
-        
-        Task{
-            
-            let serverMembers = await self.viewState.http.fetchServerMembers(target: server.id)
-            switch serverMembers {
-            case .success(let success):
-                serverMembersCount = success.members.count.formattedWithSeparator()
-            case .failure(_):
-                serverMembersCount = nil
-            }
-            
-        }
-        
-    }
-
     // MARK: - Header View
     private var headerView: some View {
         ZStack(alignment: .bottomLeading) {
@@ -202,7 +184,7 @@ struct ServerInfoSheet: View {
                 PeptideIcon(iconName: .peptideTeamUsers,
                             size: .size16,
                             color: .iconGray07)
-                PeptideText(textVerbatim: "\(serverMembersCount ?? "---") members",
+                PeptideText(textVerbatim: viewState.serverMembersLabel(for: server.id),
                             font: .peptideBody4,
                             textColor: .textGray07,
                             lineLimit: 1)

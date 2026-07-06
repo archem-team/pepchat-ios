@@ -97,6 +97,11 @@ enum MainSelection: Hashable, Codable {
     }
 }
 
+enum DiscoverHomeTab: Hashable, Codable {
+    case home
+    case promos
+}
+
 enum ChannelSelection: Hashable, Codable {
     case channel(String)
     case home
@@ -113,6 +118,7 @@ enum ChannelSelection: Hashable, Codable {
 
 enum NavigationDestination: Hashable, Codable {
     case discover
+    case promos_submit
     case settings
     case about_settings
     case developer_settings

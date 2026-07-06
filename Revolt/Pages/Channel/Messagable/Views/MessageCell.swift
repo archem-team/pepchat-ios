@@ -33,6 +33,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
     internal var viewState: ViewState?
     internal let usernameVerifiedBadgeImageView = UIImageView()
     internal var usernameVerifiedBadgeWidthConstraint: NSLayoutConstraint?
+    internal let unreadSeparatorView = UIView()
+    internal let unreadSeparatorLabel = UILabel()
+    internal var unreadSeparatorHeightConstraint: NSLayoutConstraint?
+    internal var replyViewTopConstraint: NSLayoutConstraint?
+    internal var avatarTopConstraint: NSLayoutConstraint?
 
     
     // Reply components
@@ -153,6 +158,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
     
     override func prepareForReuse() {
         super.prepareForReuse()
+        layer.removeAllAnimations()
+        alpha = 1
+        transform = .identity
         
         // PERFORMANCE OPTIMIZATION: Clear all content to prevent overlapping issues
         avatarImageView.image = nil
@@ -162,6 +170,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         contentLabel.isUserInteractionEnabled = true // Reset interaction state
         usernameLabel.text = nil
         timeLabel.text = nil
+        setUnreadSeparatorVisible(false)
         
         // Hide bridge badge
         bridgeBadgeLabel.text = nil
@@ -1078,7 +1087,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         guard let viewState = self.viewState else { return }
         
         // Create the download URL
-        let downloadURL = viewState.formatUrl(fromId: attachment.id, withTag: "attachments")
+        let downloadURL = viewState.formatUrl(with: attachment)
         
         guard let url = URL(string: downloadURL) else {
             // print("❌ Invalid download URL: \(downloadURL)")

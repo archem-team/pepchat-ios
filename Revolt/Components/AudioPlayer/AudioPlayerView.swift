@@ -959,7 +959,8 @@ class AudioPlayerView: UIView {
             // Ensure the Documents directory exists
             try fm.createDirectory(at: documentsPath, withIntermediateDirectories: true)
 
-            var destinationURL = documentsPath.appendingPathComponent(filename)
+            let resolvedFilename = filenameWithInferredExtension(filename, mimeType: response?.mimeType)
+            var destinationURL = documentsPath.appendingPathComponent(resolvedFilename)
 
             // If destination exists try to remove it
             if fm.fileExists(atPath: destinationURL.path) {
@@ -1022,6 +1023,37 @@ class AudioPlayerView: UIView {
         // Fallback filename
         let timestamp = DateFormatter().string(from: Date())
         return "audio_file_\(timestamp)"
+    }
+
+    private func filenameWithInferredExtension(_ filename: String, mimeType: String?) -> String {
+        let cleanFilename = filename
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !(cleanFilename as NSString).pathExtension.isEmpty else {
+            let inferredExtension = preferredAudioExtension(forMimeType: mimeType) ?? "mp3"
+            return "\(cleanFilename.isEmpty ? "audio_file" : cleanFilename).\(inferredExtension)"
+        }
+
+        return cleanFilename
+    }
+
+    private func preferredAudioExtension(forMimeType mimeType: String?) -> String? {
+        switch mimeType?.lowercased().split(separator: ";", maxSplits: 1).first.map(String.init) {
+        case "audio/mpeg":
+            return "mp3"
+        case "audio/mp4", "audio/x-m4a":
+            return "m4a"
+        case "audio/wav", "audio/x-wav":
+            return "wav"
+        case "audio/ogg", "application/ogg":
+            return "ogg"
+        case "audio/aac":
+            return "aac"
+        default:
+            return nil
+        }
     }
     
     private func updateDownloadButtonState() {

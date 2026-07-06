@@ -16,6 +16,7 @@ extension MessageCell {
     internal func updateReactions(for message: Message, viewState: ViewState) {
         // CRITICAL FIX: Always get the latest message from ViewState instead of using the passed message
         let latestMessage = viewState.messages[message.id] ?? message
+        currentMessage = latestMessage
         // print("🔥 updateReactions called for message: \(message.id)")
         // print("🔥 Original message reactions: \(message.reactions?.keys.joined(separator: ", ") ?? "none")")
         // print("🔥 Latest message reactions: \(latestMessage.reactions?.keys.joined(separator: ", ") ?? "none")")
@@ -48,7 +49,7 @@ extension MessageCell {
         // Build reaction buttons
         var buttons: [UIView] = []
         for (emoji, users) in reactions {
-            let reactionButton = createSimpleReactionButton(emoji: emoji, count: users.count, viewState: viewState)
+            let reactionButton = createSimpleReactionButton(emoji: emoji, users: users, messageId: latestMessage.id, viewState: viewState)
             buttons.append(reactionButton)
         }
 
@@ -242,15 +243,12 @@ extension MessageCell {
     }
     
     // Proper reaction button design with custom emoji support and click functionality
-    private func createSimpleReactionButton(emoji: String, count: Int, viewState: ViewState) -> UIView {
-        guard let message = currentMessage else { return UIView() }
-        
+    private func createSimpleReactionButton(emoji: String, users: [String], messageId: String, viewState: ViewState) -> UIView {
         let container = UIView()
         container.translatesAutoresizingMaskIntoConstraints = false
         
         // Check if current user has reacted with this emoji
         let currentUserId = viewState.currentUser?.id ?? ""
-        let users = message.reactions?[emoji] ?? []
         let hasCurrentUserReacted = users.contains(currentUserId)
         
         // Style the container based on user's reaction status
@@ -323,7 +321,7 @@ extension MessageCell {
         
         // Count label
         let countLabel = UILabel()
-        countLabel.text = "\(count)"
+        countLabel.text = "\(users.count)"
         countLabel.font = UIFont.systemFont(ofSize: 12, weight: .semibold)
         countLabel.textColor = hasCurrentUserReacted ? UIColor.systemBlue : UIColor.label
         
@@ -339,9 +337,7 @@ extension MessageCell {
         container.accessibilityLabel = emoji
         
         // CRITICAL FIX: Store message ID for reaction handling
-        if let message = currentMessage {
-            container.restorationIdentifier = message.id
-        }
+        container.restorationIdentifier = messageId
         
         NSLayoutConstraint.activate([
             stackView.centerXAnchor.constraint(equalTo: container.centerXAnchor),

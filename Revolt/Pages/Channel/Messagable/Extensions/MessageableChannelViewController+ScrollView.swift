@@ -19,6 +19,10 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
     }
     
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if scrollView == tableView, !decelerate {
+            tryClearUnreadMarkerIfAtAbsoluteBottom()
+        }
+
         // Update manual scroll tracking
         let translation = scrollView.panGestureRecognizer.translation(in: scrollView)
         let isScrollingUp = translation.y > 0
@@ -89,6 +93,11 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
         
         // Update bouncing behavior on every scroll
         updateTableViewBouncing()
+
+        if scrollView == tableView {
+            updateScrollToLatestButtonVisibility()
+            clearUnreadMarkerIfUserScrolledToLatest(scrollView)
+        }
         
         // CRITICAL FIX: Sync viewModel.messages with localMessages if they're inconsistent
         // But only if data source is stable
@@ -189,9 +198,100 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
         // Stop scroll protection after deceleration ends
         scrollProtectionTimer?.invalidate()
         scrollProtectionTimer = nil
+
+        if scrollView == tableView {
+            tryClearUnreadMarkerIfAtAbsoluteBottom()
+        }
     }
     
     // MARK: - Scroll Helper Methods
+
+    private func clearUnreadMarkerIfUserScrolledToLatest(_ scrollView: UIScrollView) {
+        guard unreadSeparatorMessageId != nil || unreadAnchorLastReadMessageId != nil else { return }
+        guard scrollView.isDragging || scrollView.isDecelerating else { return }
+
+        let velocity = scrollView.panGestureRecognizer.velocity(in: scrollView)
+        if velocity.y > 30 {
+            return
+        }
+
+        tryClearUnreadMarkerIfAtAbsoluteBottom()
+    }
+
+    internal func scrollToLatestMessageFromButton() {
+        guard !isViewDisappearing else { return }
+        guard tableView.dataSource != nil else { return }
+
+        didRequestLatestPositionFromButton = true
+        didPositionAtUnreadSeparator = true
+        scrollProtectionTimer?.invalidate()
+        scrollProtectionTimer = nil
+        scrollToBottomWorkItem?.cancel()
+        scrollToBottomWorkItem = nil
+        scrollPositionManager.cancelScrollToBottom()
+        lastManualScrollUpTime = nil
+        lastScrollToBottomTime = nil
+
+        targetMessageId = nil
+        targetMessageProcessed = false
+        isInTargetMessagePosition = false
+        lastTargetMessageHighlightTime = nil
+        clearTargetMessageTimer?.invalidate()
+        clearTargetMessageTimer = nil
+        viewModel.viewState.currentTargetMessageId = nil
+
+        if tableView.isDragging || tableView.isDecelerating {
+            tableView.setContentOffset(tableView.contentOffset, animated: false)
+        }
+
+        view.layoutIfNeeded()
+        tableView.layoutIfNeeded()
+        scrollToLatestMessageImmediately(animated: true)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.scrollToLatestMessageImmediately(animated: false)
+        }
+    }
+
+    private func scrollToLatestMessageImmediately(animated: Bool) {
+        guard tableView.numberOfSections > 0 else { return }
+        let rowCount = tableView.numberOfRows(inSection: 0)
+        let lastIndex = rowCount - 1
+        guard lastIndex >= 0, rowCount > lastIndex else { return }
+
+        let indexPath = IndexPath(row: lastIndex, section: 0)
+        tableView.scrollToRow(at: indexPath, at: .bottom, animated: animated)
+
+        let maxOffsetY = max(
+            -tableView.adjustedContentInset.top,
+            tableView.contentSize.height - tableView.bounds.height + tableView.adjustedContentInset.bottom
+        )
+        if !animated {
+            tableView.setContentOffset(
+                CGPoint(x: tableView.contentOffset.x, y: maxOffsetY),
+                animated: false
+            )
+        }
+    }
+
+    private func updateScrollToLatestButtonVisibility() {
+        guard !isViewDisappearing else { return }
+        guard tableView.numberOfRows(inSection: 0) > 0 else {
+            hideNewMessageButton()
+            return
+        }
+
+        let visibleBottom = tableView.contentOffset.y + tableView.bounds.height - tableView.contentInset.bottom
+        let distanceFromBottom = tableView.contentSize.height - visibleBottom
+        let shouldShowButton = distanceFromBottom > 180
+
+        if shouldShowButton {
+            showNewMessageButton(markUnread: false)
+        } else {
+            hideNewMessageButton()
+            lastManualScrollUpTime = nil
+        }
+    }
     
     private func detectScrollToBottomForLoadingMore() {
         // Only proceed if we have enough messages and not already loading
@@ -253,6 +353,10 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
         if targetMessageProtectionActive {
             // print("🎯 scrollToBottom: Target message protection active, blocking auto-scroll")
             // print("🎯 Protection details - targetMessageId: \(targetMessageId != nil), isInPosition: \(isInTargetMessagePosition), processed: \(targetMessageProcessed)")
+            return
+        }
+
+        if unreadSeparatorMessageId != nil {
             return
         }
         
@@ -375,4 +479,3 @@ extension MessageableChannelViewController: UIScrollViewDelegate {
         updateTableViewBouncing()
     }
 }
-
