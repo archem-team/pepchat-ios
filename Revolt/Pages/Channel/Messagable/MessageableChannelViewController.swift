@@ -1487,6 +1487,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 
     // Improved isUserNearBottom with more relaxed threshold
     func isUserNearBottom(threshold: CGFloat? = nil) -> Bool {
+        if hasPendingUnreadSeparatorPosition() {
+            return false
+        }
+
         // COMPREHENSIVE TARGET MESSAGE PROTECTION
         if targetMessageProtectionActive {
             // print(

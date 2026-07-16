@@ -369,7 +369,7 @@ struct DiscoverScrollView: View {
         self.isLoading = discoverItems.isEmpty
         // print("🌐 [DiscoverScrollView] Loading server list from public servers API...")
         
-        ServerChatDataFetcher.shared.fetchData { result in
+        ServerChatDataFetcher.shared.fetchData(http: viewState.http) { result in
                 DispatchQueue.main.async {
                     
                     self.isLoading = false
@@ -548,41 +548,6 @@ struct ServerChat: Codable {
     }
 }
 
-struct DirectoryCommunity: Decodable {
-    let serverId: String?
-    let logo: String?
-}
-
-enum DirectoryCommunitiesData: Decodable {
-    case items([DirectoryCommunity])
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        if let items = try? container.decode([DirectoryCommunity].self) {
-            self = .items(items)
-            return
-        }
-
-        let wrapped = try container.decode(DirectoryCommunitiesItems.self)
-        self = .items(wrapped.items)
-    }
-
-    var items: [DirectoryCommunity] {
-        switch self {
-        case .items(let items):
-            return items
-        }
-    }
-}
-
-struct DirectoryCommunitiesItems: Decodable {
-    let items: [DirectoryCommunity]
-}
-
-struct PublicCommunitiesResponse: Decodable {
-    let data: DirectoryCommunitiesData
-}
-
 struct PublicServersResponse: Decodable {
     let success: Bool
     let data: [ServerChat]?
@@ -600,9 +565,7 @@ struct ServerChatCache: Codable {
 
 class ServerChatDataFetcher {
     static let shared = ServerChatDataFetcher()
-    
-    let serversUrl = "https://manageapi.peptide.chat/api/directory/servers"
-    let communitiesUrl = "https://manageapi.peptide.chat/api/directory/communities?limit=200"
+
     let csvFallbackUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRY41D-NgTE6bC3kTN3dRpisI-DoeHG8Eg7n31xb1CdydWjOLaphqYckkTiaG9oIQSWP92h3NE-7cpF/pub?gid=0&single=true&output=csv"
     
     private let cacheFileName = "discover_server_cache.json"
@@ -626,12 +589,15 @@ class ServerChatDataFetcher {
         }
     }
     
-    func fetchData(completion: @escaping (Result<[ServerChat], Error>) -> Void) {
-        // print("🌐 [ServerChatDataFetcher] Fetching public servers from URL: \(serversUrl)")
-        AF.request(serversUrl).responseDecodable(of: PublicServersResponse.self) { response in
-            switch response.result {
+    func fetchData(http: HTTPClient, completion: @escaping (Result<[ServerChat], Error>) -> Void) {
+        Task {
+            let result: Result<PublicServersResponse, RevoltError> = await http.req(
+                method: .get,
+                route: "/directory/servers"
+            )
+
+            switch result {
             case .success(let publicServersResponse):
-                // print("✅ [ServerChatDataFetcher] Public servers downloaded successfully")
                 guard publicServersResponse.success, let serverChats = publicServersResponse.data else {
                     self.fetchCSVFallback(completion: completion)
                     return
@@ -642,56 +608,18 @@ class ServerChatDataFetcher {
                     return
                 }
 
-                self.fetchCommunityLogos(for: serverChats, completion: completion)
+                let cache = ServerChatCache(timestamp: Date(), items: serverChats)
+                self.saveCache(cache)
+                completion(.success(serverChats))
 
-            case .failure:
-                // print("❌ [ServerChatDataFetcher] Failed to download public servers")
+            case .failure(let error):
+                debugPrint("directory servers fetch failed: \(error)")
+                if case .HTTPError(_, 401) = error {
+                    completion(.failure(PublicServersError(message: "Sign in again to load Discover servers.")))
+                    return
+                }
                 self.fetchCSVFallback(completion: completion)
             }
-        }
-    }
-
-    private func fetchCommunityLogos(
-        for serverChats: [ServerChat],
-        completion: @escaping (Result<[ServerChat], Error>) -> Void
-    ) {
-        AF.request(communitiesUrl).responseDecodable(of: PublicCommunitiesResponse.self) { response in
-            let communities: [DirectoryCommunity]
-            switch response.result {
-            case .success(let payload):
-                communities = payload.data.items
-            case .failure:
-                // The directory remains usable when its optional logo source is unavailable.
-                communities = []
-            }
-
-            var logosByServerId: [String: String] = [:]
-            for community in communities {
-                guard let serverId = community.serverId,
-                      let logo = community.logo,
-                      !logo.isEmpty else {
-                    continue
-                }
-                logosByServerId[serverId] = logo
-            }
-
-            let enrichedServers = serverChats.map { server in
-                ServerChat(
-                    id: server.id,
-                    name: server.name,
-                    description: server.description,
-                    inviteCode: server.inviteCode,
-                    disabled: server.disabled,
-                    isNew: server.isNew,
-                    sortOrder: server.sortOrder,
-                    color: server.color,
-                    logo: logosByServerId[server.id] ?? server.logo
-                )
-            }
-
-            let cache = ServerChatCache(timestamp: Date(), items: enrichedServers)
-            self.saveCache(cache)
-            completion(.success(enrichedServers))
         }
     }
 

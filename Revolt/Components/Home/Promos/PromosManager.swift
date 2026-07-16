@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import Alamofire
 
 class PromosManager: ObservableObject {
     @Published var promos: [Promo] = []
@@ -15,96 +16,62 @@ class PromosManager: ObservableObject {
     @Published var submitState: PromoSubmitState = .idle
     @Published var submitErrorMessage: String?
 
-    private let baseURL = "https://manageapi.peptide.chat/api"
-    private var requestTask: URLSessionDataTask?
+    private var fetchTask: Task<Void, Never>?
 
     deinit {
-        requestTask?.cancel()
-    }
-
-    func fetchPromos(sort: PromoSort) {
-        requestTask?.cancel()
-
-        guard var components = URLComponents(string: "\(baseURL)/promos") else {
-            errorMessage = "Invalid promos URL."
-            return
-        }
-
-        components.queryItems = [
-            URLQueryItem(name: "sort", value: sort.apiValue),
-            URLQueryItem(name: "pageSize", value: "100")
-        ]
-
-        guard let url = components.url else {
-            errorMessage = "Invalid promos URL."
-            return
-        }
-
-        isLoading = promos.isEmpty
-        errorMessage = nil
-
-        requestTask = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-            guard let self else { return }
-
-            if let error = error as NSError?, error.code == NSURLErrorCancelled {
-                return
-            }
-
-            DispatchQueue.main.async {
-                self.isLoading = false
-            }
-
-            if let error {
-                DispatchQueue.main.async {
-                    self.errorMessage = error.localizedDescription
-                }
-                return
-            }
-
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200..<300).contains(httpResponse.statusCode),
-                  let data else {
-                DispatchQueue.main.async {
-                    self.errorMessage = "Failed to load promos."
-                }
-                return
-            }
-
-            do {
-                let payload = try JSONDecoder().decode(PromosResponse.self, from: data)
-                guard payload.success else {
-                    throw PromosError.invalidResponse
-                }
-
-                DispatchQueue.main.async {
-                    self.promos = payload.data.items
-                    self.errorMessage = nil
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.errorMessage = "Failed to parse promos."
-                }
-            }
-        }
-
-        requestTask?.resume()
+        fetchTask?.cancel()
     }
 
     @MainActor
-    func submitPromo(form: PromoSubmitForm, sessionToken: String?) async -> Bool {
+    func fetchPromos(sort: PromoSort, http: HTTPClient) {
+        fetchTask?.cancel()
+        isLoading = promos.isEmpty
+        errorMessage = nil
+
+        fetchTask = Task { [weak self] in
+            guard let self else { return }
+
+            let query = PromosListQuery(sort: sort.apiValue, pageSize: 100)
+            let result: Result<PromosResponse, RevoltError> = await http.req(
+                method: .get,
+                route: "/promos",
+                parameters: query,
+                encoder: URLEncodedFormParameterEncoder.default
+            )
+
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                self.isLoading = false
+
+                switch result {
+                case .success(let payload) where payload.success:
+                    self.promos = payload.data.items
+                    self.errorMessage = nil
+                case .success:
+                    self.errorMessage = "Failed to load promos."
+                case .failure(let error):
+                    self.errorMessage = PromosManager.message(for: error, fallback: "Failed to load promos.")
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func submitPromo(form: PromoSubmitForm, http: HTTPClient) async -> Bool {
         guard !form.serverId.isEmpty else {
             submitErrorMessage = "Select a server."
             submitState = .error
             return false
         }
 
-        guard let sessionToken, !sessionToken.isEmpty else {
+        guard let sessionToken = http.token, !sessionToken.isEmpty else {
             submitErrorMessage = "No active session."
             submitState = .error
             return false
         }
 
-        guard let url = URL(string: "\(baseURL)/promos/submit") else {
+        guard let url = URL(string: "\(http.baseURL)/promos/submit") else {
             submitErrorMessage = "Invalid submit URL."
             submitState = .error
             return false
@@ -117,15 +84,21 @@ class PromosManager: ObservableObject {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue(sessionToken, forHTTPHeaderField: "X-Revolt-Token")
+            request.setValue(sessionToken, forHTTPHeaderField: "x-session-token")
             request.httpBody = try JSONSerialization.data(withJSONObject: form.requestBody())
 
             let (data, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let payload = try? JSONDecoder().decode(PromoSubmitResponse.self, from: data)
 
-            guard (200..<300).contains(statusCode), payload?.success == true else {
-                submitErrorMessage = payload?.error?.message ?? "Submission failed."
+            guard (200..<300).contains(statusCode) else {
+                submitErrorMessage = PromosManager.submitErrorMessage(from: data, statusCode: statusCode)
+                submitState = .error
+                return false
+            }
+
+            let payload = try JSONDecoder().decode(PromoSubmitResponse.self, from: data)
+            guard payload.success else {
+                submitErrorMessage = payload.errorMessage ?? "Submission failed."
                 submitState = .error
                 return false
             }
@@ -158,10 +131,49 @@ class PromosManager: ObservableObject {
         submitState = .idle
         submitErrorMessage = nil
     }
-}
 
-enum PromosError: Error {
-    case invalidResponse
+    private static func message(for error: RevoltError, fallback: String) -> String {
+        switch error {
+        case .HTTPError(let body, let statusCode):
+            if statusCode == 401 {
+                return "Sign in again to load promos."
+            }
+
+            if let body,
+               let data = body.data(using: .utf8),
+               let payload = try? JSONDecoder().decode(PromoAPIError.self, from: data),
+               let message = payload.error {
+                return message
+            }
+
+            return fallback
+        case .Alamofire(let error):
+            return error.localizedDescription
+        case .JSONDecoding:
+            return "Failed to parse promos."
+        }
+    }
+
+    private static func submitErrorMessage(from data: Data, statusCode: Int) -> String {
+        if statusCode == 401 {
+            return "Sign in again to submit promos."
+        }
+
+        if statusCode == 403 {
+            return "You need to own this community to submit a promo."
+        }
+
+        if statusCode == 429 {
+            return "Too many submissions. Try again later."
+        }
+
+        if let payload = try? JSONDecoder().decode(PromoAPIError.self, from: data),
+           let message = payload.error {
+            return message
+        }
+
+        return "Submission failed."
+    }
 }
 
 enum PromoSubmitState {
@@ -173,11 +185,28 @@ enum PromoSubmitState {
 
 struct PromoSubmitResponse: Decodable {
     let success: Bool
-    let error: PromoSubmitError?
+    let data: PromoSubmitData?
+    let error: String?
+    let type: String?
+
+    var errorMessage: String? {
+        error ?? type
+    }
 }
 
-struct PromoSubmitError: Decodable {
-    let message: String?
+struct PromoSubmitData: Decodable {
+    let id: String
+    let approval: String
+}
+
+struct PromoAPIError: Decodable {
+    let type: String?
+    let error: String?
+}
+
+private struct PromosListQuery: Encodable {
+    let sort: String
+    let pageSize: Int
 }
 
 struct PromoSubmitItemForm: Identifiable, Equatable {

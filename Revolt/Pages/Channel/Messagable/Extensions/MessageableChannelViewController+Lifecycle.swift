@@ -201,10 +201,15 @@ extension MessageableChannelViewController {
                 }) != nil
 
             if hasActualMessages && messageLoadingState != .loading {
-                // Messages exist, show them immediately without loading
+                refreshUnreadSeparatorFromServerState()
                 tableView.alpha = 1.0
                 tableView.tableFooterView = nil
                 refreshMessages()
+                if hasPendingUnreadSeparatorPosition() {
+                    if !positionAtUnreadSeparatorIfNeeded() {
+                        loadUnreadMessagesAfterLastReadIfNeeded()
+                    }
+                }
 
                 // Adjust table insets and check for missing replies
                 loadingTask = Task { [weak self] in
@@ -396,8 +401,24 @@ extension MessageableChannelViewController {
                 newSize.height > oldSize.height + 20
             {  // Significant increase in height
 
+                if hasPendingUnreadSeparatorPosition()
+                    && didPositionAtUnreadSeparator
+                    && !didRequestLatestPositionFromButton
+                    && !tableView.isDragging
+                    && !tableView.isDecelerating {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, self.canMutateTableView() else { return }
+                        _ = self.positionAtUnreadSeparatorIfNeeded(force: true)
+                    }
+                    return
+                }
+
                 // If user is near bottom and scrolling is enabled, scroll to show new content
-                if isUserNearBottom() && !isLoadingMore && !isDataSourceUpdating && tableView.isScrollEnabled {
+                if !hasPendingUnreadSeparatorPosition()
+                    && isUserNearBottom()
+                    && !isLoadingMore
+                    && !isDataSourceUpdating
+                    && tableView.isScrollEnabled {
                     scrollToBottom(animated: false)
                 }
             }

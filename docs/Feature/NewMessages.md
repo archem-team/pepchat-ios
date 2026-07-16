@@ -171,6 +171,24 @@ Fix:
 - Suppress automatic unread-separator positioning after that request and restore the bottom position after an in-flight history reload completes.
 - Keep the red divider and manual unread server state intact.
 
+### Large unread backlog opened at bottom
+
+Issue:
+
+- When a channel had more pending unread messages than could fit on screen, the chat could briefly find a cached divider candidate and then land at the latest message or a middle portion of the unread backlog.
+- Cache-first rendering, API reconciliation, reply refreshes, and link-preview height changes each had generic "near bottom" or "position at bottom before showing" paths.
+- Those paths could win the race after the unread anchor was captured, making a large unread session behave like the user had already scrolled to latest or had opened somewhere above/below the real divider.
+
+Fix:
+
+- Treat `unreadSeparatorMessageId` or `unreadAnchorLastReadMessageId` as a pending unread-position intent.
+- While that intent exists, `isUserNearBottom()` returns false for automatic scroll decisions.
+- For server-origin unread state, load the unread history window after `Unread.last_id` before trusting a cached separator candidate. This prevents the latest cached page from acting as the fake beginning of unread messages.
+- Hidden-table positioning, lifecycle cached-message reveal, and API reconciliation now try the unread separator first, trigger unread context loading if the first unread row is not loaded yet, and only fall back to bottom when no unread marker is active.
+- After the unread separator is positioned, API/cache reconciliation and content-size changes re-anchor to that divider. This mirrors Revite's renderer scroll-state preservation after message list mutations.
+- Older-history pagination is not triggered from `willDisplay` during initial layout. Loading messages before the first row now requires an actual user drag/deceleration, so read messages are not prepended above the divider while the chat is opening.
+- Content-size growth from previews/replies no longer scrolls to bottom while the unread marker is active.
+
 ## UIKit Implementation
 
 ### State
