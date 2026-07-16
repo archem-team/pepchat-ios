@@ -12,10 +12,6 @@ extension MessageableChannelViewController: UITableViewDelegate {
     // Note: UITableViewDataSource methods are now handled by LocalMessagesDataSource class
     
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
-        if indexPath.row == 0 {
-            isLoadingMore = true
-        }
-
         // Safety check for localMessages count
         guard !localMessages.isEmpty, indexPath.row < localMessages.count else {
             return

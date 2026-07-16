@@ -2,15 +2,17 @@
 
 ## Overview
 
-The Discover server list now loads from the public PepChat directory API instead of the previous Google Sheets CSV feed.
+The Discover server list loads from the authenticated PepChat directory API on the main backend instead of the legacy admin API or the previous Google Sheets CSV feed.
 
 Endpoint:
 
 ```text
-GET https://manageapi.peptide.chat/api/directory/servers
+GET https://peptide.chat/api/directory/servers
 ```
 
-The endpoint is public and returns a standard response envelope with the server list in `data`. The server applies `Cache-Control: public, max-age=300`, so clients should not poll faster than five minutes.
+The endpoint requires the app session token (`x-session-token`) and returns a standard response envelope with the server list in `data`. The server applies `Cache-Control: private, max-age=300`, so clients can cache for five minutes.
+
+The server list includes each server logo as a simple Autumn file id string in `logo`, so the app can render logos directly from the `/directory/servers` response without fetching `/directory/communities`.
 
 If this API fails, the app falls back to the previous published Google Sheets CSV URL:
 
@@ -23,8 +25,8 @@ https://docs.google.com/spreadsheets/d/e/2PACX-1vRY41D-NgTE6bC3kTN3dRpisI-DoeHG8
 The integration remains local to `Revolt/Components/Home/Discover/DiscoverScrollView.swift`.
 
 - `DiscoverScrollView.loadData()` still owns loading cached data first, showing the list, then refreshing from the network.
-- `ServerChatDataFetcher` now calls the public JSON API with Alamofire `responseDecodable` instead of downloading and parsing CSV.
-- If the API request fails, returns `success=false`, or cannot decode, `ServerChatDataFetcher` downloads and parses the legacy CSV fallback.
+- `ServerChatDataFetcher` now calls the main JSON API through `HTTPClient` so `x-session-token` is included.
+- If the API request fails, returns `success=false`, or cannot decode, `ServerChatDataFetcher` downloads and parses the legacy CSV fallback. A `401` is not treated as fallbackable because the main API now requires a valid session.
 - The decoded API rows are cached to `discover_server_cache.json` in the user caches directory.
 - Discover is still only loaded for `peptide.chat` base URLs, preserving the old domain guard.
 - `DiscoverScrollView` observes `ViewState.discoverMembershipCache` and mirrors it into local row state so join/leave events update already-mounted Discover rows.
@@ -41,6 +43,7 @@ The integration remains local to `Revolt/Components/Home/Discover/DiscoverScroll
 | `new` | `DiscoverItem.isNew` | Decoded with custom coding key because `new` is not the Swift property name. |
 | `showcolor` | `DiscoverItem.color` | Optional accent hex color. |
 | `sortorder` | `DiscoverItem.sortOrder` | Optional. The API response is already sorted, so the app preserves response order. |
+| `logo` | `DiscoverItem.logo` | Optional Autumn icon file id. Rendered as `/icons/{logo}?max_side=256`. |
 
 The old CSV-only fields (`chronological`, donation columns, notes, `dateAdded`) are not used by the Discover UI and are not required by the API-backed implementation.
 
@@ -67,7 +70,7 @@ The app still shows the last cached Discover response when available. If the API
 Network fallback order:
 
 1. Load `discover_server_cache.json` if available.
-2. Fetch the public JSON API.
+2. Fetch the authenticated main directory JSON API.
 3. If the API path fails or returns an empty `data` array, fetch and parse the legacy CSV.
 4. Save whichever fresh network source succeeds back into `discover_server_cache.json`.
 

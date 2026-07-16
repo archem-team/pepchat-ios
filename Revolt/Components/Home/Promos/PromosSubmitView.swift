@@ -658,7 +658,7 @@ struct PromosSubmitView: View {
 
         let submitted = await promosManager.submitPromo(
             form: form,
-            sessionToken: viewState.sessionToken
+            http: viewState.http
         )
 
         if submitted {
@@ -681,10 +681,6 @@ struct PromosSubmitView: View {
             return "You can attach up to \(maxImages) images."
         }
 
-        if form.title.trimmed.isEmpty {
-            return "Enter a promo title."
-        }
-
         if form.title.count > 120 {
             return "Title must be 120 characters or less."
         }
@@ -696,42 +692,6 @@ struct PromosSubmitView: View {
         let productValidation = validateProducts()
         if let productValidation {
             return productValidation
-        }
-
-        if let message = validateRequiredNumber(form.shippingFee, label: "Shipping fee", minimum: 0) {
-            return message
-        }
-
-        if let message = validateRequiredNumber(form.freeShippingThreshold, label: "Free shipping amount", minimum: 0) {
-            return message
-        }
-
-        if form.warehouse.trimmed.isEmpty {
-            return "Enter a warehouse, for example US or EU."
-        }
-
-        if let message = validateRequiredNumber(form.purityPct, label: "Purity", minimum: 0, maximum: 100) {
-            return message
-        }
-
-        if let message = validateRequiredNumber(form.volumePct, label: "Volume", minimum: 0, maximum: 100) {
-            return message
-        }
-
-        if form.discountNote.trimmed.isEmpty {
-            return "Enter a discount note."
-        }
-
-        if !usesStartDate {
-            return "Select a start date."
-        }
-
-        if !form.untilSoldOut && !usesEndDate {
-            return "Select an end date or choose Until sold out."
-        }
-
-        if form.submitterContact.trimmed.isEmpty {
-            return "Enter your reviewer contact."
         }
 
         if let message = validateOptionalNumber(form.shippingFee, label: "Shipping fee", minimum: 0) {
@@ -824,50 +784,48 @@ struct PromosSubmitView: View {
 
     private func validateProducts() -> String? {
         for (index, item) in form.items.enumerated() {
+            if item.isEmptyProductRow {
+                continue
+            }
+
             if item.product.trimmed.isEmpty {
                 return "Product \(index + 1): enter a product name."
             }
 
-            if item.dosage.trimmed.isEmpty {
-                return "Product \(index + 1): enter a dosage."
+            if item.product.count > 60 {
+                return "Product \(index + 1): product name must be 60 characters or less."
             }
 
-            guard let price = item.price.numberValue, price > 0 else {
-                return "Product \(index + 1): enter a valid price greater than 0."
+            if item.dosage.count > 30 {
+                return "Product \(index + 1): dosage must be 30 characters or less."
             }
 
-            if item.unit.trimmed.isEmpty {
-                return "Product \(index + 1): enter a unit, for example kit."
-            }
-
-            if let message = validateRequiredNumber(item.moqKits, label: "Product \(index + 1) MOQ kits", minimum: 0) {
+            if let message = validateOptionalNumber(item.price, label: "Product \(index + 1) price", minimum: 0) {
                 return message
             }
 
-            if let message = validateRequiredNumber(item.moqTotal, label: "Product \(index + 1) MOQ total", minimum: 0) {
+            if item.price.trimmed.isEmpty {
+                return "Product \(index + 1): enter a price."
+            }
+
+            if item.unit.count > 20 {
+                return "Product \(index + 1): unit must be 20 characters or less."
+            }
+
+            if let message = validateOptionalNumber(item.moqKits, label: "Product \(index + 1) MOQ kits", minimum: 0) {
                 return message
             }
 
-            if item.note.count > 300 {
-                return "Product \(index + 1): note must be 300 characters or less."
+            if let message = validateOptionalNumber(item.moqTotal, label: "Product \(index + 1) MOQ total", minimum: 0) {
+                return message
+            }
+
+            if item.note.count > 120 {
+                return "Product \(index + 1): note must be 120 characters or less."
             }
         }
 
         return nil
-    }
-
-    private func validateRequiredNumber(
-        _ value: String,
-        label: String,
-        minimum: Double,
-        maximum: Double? = nil
-    ) -> String? {
-        let trimmed = value.trimmed
-        guard !trimmed.isEmpty else {
-            return "\(label) is required."
-        }
-
-        return validateOptionalNumber(value, label: label, minimum: minimum, maximum: maximum)
     }
 
     private func validateOptionalNumber(

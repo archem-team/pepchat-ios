@@ -64,10 +64,10 @@ struct PromosView: View {
         }
         .background(Color.bgGray12)
         .onAppear {
-            promosManager.fetchPromos(sort: selectedPromoFilter)
+            promosManager.fetchPromos(sort: selectedPromoFilter, http: viewState.http)
         }
         .onChange(of: selectedPromoFilter) { newValue in
-            promosManager.fetchPromos(sort: newValue)
+            promosManager.fetchPromos(sort: newValue, http: viewState.http)
         }
     }
 
@@ -229,6 +229,8 @@ private struct PromoCardView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var expanded = false
     @State private var selectedImageIndex = 0
+    @State private var imageTransitionDirection: PromoImageTransitionDirection = .forward
+    @State private var previewImage: PromoImagePreview?
 
     private let collapseThreshold = 5
 
@@ -246,6 +248,10 @@ private struct PromoCardView: View {
         promo.images?
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty } ?? []
+    }
+
+    private var imageURLs: [URL] {
+        imageRefs.compactMap { imageURL(for: $0) }
     }
 
     private var isCollapsible: Bool {
@@ -324,22 +330,35 @@ private struct PromoCardView: View {
 
     private var promoGallery: some View {
         VStack(alignment: .leading, spacing: .spacing8) {
-            PromoRemoteImage(
-                url: imageURL(for: selectedImageRef),
-                height: galleryHeroHeight,
-                cornerRadius: .radius8
-            )
+            ZStack {
+                PromoRemoteImage(
+                    url: imageURL(for: selectedImageRef),
+                    height: galleryHeroHeight,
+                    cornerRadius: .radius8
+                )
+                .id(selectedImageRef)
+                .transition(imageTransitionDirection.transition)
+            }
+            .frame(height: galleryHeroHeight)
+            .clipShape(RoundedRectangle(cornerRadius: .radius8))
+            .contentShape(RoundedRectangle(cornerRadius: .radius8))
+            .onTapGesture {
+                let urls = imageURLs
+                guard !urls.isEmpty else { return }
+
+                previewImage = PromoImagePreview(
+                    urls: urls,
+                    startIndex: min(selectedImageIndex, urls.count - 1)
+                )
+            }
+            .gesture(gallerySwipeGesture)
 
             if imageRefs.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: .size6) {
-                        ForEach(Array(imageRefs.dropFirst().enumerated()), id: \.offset) { offset, ref in
-                            let index = offset + 1
-
+                        ForEach(Array(imageRefs.enumerated()), id: \.offset) { index, ref in
                             Button {
-                                withAnimation(.bouncy(duration: 0.25, extraBounce: 0.12)) {
-                                    selectedImageIndex = index
-                                }
+                                selectImage(at: index)
                             } label: {
                                 PromoRemoteImage(
                                     url: imageURL(for: ref),
@@ -363,6 +382,39 @@ private struct PromoCardView: View {
         }
         .onChange(of: promo.id) { _ in
             selectedImageIndex = 0
+            previewImage = nil
+        }
+        .fullScreenCover(item: $previewImage) { preview in
+            PromoImageViewer(urls: preview.urls, startIndex: preview.startIndex) {
+                previewImage = nil
+            }
+        }
+    }
+
+    private var gallerySwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                guard imageRefs.count > 1 else { return }
+
+                let horizontal = value.translation.width
+                let vertical = abs(value.translation.height)
+                guard abs(horizontal) > vertical, abs(horizontal) > 44 else { return }
+
+                if horizontal < 0 {
+                    selectImage(at: selectedImageIndex + 1)
+                } else {
+                    selectImage(at: selectedImageIndex - 1)
+                }
+            }
+    }
+
+    private func selectImage(at index: Int) {
+        guard imageRefs.indices.contains(index), index != selectedImageIndex else { return }
+
+        imageTransitionDirection = index > selectedImageIndex ? .forward : .backward
+
+        withAnimation(.easeInOut(duration: 0.24)) {
+            selectedImageIndex = index
         }
     }
 
@@ -773,6 +825,299 @@ private struct PromoRemoteImage: View {
                 .font(.system(size: min(height * 0.22, 34), weight: .regular))
                 .foregroundStyle(Color.textGray07)
         }
+    }
+}
+
+private struct PromoImagePreview: Identifiable {
+    let urls: [URL]
+    let startIndex: Int
+
+    var id: String {
+        "\(urls.map(\.absoluteString).joined(separator: "|"))-\(startIndex)"
+    }
+}
+
+private enum PromoImageTransitionDirection {
+    case forward
+    case backward
+
+    var transition: AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: insertionEdge).combined(with: .opacity),
+            removal: .move(edge: removalEdge).combined(with: .opacity)
+        )
+    }
+
+    private var insertionEdge: Edge {
+        self == .forward ? .trailing : .leading
+    }
+
+    private var removalEdge: Edge {
+        self == .forward ? .leading : .trailing
+    }
+}
+
+private struct PromoImageViewer: View {
+    let urls: [URL]
+    let startIndex: Int
+    let onClose: () -> Void
+
+    @State private var selectedIndex: Int
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+    @State private var didFail = false
+    @State private var pagingDragOffset: CGFloat = 0
+
+    private let minScale: CGFloat = 1
+    private let maxScale: CGFloat = 5
+
+    init(urls: [URL], startIndex: Int, onClose: @escaping () -> Void) {
+        self.urls = urls
+        self.startIndex = startIndex
+        self.onClose = onClose
+        _selectedIndex = State(initialValue: min(max(startIndex, 0), max(urls.count - 1, 0)))
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black
+                .ignoresSafeArea()
+
+            GeometryReader { proxy in
+                ZStack {
+                    ForEach(urls.indices, id: \.self) { index in
+                        pageImage(at: index, size: proxy.size)
+                            .offset(x: CGFloat(index - selectedIndex) * proxy.size.width + pagingDragOffset)
+                    }
+                }
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .clipped()
+                .contentShape(Rectangle())
+                .simultaneousGesture(pageSwipeGesture)
+            }
+            .ignoresSafeArea()
+
+            topControls
+
+            bottomCounter
+        }
+        .onChange(of: selectedIndex) { _ in
+            resetZoom()
+            didFail = false
+        }
+    }
+
+    @ViewBuilder
+    private func pageImage(at index: Int, size: CGSize) -> some View {
+        if index == selectedIndex, urls.indices.contains(index), !didFail {
+            KFImage(urls[index])
+                .cacheOriginalImage()
+                .onSuccess { _ in
+                    didFail = false
+                }
+                .onFailure { _ in
+                    didFail = true
+                }
+                .placeholder {
+                    ProgressView()
+                        .tint(.white)
+                }
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .scaleEffect(scale)
+                .offset(offset)
+                .frame(width: size.width, height: size.height)
+                .contentShape(Rectangle())
+                .gesture(zoomGesture(in: size))
+                .simultaneousGesture(doubleTapGesture(in: size))
+        } else if index == selectedIndex {
+            brokenImage
+                .frame(width: size.width, height: size.height)
+        } else if urls.indices.contains(index) {
+            KFImage(urls[index])
+                .cacheOriginalImage()
+                .placeholder {
+                    ProgressView()
+                        .tint(.white)
+                }
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size.width, height: size.height)
+        }
+    }
+
+    private var topControls: some View {
+        VStack {
+            HStack {
+                Spacer(minLength: .zero)
+
+                Button {
+                    onClose()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(.black.opacity(0.55), in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 14)
+            .padding(.horizontal, 14)
+
+            Spacer(minLength: .zero)
+        }
+    }
+
+    private var bottomCounter: some View {
+        VStack {
+            Spacer(minLength: .zero)
+
+            if urls.count > 1 {
+                Text("\(selectedIndex + 1)/\(urls.count)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(.black.opacity(0.58), in: Capsule())
+                    .padding(.bottom, 24)
+            }
+        }
+    }
+
+    private var pageSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 40)
+            .onChanged { value in
+                guard scale <= minScale, urls.count > 1 else { return }
+
+                let horizontal = value.translation.width
+                let vertical = abs(value.translation.height)
+                guard abs(horizontal) > vertical else { return }
+
+                let isAtFirst = selectedIndex == 0 && horizontal > 0
+                let isAtLast = selectedIndex == urls.count - 1 && horizontal < 0
+                pagingDragOffset = isAtFirst || isAtLast ? horizontal * 0.18 : horizontal
+            }
+            .onEnded { value in
+                guard scale <= minScale else { return }
+
+                let horizontal = value.translation.width
+                let vertical = abs(value.translation.height)
+                guard abs(horizontal) > vertical, abs(horizontal) > 60 else {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        pagingDragOffset = 0
+                    }
+                    return
+                }
+
+                withAnimation(.easeInOut(duration: 0.24)) {
+                    if horizontal < 0 {
+                        showNextImage()
+                    } else {
+                        showPreviousImage()
+                    }
+                    pagingDragOffset = 0
+                }
+            }
+    }
+
+    private func zoomGesture(in size: CGSize) -> some Gesture {
+        SimultaneousGesture(
+            MagnificationGesture()
+                .onChanged { value in
+                    scale = clampedScale(lastScale * value)
+                    offset = clampedOffset(lastOffset, in: size)
+                }
+                .onEnded { _ in
+                    scale = clampedScale(scale)
+                    if scale <= minScale {
+                        resetZoom()
+                    } else {
+                        offset = clampedOffset(offset, in: size)
+                        lastScale = scale
+                        lastOffset = offset
+                    }
+                },
+            DragGesture()
+                .onChanged { value in
+                    guard scale > minScale else { return }
+                    let proposed = CGSize(
+                        width: lastOffset.width + value.translation.width,
+                        height: lastOffset.height + value.translation.height
+                    )
+                    offset = clampedOffset(proposed, in: size)
+                }
+                .onEnded { _ in
+                    lastOffset = clampedOffset(offset, in: size)
+                    offset = lastOffset
+                }
+        )
+    }
+
+    private func doubleTapGesture(in size: CGSize) -> some Gesture {
+        TapGesture(count: 2)
+            .onEnded {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                    if scale > minScale {
+                        resetZoom()
+                    } else {
+                        scale = 2.5
+                        lastScale = scale
+                        offset = clampedOffset(offset, in: size)
+                        lastOffset = offset
+                    }
+                }
+            }
+    }
+
+    private func showNextImage() {
+        guard selectedIndex < urls.count - 1 else { return }
+        selectedIndex += 1
+    }
+
+    private func showPreviousImage() {
+        guard selectedIndex > 0 else { return }
+        selectedIndex -= 1
+    }
+
+    private var brokenImage: some View {
+        VStack(spacing: .spacing8) {
+            Image(systemName: "photo.trianglebadge.exclamationmark")
+                .font(.system(size: 44, weight: .regular))
+                .foregroundStyle(Color.textGray07)
+
+            PeptideText(
+                text: "Image unavailable",
+                font: .peptideSubhead,
+                textColor: .textGray07,
+                alignment: .center
+            )
+        }
+    }
+
+    private func clampedScale(_ value: CGFloat) -> CGFloat {
+        min(max(value, minScale), maxScale)
+    }
+
+    private func clampedOffset(_ proposed: CGSize, in size: CGSize) -> CGSize {
+        guard scale > minScale else { return .zero }
+
+        let horizontalLimit = size.width * (scale - minScale) / 2
+        let verticalLimit = size.height * (scale - minScale) / 2
+
+        return CGSize(
+            width: min(max(proposed.width, -horizontalLimit), horizontalLimit),
+            height: min(max(proposed.height, -verticalLimit), verticalLimit)
+        )
+    }
+
+    private func resetZoom() {
+        scale = minScale
+        lastScale = minScale
+        offset = .zero
+        lastOffset = .zero
     }
 }
 

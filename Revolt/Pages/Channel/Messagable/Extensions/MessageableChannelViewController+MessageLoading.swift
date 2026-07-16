@@ -809,7 +809,11 @@ extension MessageableChannelViewController {
 
             let tableAlreadyVisible = self.tableView.alpha >= 1.0
 
-            if !hasManuallyScrolledUp {
+            if self.hasPendingUnreadSeparatorPosition() {
+                if !self.positionAtUnreadSeparatorIfNeeded(force: self.didPositionAtUnreadSeparator) {
+                    self.loadUnreadMessagesAfterLastReadIfNeeded()
+                }
+            } else if !hasManuallyScrolledUp {
                 if let highlightTime = self.lastTargetMessageHighlightTime,
                     Date().timeIntervalSince(highlightTime) < 10.0
                 {
@@ -938,9 +942,13 @@ extension MessageableChannelViewController {
                         self.lastManualScrollUpTime != nil
                         && Date().timeIntervalSince(self.lastManualScrollUpTime!) < 10.0
 
-                    // FIXED: Always position at bottom when loading initial messages from memory
-                    // Only skip if user has manually scrolled up
-                    if !hasManuallyScrolledUp {
+                    if self.hasPendingUnreadSeparatorPosition() {
+                        if !self.positionAtUnreadSeparatorIfNeeded(force: self.didPositionAtUnreadSeparator) {
+                            self.loadUnreadMessagesAfterLastReadIfNeeded()
+                        }
+                    } else if !hasManuallyScrolledUp {
+                        // FIXED: Always position at bottom when loading initial messages from memory
+                        // Only skip if user has manually scrolled up
                         // CRITICAL FIX: Don't auto-position if target message was recently highlighted
                                 if let highlightTime = self.lastTargetMessageHighlightTime,
                                     Date().timeIntervalSince(highlightTime) < 10.0
@@ -1784,6 +1792,13 @@ extension MessageableChannelViewController {
     func loadMoreMessagesIfNeeded(for indexPath: IndexPath) {
         // CRITICAL CHANGE: Only load more messages when we're exactly at the first message
         // This prevents premature API calls when user isn't at the very top
+        guard tableView.isDragging || tableView.isDecelerating else {
+            return
+        }
+
+        guard !hasPendingUnreadSeparatorPosition() || didPositionAtUnreadSeparator else {
+            return
+        }
 
         // Safety check - try viewModel.messages first, then fall back to localMessages
         let messages = !viewModel.messages.isEmpty ? viewModel.messages : localMessages

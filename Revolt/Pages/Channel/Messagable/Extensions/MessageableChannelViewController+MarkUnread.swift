@@ -57,7 +57,8 @@ extension MessageableChannelViewController {
         }
 
         // Only mark as seen if there are messages and we're not already doing it
-        guard let lastMessageId = viewModel.messages.last, !isAcknowledgingMessage else {
+        guard let lastMessageId = latestAutomaticAcknowledgementId(),
+              !isAcknowledgingMessage else {
             return
         }
 
@@ -163,6 +164,22 @@ extension MessageableChannelViewController {
             nextRetryTime = Date().addingTimeInterval(delay)
         }
 
+        // ACK cursors must only move forwards. A delayed retry for an older message
+        // must not overwrite a newer ACK that has already succeeded.
+        if let acknowledgedId = viewModel.viewState.unreads[channelId]?.last_id,
+           acknowledgedId >= messageId {
+            return
+        }
+
+        retryQueue.removeAll {
+            $0.channelId == channelId && $0.messageId <= messageId
+        }
+        if retryQueue.contains(where: {
+            $0.channelId == channelId && $0.messageId > messageId
+        }) {
+            return
+        }
+
         // Add to retry queue
         let task = RetryTask(
             messageId: messageId, channelId: channelId, retryCount: retryCount,
@@ -192,6 +209,12 @@ extension MessageableChannelViewController {
             retryQueue.removeAll(where: {
                 $0.messageId == nextTask.messageId && $0.channelId == nextTask.channelId
             })
+
+            if let acknowledgedId = viewModel.viewState.unreads[nextTask.channelId]?.last_id,
+               acknowledgedId >= nextTask.messageId {
+                processRetryQueue()
+                return
+            }
 
             // Only retry if we're not already acknowledging and enough time has passed
             if now.timeIntervalSince(lastMessageSeenTime) >= messageSeenThrottleInterval {
@@ -333,7 +356,7 @@ extension MessageableChannelViewController {
         }
         cellHeightCache.invalidate(messageId: message.id)
         continuationCache.removeValue(forKey: message.id)
-        acknowledgeLatestMessageImmediately(messageId: ackMessageId)
+        acknowledgeLatestMessageImmediately(messageId: ackMessageId, allowOlderMessage: true)
         updateLiveUnreadMessageBadge()
         showNewMessageButton(markUnread: false)
 
@@ -404,6 +427,10 @@ extension MessageableChannelViewController {
         return true
     }
 
+    internal func hasPendingUnreadSeparatorPosition() -> Bool {
+        unreadSeparatorMessageId != nil || unreadAnchorLastReadMessageId != nil
+    }
+
     internal func tryClearUnreadMarkerIfAtAbsoluteBottom() {
         guard !didManuallyMarkUnreadInCurrentSession else { return }
         guard !isAutoAcknowledgmentProtectionActive() else { return }
@@ -411,9 +438,14 @@ extension MessageableChannelViewController {
         clearUnreadMarkerAndAcknowledgeLatest()
     }
 
-    internal func positionAtUnreadSeparatorIfNeeded() -> Bool {
+    internal func positionAtUnreadSeparatorIfNeeded(force: Bool = false) -> Bool {
+        if shouldLoadUnreadContextBeforePositioning() {
+            loadUnreadMessagesAfterLastReadIfNeeded()
+            return false
+        }
+
         guard !didRequestLatestPositionFromButton,
-              !didPositionAtUnreadSeparator,
+              (force || !didPositionAtUnreadSeparator),
               let markerId = unreadSeparatorMessageId,
               let row = localMessages.firstIndex(of: markerId),
               tableView.dataSource != nil,
@@ -423,11 +455,18 @@ extension MessageableChannelViewController {
         }
 
         tableView.layoutIfNeeded()
-        tableView.scrollToRow(at: IndexPath(row: row, section: 0), at: .top, animated: false)
+        scrollToUnreadSeparator(row: row, animated: false)
         didPositionAtUnreadSeparator = true
         showNewMessageButton(markUnread: false)
         loadUnreadMessagesAfterLastReadIfNeeded()
         return true
+    }
+
+    private func shouldLoadUnreadContextBeforePositioning() -> Bool {
+        unreadAnchorLastReadMessageId != nil
+            && !didRequestUnreadContextLoad
+            && !didManuallyMarkUnreadInCurrentSession
+            && !didRequestLatestPositionFromButton
     }
 
     internal func clearUnreadMarkerAndAcknowledgeLatest(messageId: String? = nil) {
@@ -449,8 +488,26 @@ extension MessageableChannelViewController {
         updateLiveUnreadMessageBadge()
     }
 
-    internal func acknowledgeLatestMessageImmediately(messageId: String? = nil) {
-        guard let latestMessageId = messageId ?? localMessages.last ?? viewModel.messages.last else { return }
+    private func latestAutomaticAcknowledgementId(requestedId: String? = nil) -> String? {
+        [
+            requestedId,
+            viewModel.channel.last_message_id,
+            localMessages.max(),
+            viewModel.messages.max(),
+            viewModel.viewState.unreads[viewModel.channel.id]?.last_id
+        ]
+        .compactMap { $0 }
+        .max()
+    }
+
+    internal func acknowledgeLatestMessageImmediately(
+        messageId: String? = nil,
+        allowOlderMessage: Bool = false
+    ) {
+        let resolvedMessageId = allowOlderMessage
+            ? messageId
+            : latestAutomaticAcknowledgementId(requestedId: messageId)
+        guard let latestMessageId = resolvedMessageId else { return }
         let channelId = viewModel.channel.id
 
         if var unread = viewModel.viewState.unreads[channelId] {
@@ -526,7 +583,18 @@ extension MessageableChannelViewController {
                 include_users: true
             )
 
-            guard case .success(let history) = result, !history.messages.isEmpty else { return }
+            guard case .success(let history) = result, !history.messages.isEmpty else {
+                await MainActor.run {
+                    guard self.canApplyLoadResult(for: channelId), !self.isViewDisappearing else { return }
+                    if !self.didRequestLatestPositionFromButton {
+                        _ = self.positionAtUnreadSeparatorIfNeeded()
+                    }
+                    self.hideSkeletonView()
+                    self.tableView.tableFooterView = nil
+                    self.tableView.alpha = 1.0
+                }
+                return
+            }
 
             await MainActor.run {
                 guard self.canApplyLoadResult(for: channelId), !self.isViewDisappearing else { return }
@@ -576,8 +644,11 @@ extension MessageableChannelViewController {
                 if self.didRequestLatestPositionFromButton {
                     self.scrollToLatestMessageFromButton()
                 } else {
-                    _ = self.positionAtUnreadSeparatorIfNeeded()
+                    _ = self.positionAtUnreadSeparatorIfNeeded(force: self.didPositionAtUnreadSeparator)
                 }
+                self.hideSkeletonView()
+                self.tableView.tableFooterView = nil
+                self.tableView.alpha = 1.0
                 self.updateTableViewBouncing()
             }
         }
