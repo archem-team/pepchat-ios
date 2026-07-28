@@ -440,7 +440,7 @@ fileprivate struct DeleteAccountSheet: View {
                     .multilineTextAlignment(.center)
                 Spacer()
                     .frame(maxHeight: 10)
-                Text("Your account will be disabled, and may be reactivated by opening a support request. After a week, it will be permanently deleted.")
+                Text("Your account and all of your data, including messages and friends, will be queued for deletion. A confirmation email will be sent, and you can cancel within 7 days by contacting support.")
                     .font(.callout)
                     .multilineTextAlignment(.center)
                 
@@ -506,8 +506,6 @@ struct UserSettings: View {
     @State var presentChangeUsernameSheet = false
     @State var presentChangeEmailSheet = false
     @State var presentChangePasswordSheet = false
-    @State var presentDisableAccountSheet = false
-    @State var presentDeleteAccountSheet = false
     
     @State var emailSubstitute = ""
     
@@ -900,18 +898,6 @@ struct UserSettings: View {
             }
             .presentationBackground(viewState.theme.background)
         }*/
-        .sheet(isPresented: $presentDisableAccountSheet) {
-            SettingsSheetContainer(showSheet: $presentDisableAccountSheet) {
-                DisableAccountSheet(showSheet: $presentDisableAccountSheet)
-            }
-            .presentationBackground(viewState.theme.background)
-        }
-        .sheet(isPresented: $presentDeleteAccountSheet) {
-            SettingsSheetContainer(showSheet: $presentDeleteAccountSheet) {
-                DeleteAccountSheet(showSheet: $presentDeleteAccountSheet)
-            }
-            .presentationBackground(viewState.theme.background)
-        }
 }
 }
 
@@ -922,6 +908,3 @@ struct UserSettings: View {
         .applyPreviewModifiers(withState: viewState)
         .preferredColorScheme(.dark)
 }
-
-
-

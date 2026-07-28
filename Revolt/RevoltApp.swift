@@ -562,6 +562,10 @@ struct MainApp: View {
                 EnableAuthenticatorAppView(token: token)
             case .validate_password_view(let reason):
                 ValidatePasswordView(validatePasswordReason: reason)
+            case .account_lifecycle(let action):
+                AccountLifecyclePasswordView(action: action)
+            case .account_lifecycle_confirm(let action, let token):
+                AccountLifecycleConfirmView(action: action, mfaToken: token)
             case .server_members_view(let serverId):
                 ServerMembersView(serverId: serverId)
             case .blocked_users_view:

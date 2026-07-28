@@ -145,6 +145,8 @@ enum NavigationDestination: Hashable, Codable {
     case profile_setting
     case server_emoji_settings(String)
     case validate_password_view(ValidatePasswordReason)
+    case account_lifecycle(AccountLifecycleAction)
+    case account_lifecycle_confirm(AccountLifecycleAction, String)
     case show_recovery_codes(String, Bool)
     case enable_authenticator_app(String)
     case blocked_users_view

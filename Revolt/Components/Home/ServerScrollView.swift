@@ -9,6 +9,7 @@ import SwiftUI
 import Types
 import OrderedCollections
 import UniformTypeIdentifiers
+import PopupView
 
 /// A view that displays a scrollable list of servers with options to add a new server,
 /// access discovery, and settings. It also shows the user's avatar for direct messages (DMs).
@@ -328,6 +329,7 @@ struct ServerItemView: View {
     @Binding var selectedServer: Server?
     @Binding var showServerSheet: Bool
     @Binding var isPresentedNotificationSetting: Bool
+    @State private var isPresentedServerLeave = false
     
     var body: some View {
         Button {
@@ -429,7 +431,42 @@ struct ServerItemView: View {
                         PeptideIcon(iconName: .peptideSetting, color: .iconGray04)
                     }
                 }
+
+                if !viewState.isCurrentUserOwner(of: server.id) {
+                    Divider()
+
+                    Button(role: .destructive) {
+                        isPresentedServerLeave.toggle()
+                    } label: {
+                        HStack(spacing: .zero) {
+                            PeptideText(text: "Leave Server", textColor: .textRed07)
+                            PeptideIcon(iconName: .peptideSignOutLeave, color: .iconRed07)
+                        }
+                    }
+
+                    Button(role: .destructive) {
+                        viewState.path.append(NavigationDestination.report(nil, server.id, nil))
+                    } label: {
+                        HStack(spacing: .zero) {
+                            PeptideText(text: "Report Server", textColor: .textRed07)
+                            PeptideIcon(iconName: .peptideReportFlag, color: .iconRed07)
+                        }
+                    }
+                }
             }
+            .popup(isPresented: $isPresentedServerLeave, view: {
+                DeleteServerSheet(isPresented: $isPresentedServerLeave,
+                                  isPresentedServerSheet: .constant(true),
+                                  server: server,
+                                  isOwner: false)
+            }, customize: {
+                $0.type(.default)
+                  .isOpaque(true)
+                  .appearFrom(.bottomSlide)
+                  .backgroundColor(Color.bgDefaultPurple13.opacity(0.7))
+                  .closeOnTap(false)
+                  .closeOnTapOutside(false)
+            })
         }
     }
 
