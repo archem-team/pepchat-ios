@@ -82,12 +82,27 @@ struct Settings: View {
                 PeptideDivider()
                     .padding(.leading, 0)
                 
-                if let url = URL(string: "https://zeko.chat/delete-account") {
-                    Link(destination: url) {
-                        PeptideActionButton(icon: .peptideTrashDelete,
-                                            title: "Delete Account",
-                                            hasArrow: true)
-                    }
+                Button {
+                    viewState.path.append(NavigationDestination.account_lifecycle(.disable))
+                } label: {
+                    PeptideActionButton(icon: .peptideDisconnect,
+                                        iconColor: .iconRed07,
+                                        title: "Disable Account",
+                                        titleColor: .textRed07,
+                                        hasArrow: true)
+                }
+
+                PeptideDivider()
+                    .padding(.leading, 0)
+
+                Button {
+                    viewState.path.append(NavigationDestination.account_lifecycle(.delete))
+                } label: {
+                    PeptideActionButton(icon: .peptideTrashDelete,
+                                        iconColor: .iconRed07,
+                                        title: "Delete Account",
+                                        titleColor: .textRed07,
+                                        hasArrow: true)
                 }
                 
                 
