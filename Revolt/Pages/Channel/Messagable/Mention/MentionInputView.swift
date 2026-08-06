@@ -50,17 +50,23 @@ private final class PassthroughMentionWindow: UIWindow {
 
 protocol MentionInputViewDelegate: AnyObject {
     func mentionInputView(_ mentionView: MentionInputView, didSelectUser user: User, member: Member?)
+    func mentionInputViewDidSelectEveryone(_ mentionView: MentionInputView)
     func mentionInputViewDidDismiss(_ mentionView: MentionInputView)
 }
 
 class MentionInputView: UIView {
+    private enum Suggestion {
+        case everyone
+        case user(User, Member?)
+    }
+
     // MARK: - Properties
     private let tableView = UITableView()
     private let emptyStateLabel = UILabel()
     private let containerView = UIView()
     
     private var users: [(User, Member?)] = []
-    private var filteredUsers: [(User, Member?)] = []
+    private var filteredSuggestions: [Suggestion] = []
     private var searchText: String = ""
     
     weak var delegate: MentionInputViewDelegate?
@@ -125,7 +131,7 @@ class MentionInputView: UIView {
         // Reset state when channel changes
         usersLoaded = false
         users.removeAll()
-        filteredUsers.removeAll()
+        filteredSuggestions.removeAll()
         searchText = ""
         isDismissed = true
         fullRosterTask?.cancel()
@@ -156,7 +162,7 @@ class MentionInputView: UIView {
         searchWorkItem = nil
         searchText = ""
         isDismissed = true
-        filteredUsers.removeAll()
+        filteredSuggestions.removeAll()
         tableView.reloadData()
         hidePopup(animated: animated)
     }
@@ -192,7 +198,7 @@ class MentionInputView: UIView {
     
     private func showAsPopup() {
         guard !isDismissed else { return }
-        guard filteredUsers.count > 0 else { 
+        guard !filteredSuggestions.isEmpty else {
             hidePopup()
             return 
         }
@@ -236,7 +242,7 @@ class MentionInputView: UIView {
         containerViewController.view.addSubview(self)
         
         // Calculate better height: maximum 8 users displayed for better UX  
-        let maxVisibleUsers = min(filteredUsers.count, 8)
+        let maxVisibleUsers = min(filteredSuggestions.count, 8)
         let minHeight: CGFloat = 64 // Minimum height for 1 user
         let mentionHeight: CGFloat = max(minHeight, CGFloat(maxVisibleUsers * 48) + 16) // 8px padding top and bottom
         let margin: CGFloat = 20
@@ -288,7 +294,7 @@ class MentionInputView: UIView {
         guard let heightConstraint = heightConstraint else { return }
         
         // Calculate new height based on current filtered users
-        let maxVisibleUsers = min(filteredUsers.count, 8)
+        let maxVisibleUsers = min(filteredSuggestions.count, 8)
         let minHeight: CGFloat = 64 // Minimum height for 1 user
         let newHeight: CGFloat = max(minHeight, CGFloat(maxVisibleUsers * 48) + 16) // 8px padding top and bottom
         
@@ -352,7 +358,7 @@ class MentionInputView: UIView {
         currentChannel = nil
         currentServer = nil
         users.removeAll()
-        filteredUsers.removeAll()
+        filteredSuggestions.removeAll()
         isDismissed = true
     }
     
@@ -576,6 +582,12 @@ class MentionInputView: UIView {
     }
     
     private func filterUsers() {
+        let includeEveryone = MentionInputUtilities.shouldIncludeEveryone(
+            searchText: searchText,
+            canMentionEveryone: canMentionEveryone
+        )
+
+        let filteredUsers: [(User, Member?)]
         if searchText.isEmpty {
             filteredUsers = users
         } else {
@@ -626,8 +638,10 @@ class MentionInputView: UIView {
             
             // Combine priority matches first, then secondary matches
             filteredUsers = priorityMatches + secondaryMatches
-            
         }
+
+        filteredSuggestions = (includeEveryone ? [.everyone] : [])
+            + filteredUsers.map { .user($0.0, $0.1) }
         
         DispatchQueue.main.async {
             guard !self.isDismissed else { return }
@@ -635,13 +649,13 @@ class MentionInputView: UIView {
             self.updateEmptyState()
             
             // Configure bounce behavior based on number of users
-            let contentHeight = CGFloat(self.filteredUsers.count * 48)
+            let contentHeight = CGFloat(self.filteredSuggestions.count * 48)
             let tableHeight = self.tableView.frame.height
             self.tableView.alwaysBounceVertical = contentHeight > tableHeight
             self.tableView.bounces = contentHeight > tableHeight
             
             // Show or hide popup based on filtered results
-            if !self.filteredUsers.isEmpty {
+            if !self.filteredSuggestions.isEmpty {
                 self.showAsPopup()
             } else {
                 self.hidePopup()
@@ -651,8 +665,33 @@ class MentionInputView: UIView {
     
     private func updateEmptyState() {
         DispatchQueue.main.async {
-            self.emptyStateLabel.isHidden = !self.filteredUsers.isEmpty
-            self.tableView.isHidden = self.filteredUsers.isEmpty
+            self.emptyStateLabel.isHidden = !self.filteredSuggestions.isEmpty
+            self.tableView.isHidden = self.filteredSuggestions.isEmpty
+        }
+    }
+
+    private var canMentionEveryone: Bool {
+        guard let channel = currentChannel else { return false }
+
+        switch channel {
+        case .group_dm_channel:
+            return true
+        case .text_channel:
+            guard let server = currentServer,
+                  let currentUser = viewState.currentUser else {
+                return false
+            }
+            let member = viewState.members[server.id]?[currentUser.id]
+            let permissions = resolveChannelPermissions(
+                from: currentUser,
+                targettingUser: currentUser,
+                targettingMember: member,
+                channel: channel,
+                server: server
+            )
+            return permissions.contains(.mentionEveryone)
+        default:
+            return false
         }
     }
     
@@ -745,19 +784,24 @@ class MentionInputView: UIView {
 // MARK: - UITableViewDelegate & UITableViewDataSource
 extension MentionInputView: UITableViewDelegate, UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return filteredUsers.count
+        return filteredSuggestions.count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         guard let cell = tableView.dequeueReusableCell(withIdentifier: "MentionUserCell", for: indexPath) as? MentionUserCell,
-              indexPath.row < filteredUsers.count else {
+              indexPath.row < filteredSuggestions.count else {
             return UITableViewCell()
         }
-        
-        let (user, member) = filteredUsers[indexPath.row]
-        cell.configure(with: user, member: member, viewState: viewState) { [weak self] selectedUser, selectedMember in
-            // print("DEBUG: Cell onSelect called for user: \(selectedUser.username)")
-            self?.tableView(tableView, didSelectRowAt: indexPath)
+
+        switch filteredSuggestions[indexPath.row] {
+        case .everyone:
+            cell.configureEveryone { [weak self] in
+                self?.tableView(tableView, didSelectRowAt: indexPath)
+            }
+        case .user(let user, let member):
+            cell.configure(with: user, member: member, viewState: viewState) { [weak self] _, _ in
+                self?.tableView(tableView, didSelectRowAt: indexPath)
+            }
         }
         return cell
     }
@@ -779,8 +823,8 @@ extension MentionInputView: UITableViewDelegate, UITableViewDataSource {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         
-        guard indexPath.row < filteredUsers.count else { return }
-        let (user, member) = filteredUsers[indexPath.row]
+        guard indexPath.row < filteredSuggestions.count else { return }
+        let suggestion = filteredSuggestions[indexPath.row]
         
         // print("DEBUG: ==========================================")
         // print("DEBUG: USER SELECTED FROM MENTION LIST")
@@ -799,7 +843,12 @@ extension MentionInputView: UITableViewDelegate, UITableViewDataSource {
         // print("DEBUG: User selected from popup: \(user.username)")
         
         // DIRECT IMPLEMENTATION: Insert the mention text directly
-        insertMentionText(for: user, member: member)
+        switch suggestion {
+        case .everyone:
+            delegate?.mentionInputViewDidSelectEveryone(self)
+        case .user(let user, let member):
+            insertMentionText(for: user, member: member)
+        }
     }
     
     // Recursive function to find a textView
@@ -829,6 +878,7 @@ class MentionUserCell: UITableViewCell {
     private var member: Member?
     private var viewState: ViewState?
     private var onSelect: ((User, Member?) -> Void)?
+    private var onSelectEveryone: (() -> Void)?
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -892,10 +942,26 @@ class MentionUserCell: UITableViewCell {
     }
     
     @objc private func handleTap() {
-                    // print("DEBUG: Cell tapped for user: \(user?.username ?? "unknown")")
+        if let onSelectEveryone {
+            onSelectEveryone()
+            return
+        }
         if let user = user {
             onSelect?(user, member)
         }
+    }
+
+    func configureEveryone(onSelect: @escaping () -> Void) {
+        user = nil
+        member = nil
+        viewState = nil
+        self.onSelect = nil
+        onSelectEveryone = onSelect
+        nameLabel.text = "everyone"
+        usernameLabel.text = "Notify everyone in this channel"
+        avatarImageView.kf.cancelDownloadTask()
+        avatarImageView.image = UIImage(systemName: "person.3.fill")
+        avatarImageView.tintColor = UIColor(named: "iconYellow07") ?? UIColor.systemYellow
     }
     
     func configure(with user: User, member: Member?, viewState: ViewState, onSelect: @escaping (User, Member?) -> Void) {
@@ -903,6 +969,7 @@ class MentionUserCell: UITableViewCell {
         self.member = member
         self.viewState = viewState
         self.onSelect = onSelect
+        onSelectEveryone = nil
         
         // Set username and display name
         nameLabel.text = member?.nickname ?? user.display_name ?? user.username

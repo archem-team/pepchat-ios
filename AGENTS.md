@@ -184,3 +184,34 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 - **Save attachment to Photos**: `FullScreenImageViewController` (`Messagable/Controllers/`) saves the displayed image (preferring original URL/data with auth when available) via `PHPhotoLibrary` add-only authorization. In-composer pending files remain `PendingAttachmentsManager` / `1PendingAttachmentsManager.swift`.
 - **API history reconcile**: When merging fetched messages in `MessageableChannelViewController+MessageLoading.swift`, only treat cache-only IDs as server-deleted if the API page is full (100 messages); otherwise older local IDs may simply be off the end of the fetched window.
 
+## Shared `@everyone` QA Accounts
+
+Use these persistent production QA accounts for cross-client `@everyone` testing. Do not create
+duplicates, change their Archem roles, or delete them. Passwords are stored in the macOS login
+Keychain and must never be pasted into source, logs, test reports, commits, or chat.
+
+- API: `https://peptide.chat/api`
+- Server: Archem Team (`01J8W7NPV2DM3XR48JAYB1RDFK`)
+- Channel: `testing` (`01J8Y8T3XQ75D9KW32CG522952`)
+- Allowed sender: `qa-ios-everyone-sender-20260806@peptide.chat`, username
+  `ios_everyone_sender`, user `01KZBZP1BQ8603X1NKW721W732`, Keychain service
+  `pepchat-ios.qa.everyone.sender`
+- Denied sender: `qa-ios-everyone-denied-20260806@peptide.chat`, username
+  `ios_everyone_denied`, user `01KZBZP401HX40WWT9P4QGPEG7`, Keychain service
+  `pepchat-ios.qa.everyone.denied`
+- Recipient: `qa-ios-everyone-recipient-20260806@peptide.chat`, username
+  `ios_everyone_recipient`, user `01KZBZP60EV4M26MVXE5NZF040`, Keychain service
+  `pepchat-ios.qa.everyone.recipient`
+
+Retrieve a password directly into a shell variable without displaying it:
+
+```bash
+test_password="$(security find-generic-password -w -s '<keychain-service>' -a '<email>')"
+```
+
+The allowed account has the dedicated `iOS @everyone QA allowed` role; the denied account has the
+dedicated deny role; the recipient has neither. Expected server behavior: allowed `@everyone`
+messages have `flags: 2` and enter the recipient's unread `mentions`; manually typed text from the
+denied account may send successfully but has no everyone flag and must not create a mention. The
+latest non-secret session manifest is
+`.codex/test-sessions/pepchat-everyone-latest.json` (local and git-ignored).

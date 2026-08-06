@@ -636,7 +636,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
     }
     
     // New function to create attributed text with clickable mentions
-    private func createAttributedTextWithClickableMentions(from text: String, viewState: ViewState) -> NSAttributedString {
+    private func createAttributedTextWithClickableMentions(
+        from text: String,
+        viewState: ViewState,
+        mentionsEveryone: Bool
+    ) -> NSAttributedString {
         let mutableAttributedString = NSMutableAttributedString(string: text)
         
         // Set default attributes for the entire text
@@ -830,6 +834,22 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
             // print("Error creating regex for mentions: \(error)")
         }
         
+        if mentionsEveryone {
+            let foregroundColor = UIColor(named: "textYellow07") ?? UIColor.systemYellow
+            let backgroundColor = UIColor(red: 49 / 255, green: 45 / 255, blue: 29 / 255, alpha: 1)
+            for range in MentionInputUtilities.everyoneMentionRanges(in: mutableAttributedString.string) {
+                guard MentionInputUtilities.isValid(
+                    range: range,
+                    inUTF16Length: mutableAttributedString.length
+                ) else { continue }
+                mutableAttributedString.addAttributes([
+                    .foregroundColor: foregroundColor,
+                    .backgroundColor: backgroundColor,
+                    .font: UIFont.systemFont(ofSize: 15, weight: .semibold)
+                ], range: range)
+            }
+        }
+
         return mutableAttributedString
     }
     
@@ -1744,7 +1764,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
             return
         }
         let cacheKey = message.id as NSString
-        let hasMentions = content.contains("<@") || content.contains("<#")
+        let hasMentions = content.contains("<@") || content.contains("<#") || message.mentionsEveryone
 
         // Check message-level cache for the pre-emoji attributed string
         if let cached = MessageCell.attributedStringCache.object(forKey: cacheKey) {
@@ -1761,7 +1781,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         let baseAttributedString: NSAttributedString
 
         if hasMentions {
-            baseAttributedString = createAttributedTextWithClickableMentions(from: processedContent, viewState: viewState)
+            baseAttributedString = createAttributedTextWithClickableMentions(
+                from: processedContent,
+                viewState: viewState,
+                mentionsEveryone: message.mentionsEveryone
+            )
         } else {
             baseAttributedString = processMarkdownOptimized(processedContent)
         }
