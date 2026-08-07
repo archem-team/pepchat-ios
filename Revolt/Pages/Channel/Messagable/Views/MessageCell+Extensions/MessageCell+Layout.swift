@@ -24,8 +24,8 @@ extension MessageCell {
     }
 
     private func updateTopConstraintConstants(offset: CGFloat) {
-        continuationNoReplyConstraints.first?.constant = 8 + offset
-        continuationWithReplyConstraints.first?.constant = 8
+        continuationNoReplyConstraints.first?.constant = 4 + offset
+        continuationWithReplyConstraints.first?.constant = 6
         nonContinuationNoReplyConstraints.first?.constant = 8 + offset
         nonContinuationWithReplyConstraints.first?.constant = 8
     }

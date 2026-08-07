@@ -1,42 +1,45 @@
 import Foundation
 
 extension String {
-    func convertMentionsToUsernames(viewState: ViewState) -> String {
+    func replacingUserMentionTokens(
+        fallback: String = "@unknown-user",
+        usernameForUserId: (String) -> String?
+    ) -> String {
         var result = self
-        
-        // Regular expression to match mention format: <@user_id>
-        let pattern = "<@([A-Z0-9]+)>"
-        
-        do {
-            let regex = try NSRegularExpression(pattern: pattern)
-            let range = NSRange(location: 0, length: result.utf16.count)
-            
-            // Find all matches
-            let matches = regex.matches(in: result, range: range)
-            
-            // Process matches in reverse to avoid index issues
-            for match in matches.reversed() {
-                if let userIdRange = Range(match.range(at: 1), in: result) {
-                    let userId = String(result[userIdRange])
-                    
-                    // Try to find user in viewState
-                    if let user = viewState.users[userId] {
-                        // Replace the mention with username
-                        let mentionRange = Range(match.range, in: result)!
-                        let username = user.display_name ?? user.username
-                        result.replaceSubrange(mentionRange, with: "@\(username)")
-                    }
-                }
-            }
-        } catch {
-            print("DEBUG: Error creating regex: \(error)")
+        guard let regex = try? NSRegularExpression(pattern: "<@([A-Za-z0-9]+)>") else {
+            return result
         }
-        
+
+        let matches = regex.matches(
+            in: result,
+            range: NSRange(location: 0, length: result.utf16.count)
+        )
+
+        for match in matches.reversed() {
+            guard let idRange = Range(match.range(at: 1), in: result),
+                  let mentionRange = Range(match.range, in: result) else {
+                continue
+            }
+
+            let userId = String(result[idRange])
+            let replacement = usernameForUserId(userId).map { "@\($0)" } ?? fallback
+            result.replaceSubrange(mentionRange, with: replacement)
+        }
+
         return result
+    }
+
+    func convertMentionsToUsernames(viewState: ViewState) -> String {
+        replacingUserMentionTokens { userId in
+            guard let user = viewState.users[userId] ?? viewState.allEventUsers[userId] else {
+                return nil
+            }
+            return user.display_name ?? user.username
+        }
     }
     
     func containsMention() -> Bool {
-        let pattern = "<@([A-Z0-9]+)>"
+        let pattern = "<@([A-Za-z0-9]+)>"
         do {
             let regex = try NSRegularExpression(pattern: pattern)
             let range = NSRange(location: 0, length: self.utf16.count)
@@ -46,4 +49,4 @@ extension String {
             return false
         }
     }
-} 
+}

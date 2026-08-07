@@ -79,12 +79,12 @@ struct InnerMessageReplyView: View {
     func authorBadge(message: Message, author: User) -> (text: String, color: Color)? {
         if author.bot != nil {
             return message.masquerade == nil
-                ? (String(localized: "BOT"), .bgPurple10)
-                : (String(localized: "BRIDGE"), .bgRed07)
+                ? (String(localized: "BOT"), .bgPurple10.opacity(0.8))
+                : (String(localized: "BRIDGE"), .bgGray10.opacity(0.85))
         }
 
         if isNewAccount(author) {
-            return (String(localized: "NEW"), .bgGreen07)
+            return (String(localized: "NEW"), .bgGreen07.opacity(0.75))
         }
 
         return nil
@@ -98,6 +98,23 @@ struct InnerMessageReplyView: View {
 
         let accountAge = Calendar.current.dateComponents([.day], from: ulid.timestamp, to: Date()).day ?? Int.max
         return accountAge <= 14
+    }
+
+    private func attachmentSummary(_ attachments: [Types.File]) -> String {
+        guard attachments.count == 1, let attachment = attachments.first else {
+            return String(localized: "\(attachments.count) attachments")
+        }
+
+        if attachment.content_type.hasPrefix("image/") {
+            return String(localized: "Photo")
+        }
+        if attachment.content_type.hasPrefix("video/") {
+            return String(localized: "Video")
+        }
+        if attachment.content_type.hasPrefix("audio/") {
+            return String(localized: "Audio")
+        }
+        return attachment.filename
     }
     
     var body: some View {
@@ -137,7 +154,7 @@ struct InnerMessageReplyView: View {
                             
                             HStack(spacing: .spacing2){
                                 
-                                PeptideText(text: "Tap to see  attachment",
+                                PeptideText(text: attachmentSummary(message.attachments ?? []),
                                             font: .peptideFootnote,
                                             textColor: .textGray06,
                                             lineLimit: 1)
@@ -200,4 +217,3 @@ struct InnerMessageReplyView: View {
         }
     }
 }
-

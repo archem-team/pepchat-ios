@@ -447,7 +447,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         usernameLabel.font = UIFont.boldSystemFont(ofSize: 16)
         
         let showVerified = author.hasVerifiedBadge()
-        usernameLabel.textColor = showVerified ? .systemYellow : .white
+        usernameLabel.textColor = .white
         usernameVerifiedBadgeImageView.image = UIImage(systemName: "checkmark.seal.fill")
         usernameVerifiedBadgeImageView.isHidden = !showVerified
         usernameVerifiedBadgeWidthConstraint?.constant = showVerified ? 14 : 0
@@ -507,10 +507,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
 
         if author.bot != nil {
             badge = message.masquerade == nil
-                ? ("BOT", UIColor(named: "bgPurple10") ?? .systemPurple)
-                : ("BRIDGE", UIColor(named: "bgRed07") ?? .systemPink)
+                ? ("BOT", (UIColor(named: "bgPurple10") ?? .systemPurple).withAlphaComponent(0.8))
+                : ("BRIDGE", (UIColor(named: "bgGray10") ?? .systemGray).withAlphaComponent(0.85))
         } else if isNewAccount(author) {
-            badge = ("NEW", UIColor(named: "bgGreen07") ?? .systemGreen)
+            badge = ("NEW", (UIColor(named: "bgGreen07") ?? .systemGreen).withAlphaComponent(0.75))
         } else {
             badge = nil
         }
@@ -614,7 +614,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
                     let userId = String(result[userIdRange])
                     
                     // Try to find user in viewState
-                    if let user = viewState.users[userId] {
+                    if let user = viewState.users[userId] ?? viewState.allEventUsers[userId] {
                         // Get the mention range
                         let mentionRange = Range(match.range, in: result)!
                         
@@ -624,7 +624,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
                     } else {
                         // If user not found, replace with @Unknown User to avoid showing raw ID
                         let mentionRange = Range(match.range, in: result)!
-                        result.replaceSubrange(mentionRange, with: "@Unknown User")
+                        result.replaceSubrange(mentionRange, with: "@unknown-user")
                     }
                 }
             }
@@ -784,19 +784,16 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
             for match in matches.reversed() {
                 if let userIdRange = Range(match.range(at: 1), in: mutableAttributedString.string) {
                     let userId = String(mutableAttributedString.string[userIdRange])
-                    
-                    // Try to find user in viewState
-                    if let user = viewState.users[userId] {
-                        // Get the mention range in the current string
-                        let mentionRange = match.range
-                        
-                        // Safety check for range bounds in mutable string
-                        guard mentionRange.location >= 0,
-                              mentionRange.location < mutableAttributedString.length,
-                              mentionRange.location + mentionRange.length <= mutableAttributedString.length else {
-                            // print("DEBUG: Invalid mention range: \(mentionRange) for string length: \(mutableAttributedString.length)")
-                            continue
-                        }
+
+                    let mentionRange = match.range
+                    guard mentionRange.location >= 0,
+                          mentionRange.location < mutableAttributedString.length,
+                          mentionRange.location + mentionRange.length <= mutableAttributedString.length else {
+                        continue
+                    }
+
+                    // Try both user stores before falling back to a privacy-safe label.
+                    if let user = viewState.users[userId] ?? viewState.allEventUsers[userId] {
                         
                         // Replace the mention with username (use display name if available)
                         let displayName = user.display_name ?? user.username
@@ -827,6 +824,17 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
                         } catch {
                             // print("DEBUG: Error adding attributes to mention: \(error)")
                         }
+                    } else {
+                        let mentionText = "@unknown-user"
+                        mutableAttributedString.replaceCharacters(in: mentionRange, with: mentionText)
+                        let newRange = NSRange(
+                            location: mentionRange.location,
+                            length: (mentionText as NSString).length
+                        )
+                        mutableAttributedString.addAttributes([
+                            .foregroundColor: UIColor.secondaryLabel,
+                            .font: UIFont.systemFont(ofSize: 15, weight: .semibold)
+                        ], range: newRange)
                     }
                 }
             }
@@ -1178,6 +1186,17 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         // print("✅ MessageCell.clearHighlight() COMPLETED")
     }
     
+    private func replyAttachmentSummary(_ attachments: [Types.File]) -> String {
+        guard attachments.count == 1, let attachment = attachments.first else {
+            return "\(attachments.count) attachments"
+        }
+
+        if attachment.content_type.hasPrefix("image/") { return "Photo" }
+        if attachment.content_type.hasPrefix("video/") { return "Video" }
+        if attachment.content_type.hasPrefix("audio/") { return "Audio" }
+        return attachment.filename
+    }
+
     private func configureReplyView(message: Message, replies: [String], viewState: ViewState) {
         // Remove the continuation check - allow reply view for continuations too
         
@@ -1245,12 +1264,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
                         replyContentLabel.text = processedContent
                         replyContentLabel.font = UIFont.systemFont(ofSize: 12) // Reset to normal font
                     } else if !(replyMessage.attachments?.isEmpty ?? true) {
-                        let attachmentCount = replyMessage.attachments?.count ?? 0
-                        if attachmentCount == 1 {
-                            replyContentLabel.text = "[attachment]"
-                        } else {
-                            replyContentLabel.text = "[\(attachmentCount) attachments]"
-                        }
+                        replyContentLabel.text = replyAttachmentSummary(replyMessage.attachments ?? [])
                         replyContentLabel.font = UIFont.systemFont(ofSize: 12) // Reset to normal font
                     } else {
                         replyContentLabel.text = ""
@@ -1767,7 +1781,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         let hasMentions = content.contains("<@") || content.contains("<#") || message.mentionsEveryone
 
         // Check message-level cache for the pre-emoji attributed string
-        if let cached = MessageCell.attributedStringCache.object(forKey: cacheKey) {
+        if !hasMentions, let cached = MessageCell.attributedStringCache.object(forKey: cacheKey) {
             let mutableCopy = NSMutableAttributedString(attributedString: cached)
             processCustomEmojis(in: mutableCopy, textView: contentLabel)
             contentLabel.attributedText = mutableCopy
@@ -1791,7 +1805,9 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         }
 
         // Cache the pre-emoji result (immutable copy)
-        MessageCell.attributedStringCache.setObject(baseAttributedString, forKey: cacheKey)
+        if !hasMentions {
+            MessageCell.attributedStringCache.setObject(baseAttributedString, forKey: cacheKey)
+        }
 
         // Apply emoji processing on a mutable copy
         let mutableAttributedText = NSMutableAttributedString(attributedString: baseAttributedString)
@@ -1915,7 +1931,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
             } else if hasImageAttachments {
                 // Image attachments already have bottom constraint
             } else if !hasAttachments {
-                let bottomConstraint = contentLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -16)
+                let bottomConstraint = contentLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -8)
                 bottomConstraint.priority = UILayoutPriority.defaultHigh
                 bottomConstraint.isActive = true
                 // PERF Issue #9: Track for efficient deactivation in clearContentLabelBottomConstraints()
@@ -1930,7 +1946,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         
         // Minimum height constraint
         contentViewMinHeightConstraint?.isActive = false
-        let minHeightConstraint = contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 50)
+        let minimumHeight: CGFloat = isContinuation ? 28 : 50
+        let minHeightConstraint = contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: minimumHeight)
         minHeightConstraint.priority = UILayoutPriority.defaultLow
         minHeightConstraint.isActive = true
         contentViewMinHeightConstraint = minHeightConstraint
