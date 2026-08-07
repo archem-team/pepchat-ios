@@ -199,9 +199,7 @@ extension ViewState {
                 members[member.id.server]?[member.id.user] = member
             }
             
-            let userMentioned = m.mentions?.contains(where: {
-                $0 == currentUser?.id
-            }) ?? false
+            let userMentioned = currentUser.map { m.mentionsUser($0.id) } ?? false
             
             // Check if message is from current user
             let isFromCurrentUser = m.author == currentUser?.id

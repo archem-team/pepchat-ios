@@ -100,12 +100,12 @@ struct MessageView: View {
     private var authorBadge: (text: String, color: Color)? {
         if viewModel.author.bot != nil {
             return viewModel.message.masquerade == nil
-                ? (String(localized: "BOT"), .bgPurple10)
-                : (String(localized: "BRIDGE"), .bgRed07)
+                ? (String(localized: "BOT"), .bgPurple10.opacity(0.8))
+                : (String(localized: "BRIDGE"), .bgGray10.opacity(0.85))
         }
 
         if isNewAccount(viewModel.author) {
-            return (String(localized: "NEW"), .bgGreen07)
+            return (String(localized: "NEW"), .bgGreen07.opacity(0.75))
         }
 
         return nil
@@ -275,7 +275,7 @@ struct MessageView: View {
                                         
                                         Text(formattedMessageDate(from: createdAt(id: viewModel.message.id)))
                                             .font(.peptideFootnoteFont)
-                                            .foregroundStyle(.textGray06)
+                                            .foregroundStyle(.textGray04)
                                             .lineLimit(1)
                                     }
                                     

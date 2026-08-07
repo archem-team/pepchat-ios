@@ -1604,25 +1604,22 @@ struct InnerContents: UIViewRepresentable {
     // Process user mentions: <@user_id>
     private func processUserMentions(in attrString: NSMutableAttributedString, textview: UITextView) {
         // FIXED: Collect matches first to avoid offset calculation issues
-        let userMentionMatches = Array(attrString.string.matches(of: /<@(\w{26})>/))
+        let userMentionMatches = Array(attrString.string.matches(of: /<@([A-Za-z0-9]+)>/))
         
         for match in userMentionMatches.reversed() {
             let id = match.output.1
             
-            if let user = viewState.users[String(id)] {
-                let member = currentServer.flatMap { viewState.members[$0.id]![user.id] }
-                
-                // Safely calculate the offset using NSRange instead of utf16Offset
-                let nsRange = NSRange(match.range, in: attrString.string)
-                guard nsRange.location != NSNotFound && 
-                      nsRange.location >= 0 && 
-                      nsRange.location + nsRange.length <= attrString.length else {
-                    continue
-                }
-                
-                let currentAttrs = attrString.attributes(at: nsRange.location, effectiveRange: nil)
-                let currentFont = (currentAttrs[.font] ?? contentFont) as! UIFont
-                
+            let nsRange = NSRange(match.range, in: attrString.string)
+            guard nsRange.location != NSNotFound,
+                  nsRange.location >= 0,
+                  nsRange.location + nsRange.length <= attrString.length else {
+                continue
+            }
+
+            let currentAttrs = attrString.attributes(at: nsRange.location, effectiveRange: nil)
+            let currentFont = (currentAttrs[.font] as? UIFont) ?? contentFont
+
+            if let user = viewState.users[String(id)] ?? viewState.allEventUsers[String(id)] {
                 attrString.deleteCharacters(in: nsRange)
                     
                 let username = NSMutableAttributedString(string: "@\(user.display_name ?? user.username)", attributes: [.font: currentFont])
@@ -1632,6 +1629,13 @@ struct InnerContents: UIViewRepresentable {
                 ], range: NSRange(location: 0, length: username.length))
                                 
                 attrString.insert(username, at: nsRange.location)
+            } else {
+                let fallback = "@unknown-user"
+                attrString.replaceCharacters(in: nsRange, with: fallback)
+                attrString.addAttributes([
+                    .font: currentFont,
+                    .foregroundColor: UIColor.secondaryLabel
+                ], range: NSRange(location: nsRange.location, length: (fallback as NSString).length))
             }
         }
     }
@@ -2104,5 +2108,4 @@ struct ChatMessageView: View {
     .preferredColorScheme(.dark)
     
 }
-
 
