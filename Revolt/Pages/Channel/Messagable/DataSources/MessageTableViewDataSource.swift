@@ -63,7 +63,8 @@ class MessageTableViewDataSource: NSObject, UITableViewDataSource {
                 
                 // Try to get author, or create a placeholder if not found
                 let author: User
-                if let foundAuthor = viewModel.viewState.users[message.author] {
+                if let foundAuthor = viewModel.viewState.users[message.author],
+                   !MessageableChannelViewController.isPlaceholderUser(foundAuthor) {
                     author = foundAuthor
                 } else {
                     // print("⚠️ Could not find author for messageId: \(messageId), creating placeholder")
@@ -95,12 +96,8 @@ class MessageTableViewDataSource: NSObject, UITableViewDataSource {
                     viewController?.handleMessageAction(action, message: message)
                 }
 
-                cell.onImageTapped = { [weak viewController] image, originalURL, sessionToken in
-                    viewController?.showFullScreenImage(
-                        image,
-                        originalImageURL: originalURL,
-                        sessionToken: sessionToken
-                    )
+                cell.onImageTapped = { [weak viewController] items, initialIndex in
+                    viewController?.showFullScreenImages(items, initialIndex: initialIndex)
                 }
 
                 if let viewController = viewController {
@@ -187,7 +184,8 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                 
                 // Try to get author, or create a placeholder if not found
                 let author: User
-                if let foundAuthor = viewModelRef.viewState.users[message.author] {
+                if let foundAuthor = viewModelRef.viewState.users[message.author],
+                   !MessageableChannelViewController.isPlaceholderUser(foundAuthor) {
                     author = foundAuthor
                 } else {
                     // print("⚠️ Could not find author for messageId: \(messageId), creating placeholder")
@@ -214,6 +212,9 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                              member: member, 
                              viewState: viewModelRef.viewState, 
                              isContinuation: isContinuation)
+                cell.setUnreadSeparatorVisible(
+                    viewControllerRef?.shouldShowUnreadSeparator(for: messageId) ?? false
+                )
                 
                 // Check if this is a pending message and set the state
                 let channelQueuedMessages = viewModelRef.viewState.queuedMessages[message.channel] ?? []
@@ -224,12 +225,8 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
                     viewControllerRef?.handleMessageAction(action, message: message)
                 }
 
-                cell.onImageTapped = { [weak viewControllerRef] image, originalURL, sessionToken in
-                    viewControllerRef?.showFullScreenImage(
-                        image,
-                        originalImageURL: originalURL,
-                        sessionToken: sessionToken
-                    )
+                cell.onImageTapped = { [weak viewControllerRef] items, initialIndex in
+                    viewControllerRef?.showFullScreenImages(items, initialIndex: initialIndex)
                 }
 
                 // Present user sheet on avatar tap
@@ -255,4 +252,3 @@ class LocalMessagesDataSource: NSObject, UITableViewDataSource {
         }
     }
 }
-

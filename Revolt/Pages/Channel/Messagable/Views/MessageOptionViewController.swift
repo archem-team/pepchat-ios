@@ -50,26 +50,17 @@ class MessageOptionViewController: UIViewController {
         setupUI()
         setupEmojiReactions()
         setupOptions()
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // Hysteresis avoids flipping isScrollEnabled when content height hovers near the visible
-        // height (reduces layout churn / jank while scrolling).
         let visibleH = scrollView.bounds.height
         guard visibleH > 1 else { return }
         let contentH = scrollView.contentSize.height
-        let overflow = contentH - visibleH
-        let needsScroll: Bool
-        if scrollView.isScrollEnabled {
-            needsScroll = overflow > -12
-        } else {
-            needsScroll = overflow > 8
-        }
-        if scrollView.isScrollEnabled != needsScroll {
-            scrollView.isScrollEnabled = needsScroll
-            scrollView.alwaysBounceVertical = needsScroll
-        }
+        scrollView.isScrollEnabled = true
+        scrollView.alwaysBounceVertical = contentH > visibleH + 1
     }
     
     private func setupUI() {
@@ -93,7 +84,10 @@ class MessageOptionViewController: UIViewController {
         scrollView.verticalScrollIndicatorInsets = .zero
         scrollView.horizontalScrollIndicatorInsets = .zero
         scrollView.keyboardDismissMode = .none
-        scrollView.alwaysBounceVertical = false
+        scrollView.isScrollEnabled = true
+        scrollView.alwaysBounceVertical = true
+        scrollView.delaysContentTouches = false
+        scrollView.canCancelContentTouches = true
         if #available(iOS 11.0, *) {
             scrollView.contentInsetAdjustmentBehavior = .never
         }

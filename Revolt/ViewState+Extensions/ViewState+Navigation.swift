@@ -130,13 +130,14 @@ extension ViewState {
         }
     }
     
-    func selectDiscover() {
+    func selectDiscover(tab: DiscoverHomeTab = .home) {
         DispatchQueue.main.async {
             // Unload current server's channels when switching to Discover
             if case .server(let serverId) = self.currentSelection {
                 self.unloadServerChannels(serverId: serverId)
             }
             
+            self.selectedDiscoverTab = tab
             self.currentSelection = .discover
             self.currentChannel = .home
             

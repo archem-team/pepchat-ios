@@ -9,6 +9,11 @@ import Foundation
 import SwiftUI
 import Types
 
+private enum DMSortOrder {
+    case latest
+    case oldest
+}
+
 /// A view representing a scrollable list of direct messages (DMs) within the application.
 struct DMScrollView: View {
     @EnvironmentObject var viewState: ViewState
@@ -22,6 +27,39 @@ struct DMScrollView: View {
     @State private var isLoadingDeleteGroupDM : Bool = false
     @State private var selectedChannel : Channel? = nil
     @State private var wsState : WsState = .connecting
+    @State private var searchQuery: String = ""
+    @State private var searchTextFieldState: PeptideTextFieldState = .default
+    @State private var dmSortOrder: DMSortOrder = .latest
+    
+    private var displayedDms: [Channel] {
+        let channelsByKnownOrder = viewState.allDmChannelIds.compactMap { channelId in
+            viewState.channels[channelId] ?? viewState.allEventChannels[channelId]
+        }
+        let baseDms = channelsByKnownOrder.isEmpty ? viewState.dms : channelsByKnownOrder
+        let query = searchQuery
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        
+        return baseDms
+            .filter(isVisibleDm)
+            .filter { channel in
+                query.isEmpty || dmSearchText(for: channel).contains(query)
+            }
+            .sorted { lhs, rhs in
+                let lhsActivity = dmActivityMessageId(for: lhs)
+                let rhsActivity = dmActivityMessageId(for: rhs)
+                
+                if lhsActivity != rhsActivity {
+                    return dmSortOrder == .latest ? lhsActivity > rhsActivity : lhsActivity < rhsActivity
+                }
+                
+                return dmDisplayName(for: lhs).localizedCaseInsensitiveCompare(dmDisplayName(for: rhs)) == .orderedAscending
+            }
+    }
+    
+    private var isSearching: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
     
     // Function to check and fix missing DMs
     private func checkAndFixMissingDMs() {
@@ -131,6 +169,8 @@ struct DMScrollView: View {
             .padding(top: .padding24, bottom: .padding16)
             .padding(.horizontal, .padding16)
             
+            searchAndSortSection
+            
                 
             
             PeptideDivider(backgrounColor: .borderGray11)
@@ -197,25 +237,40 @@ struct DMScrollView: View {
                 
                 LazyVStack(spacing: .zero) {
                     
-                    let dmsList = viewState.dms.filter { channel in
-                        switch channel {
-                        case .saved_messages:
-                            return false
-                        case .dm_channel(let dmChannel):
-                            return dmChannel.active
-                        default:
-                            return true
-                        }
-                    }
+                    let dmsList = displayedDms
                     
                 
                     if dmsList.isEmpty {
                         
-                        DMEmptyView()
+                        if isSearching {
+                            VStack(spacing: .spacing4) {
+                                Image(.peptideNotFound)
+                                    .resizable()
+                                    .frame(width: .size200, height: .size200)
+                                
+                                PeptideText(text: "We Couldn't Find Anyone",
+                                            font: .peptideHeadline,
+                                            textColor: .textDefaultGray01)
+                                .padding(.horizontal, .padding24)
+                                
+                                PeptideText(text: "Double-check the name and try again.",
+                                            font: .peptideSubhead,
+                                            textColor: .textGray07,
+                                            alignment: .center)
+                                .padding(.horizontal, .padding24)
+                            }
+                            .frame(maxWidth: .infinity)
                             .padding(top: .padding24,
                                      bottom: .padding24,
                                      leading: .padding16,
                                      trailing: .padding16)
+                        } else {
+                            DMEmptyView()
+                                .padding(top: .padding24,
+                                         bottom: .padding24,
+                                         leading: .padding16,
+                                         trailing: .padding16)
+                        }
                         
                     } else {
                         ForEach(Array(dmsList.enumerated()), id: \.element.id) { index, channel in
@@ -262,7 +317,8 @@ struct DMScrollView: View {
                             }
                             .onAppear {
                                 // IMPROVED LAZY LOADING: Load batches based on actual visible index
-                                viewState.loadDmBatchesIfNeeded(visibleIndex: index)
+                                let visibleIndex = viewState.allDmChannelIds.firstIndex(of: channel.id) ?? index
+                                viewState.loadDmBatchesIfNeeded(visibleIndex: visibleIndex)
                                 
                                 // Also load more when near the end
                                 if index >= dmsList.count - 5 && viewState.hasMoreDmsToLoad {
@@ -296,6 +352,7 @@ struct DMScrollView: View {
             }
             .frame(maxWidth: .infinity)
             .clipped()
+            .scrollDismissesKeyboard(ScrollDismissesKeyboardMode.immediately)
             .scrollBounceBehavior(.basedOnSize)
             .background(Color.bgGray12)
 
@@ -326,7 +383,6 @@ struct DMScrollView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            // Also check when app becomes active
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.checkAndFixMissingDMs()
             }
@@ -408,6 +464,133 @@ struct DMScrollView: View {
         })
         
         
+    }
+    
+    private var searchAndSortSection: some View {
+        HStack(spacing: .spacing8) {
+            PeptideTextField(text: $searchQuery,
+                             state: $searchTextFieldState,
+                             placeholder: "Search direct messages",
+                             icon: .peptideSearch,
+                             cornerRadius: .radiusLarge,
+                             height: .size40,
+                             keyboardType: .default)
+            
+            Menu {
+                Button {
+                    dmSortOrder = .latest
+                } label: {
+                    HStack {
+                        PeptideText(text: "Latest")
+                        
+                        if dmSortOrder == .latest {
+                            PeptideIcon(iconName: .peptideDoneCircle,
+                                        size: .size20,
+                                        color: .iconYellow07)
+                        }
+                    }
+                }
+                
+                Button {
+                    dmSortOrder = .oldest
+                } label: {
+                    HStack {
+                        PeptideText(text: "Oldest")
+                        
+                        if dmSortOrder == .oldest {
+                            PeptideIcon(iconName: .peptideDoneCircle,
+                                        size: .size20,
+                                        color: .iconYellow07)
+                        }
+                    }
+                }
+            } label: {
+                PeptideIcon(iconName: .peptideSort)
+                    .frame(width: .size40, height: .size40)
+                    .background {
+                        Circle().fill(Color.bgGray11)
+                    }
+            }
+        }
+        .padding(.horizontal, .padding16)
+        .padding(.bottom, .padding16)
+    }
+    
+    private func isVisibleDm(_ channel: Channel) -> Bool {
+        switch channel {
+        case .saved_messages:
+            return false
+        case .dm_channel(let dmChannel):
+            return dmChannel.active
+        case .group_dm_channel:
+            return true
+        default:
+            return false
+        }
+    }
+    
+    private func dmActivityMessageId(for channel: Channel) -> String {
+        switch channel {
+        case .dm_channel(let dmChannel):
+            return dmChannel.last_message_id ?? viewState.channelMessages[channel.id]?.last ?? ""
+        case .group_dm_channel(let groupDMChannel):
+            return groupDMChannel.last_message_id ?? viewState.channelMessages[channel.id]?.last ?? ""
+        default:
+            return viewState.channelMessages[channel.id]?.last ?? ""
+        }
+    }
+    
+    private func dmDisplayName(for channel: Channel) -> String {
+        switch channel {
+        case .dm_channel(let dmChannel):
+            let recipient = viewState.getDMPartnerName(channel: dmChannel)
+            return recipient?.display_name ?? recipient?.username ?? "Unknown User"
+        case .group_dm_channel(let groupDMChannel):
+            return groupDMChannel.name
+        default:
+            return ""
+        }
+    }
+    
+    private func dmSearchText(for channel: Channel) -> String {
+        switch channel {
+        case .dm_channel(let dmChannel):
+            guard let currentUserId = viewState.currentUser?.id else {
+                return dmDisplayName(for: channel).lowercased()
+            }
+            
+            let recipientIds = dmChannel.recipients.filter { $0 != currentUserId }
+            let userText = recipientIds.compactMap { userId -> String? in
+                let user = viewState.users[userId] ?? viewState.allEventUsers[userId]
+                return [
+                    user?.display_name,
+                    user?.username,
+                    user?.usernameWithDiscriminator(),
+                    userId
+                ]
+                .compactMap { $0 }
+                .joined(separator: " ")
+            }
+            .joined(separator: " ")
+            
+            return userText.isEmpty ? dmDisplayName(for: channel).lowercased() : userText.lowercased()
+        case .group_dm_channel(let groupDMChannel):
+            let recipientText = groupDMChannel.recipients.compactMap { userId -> String? in
+                let user = viewState.users[userId] ?? viewState.allEventUsers[userId]
+                return [
+                    user?.display_name,
+                    user?.username,
+                    user?.usernameWithDiscriminator()
+                ]
+                .compactMap { $0 }
+                .joined(separator: " ")
+            }
+            .joined(separator: " ")
+            
+            return "\(groupDMChannel.name) \(recipientText)".lowercased()
+        default:
+            return ""
+        }
     }
 }
 

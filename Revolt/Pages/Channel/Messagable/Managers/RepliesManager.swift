@@ -408,90 +408,7 @@ class RepliesManager: NSObject {
             // print("Mention user from message: \(message.id)")
             break
         case .markUnread:
-            // Handle marking as unread
-            // print("🔄 Mark unread from message: \(message.id)")
-            Task {
-                // Capture values at the beginning to avoid async issues
-                let channelId = await viewModel.channel.id
-                let viewState = await viewModel.viewState
-                let currentUserId = await viewState.currentUser?.id ?? ""
-                
-                // Get all messages in channel to find the message before this one
-                let channelMessages = await viewState.channelMessages[channelId] ?? []
-                
-                // Find the index of the current message
-                if let currentIndex = channelMessages.firstIndex(of: message.id) {
-                    if currentIndex > 0 {
-                        // There's a previous message - mark it as the last read message
-                        let previousMessageId = channelMessages[currentIndex - 1]
-                        
-                        // print("🔄 Setting last read message to: \(previousMessageId)")
-                        
-                        // Call the API to acknowledge the previous message
-                        let result = await viewState.http.ackMessage(channel: channelId, message: previousMessageId)
-                        
-                        await MainActor.run {
-                            switch result {
-                            case .success:
-                                // print("✅ Successfully marked as unread from message: \(message.id)")
-                                
-                                // Update local unread state
-                                Task {
-                                    if var unread = await viewState.unreads[channelId] {
-                                        unread.last_id = previousMessageId
-                                        await viewState.unreads[channelId] = unread
-                                    } else {
-                                        // Create a new unread entry
-                                        let unreadId = Unread.Id(channel: channelId, user: currentUserId)
-                                        await viewState.unreads[channelId] = Unread(id: unreadId, last_id: previousMessageId)
-                                    }
-                                    
-                                    // Update app badge count after marking as unread
-                                    await MainActor.run {
-                                        viewState.updateAppBadgeCount()
-                                    }
-                                }
-                                
-                                // CRITICAL: Disable automatic acknowledgment to prevent immediate re-acknowledgment
-                                viewController.disableAutoAcknowledgment()
-                                viewState.disableAutoAcknowledgment()
-                                
-                                // viewController.showErrorAlert(message: "Marked as unread")
-                                
-                            case .failure(let error):
-                                // print("❌ Failed to mark as unread: \(error)")
-                                viewController.showErrorAlert(message: "Failed to mark as unread")
-                            }
-                        }
-                    } else {
-                        // This is the first message in the channel
-                        // Remove the unread entry entirely to make all messages unread
-                        // print("🔄 Marking entire channel as unread (removing unread state)")
-                        
-                        await MainActor.run {
-                            Task {
-                                await viewState.unreads.removeValue(forKey: channelId)
-                                
-                                // Update app badge count after marking entire channel as unread
-                                await MainActor.run {
-                                    viewState.updateAppBadgeCount()
-                                }
-                            }
-                            
-                            // CRITICAL: Disable automatic acknowledgment for this case too
-                            viewController.disableAutoAcknowledgment()
-                            viewState.disableAutoAcknowledgment()
-                            
-                            // viewController.showErrorAlert(message: "Marked entire channel as unread")
-                        }
-                    }
-                } else {
-                    // print("❌ Could not find message in channel messages list")
-                    await MainActor.run {
-                        viewController.showErrorAlert(message: "Could not mark as unread")
-                    }
-                }
-            }
+            viewController.markMessageAsUnreadFromContextMenu(message)
         case .copyLink:
             // Copy message link to clipboard
             Task {
@@ -530,28 +447,50 @@ class RepliesManager: NSObject {
                     let channelId = await viewModel.channel.id
                     let viewState = await viewModel.viewState
                     let currentUserId = await viewState.currentUser?.id ?? ""
+                    let latestMessage = await viewState.messages[message.id]
                     
-                    let userAlreadyReacted = message.reactions?[emoji]?.contains(currentUserId) ?? false
+                    let userAlreadyReacted = latestMessage?.reactions?[emoji]?.contains(currentUserId) ?? message.reactions?[emoji]?.contains(currentUserId) ?? false
                     
                     // print("React with \(emoji) to message: \(message.id)")
                     // print("User already reacted: \(userAlreadyReacted)")
                     
+                    let shouldAddReaction = !userAlreadyReacted
+                    await MainActor.run {
+                        viewState.applyLocalReactionUpdate(
+                            messageId: message.id,
+                            channelId: channelId,
+                            emojiId: emoji,
+                            userId: currentUserId,
+                            isAdding: shouldAddReaction
+                        )
+                    }
+
+                    let result: Result<EmptyResponse, RevoltError>
                     if userAlreadyReacted {
-                        // Remove reaction (unreact)
-                        let result = await viewState.http.unreactMessage(
+                        result = await viewState.http.unreactMessage(
                             channel: channelId, 
                             message: message.id, 
                             emoji: emoji
                         )
-                        // print("🔥 REMOVE REACTION API RESULT: \(result)")
                     } else {
-                        // Add reaction
-                        let result = await viewState.http.reactMessage(
+                        result = await viewState.http.reactMessage(
                             channel: channelId, 
                             message: message.id, 
                             emoji: emoji
                         )
-                        // print("🔥 ADD REACTION API RESULT: \(result)")
+                    }
+
+                    if case .failure = result {
+                        await MainActor.run {
+                            viewState.applyLocalReactionUpdate(
+                                messageId: message.id,
+                                channelId: channelId,
+                                emojiId: emoji,
+                                userId: currentUserId,
+                                isAdding: userAlreadyReacted
+                            )
+                            viewController.showErrorAlert(message: userAlreadyReacted ? "Failed to remove reaction" : "Failed to add reaction")
+                        }
                     }
                 }
             }
@@ -636,21 +575,32 @@ class RepliesManager: NSObject {
                     Task {
                         // Check if user already reacted with this emoji (toggle behavior)
                         let currentUserId = await viewState.currentUser?.id ?? ""
-                        let userAlreadyReacted = message.reactions?[emojiToSend]?.contains(currentUserId) ?? false
+                        let latestMessage = await viewState.messages[messageId]
+                        let userAlreadyReacted = latestMessage?.reactions?[emojiToSend]?.contains(currentUserId) ?? message.reactions?[emojiToSend]?.contains(currentUserId) ?? false
                         
                         // print("Custom emoji react with \(emojiToSend) to message: \(messageId)")
                         // print("User already reacted: \(userAlreadyReacted)")
                         
+                        let shouldAddReaction = !userAlreadyReacted
+                        await MainActor.run {
+                            viewState.applyLocalReactionUpdate(
+                                messageId: messageId,
+                                channelId: channelId,
+                                emojiId: emojiToSend,
+                                userId: currentUserId,
+                                isAdding: shouldAddReaction
+                            )
+                        }
+
+                        let result: Result<EmptyResponse, RevoltError>
                         if userAlreadyReacted {
-                            // Remove reaction (unreact)
-                            await viewState.http.unreactMessage(
+                            result = await viewState.http.unreactMessage(
                                 channel: channelId, 
                                 message: messageId, 
                                 emoji: emojiToSend
                             )
                         } else {
-                            // Add reaction
-                            await viewState.http.reactMessage(
+                            result = await viewState.http.reactMessage(
                                 channel: channelId, 
                                 message: messageId, 
                                 emoji: emojiToSend
@@ -659,6 +609,16 @@ class RepliesManager: NSObject {
                         
                         // Dismiss the picker on main thread
                         await MainActor.run {
+                            if case .failure = result {
+                                viewState.applyLocalReactionUpdate(
+                                    messageId: messageId,
+                                    channelId: channelId,
+                                    emojiId: emojiToSend,
+                                    userId: currentUserId,
+                                    isAdding: userAlreadyReacted
+                                )
+                                viewController.showErrorAlert(message: userAlreadyReacted ? "Failed to remove reaction" : "Failed to add reaction")
+                            }
                             viewController.dismiss(animated: true)
                         }
                     }
@@ -746,4 +706,3 @@ private func generateMessageLink(serverId: String?, channelId: String, messageId
         return "\(webDomain)/channel/\(channelId)/\(messageId)"
     }
 }
-

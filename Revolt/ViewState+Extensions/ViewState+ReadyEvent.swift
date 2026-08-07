@@ -158,6 +158,7 @@ extension ViewState {
         if let uid = currentUser?.id, let url = baseURL {
             MessageCacheWriter.shared.setSession(userId: uid, baseURL: url)
             loadDraftsFromUserDefaults(userId: uid, baseURL: url)
+            ShareStorage.saveSessionMetadata(userId: uid, baseURL: url)
         }
         
         await verifyStateIntegrity()
@@ -193,6 +194,7 @@ extension ViewState {
         }
         saveChannelCacheAsync()
         saveServersCacheAsync()
+        saveShareRecipientIndexAsync()
         
         // Check for stale messages
         for channel in channels.values {
@@ -236,7 +238,11 @@ extension ViewState {
         
         // Process all channels (already filtered)
         for channel in eventChannels {
-            channels[channel.id] = channel
+            if let existing = channels[channel.id] {
+                channels[channel.id] = mergeChannelFromReady(existing: existing, incoming: channel)
+            } else {
+                channels[channel.id] = channel
+            }
             
             // Create message array for messageable channels
             switch channel {
@@ -289,7 +295,7 @@ extension ViewState {
         }
         
         // Reconcile membership cache: mark as non-member any cached server not in Ready payload
-        for serverId in discoverMembershipCache.keys where !readyServerIds.contains(serverId) {
+        for serverId in Array(discoverMembershipCache.keys) where !readyServerIds.contains(serverId) {
             updateMembershipCache(serverId: serverId, isMember: false)
         }
         

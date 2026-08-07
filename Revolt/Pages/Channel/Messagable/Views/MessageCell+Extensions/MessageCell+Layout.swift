@@ -11,13 +11,32 @@ import Kingfisher
 import AVKit
 
 extension MessageCell {
+    internal func setUnreadSeparatorVisible(_ isVisible: Bool) {
+        let offset: CGFloat = isVisible ? 42 : 0
+        unreadSeparatorView.isHidden = !isVisible
+        unreadSeparatorHeightConstraint?.constant = offset
+        replyViewTopConstraint?.constant = 4 + offset
+        avatarTopConstraint?.constant = 8 + offset
+
+        updateTopConstraintConstants(offset: offset)
+        contentViewMinHeightConstraint?.constant = 50 + offset
+        setNeedsLayout()
+    }
+
+    private func updateTopConstraintConstants(offset: CGFloat) {
+        continuationNoReplyConstraints.first?.constant = 4 + offset
+        continuationWithReplyConstraints.first?.constant = 6
+        nonContinuationNoReplyConstraints.first?.constant = 8 + offset
+        nonContinuationWithReplyConstraints.first?.constant = 8
+    }
+
     internal func updateAppearanceForContinuation() {
         // Hide avatar and username for continuation messages
         avatarImageView.isHidden = isContinuation
         usernameLabel.isHidden = isContinuation
         usernameVerifiedBadgeImageView.isHidden = isContinuation || usernameVerifiedBadgeImageView.image == nil
         timeLabel.isHidden = isContinuation
-        bridgeBadgeLabel.isHidden = isContinuation || currentMessage?.masquerade == nil
+        bridgeBadgeLabel.isHidden = isContinuation || (bridgeBadgeLabel.text?.isEmpty ?? true)
 
         // PERF Issue #9: Toggle pre-built constraint sets instead of scanning/removing/recreating.
         // Deactivate all four sets first, then activate the correct one.

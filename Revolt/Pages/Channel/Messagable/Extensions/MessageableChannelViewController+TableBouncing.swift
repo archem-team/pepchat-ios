@@ -145,6 +145,26 @@ extension MessageableChannelViewController {
         // Update bouncing behavior based on content
         updateTableViewBouncing()
 
+        let previousUnreadSeparator = unreadSeparatorMessageId
+        refreshUnreadSeparatorFromServerState()
+        if previousUnreadSeparator != unreadSeparatorMessageId {
+            tableView.reloadData()
+            tableView.layoutIfNeeded()
+        }
+        if positionAtUnreadSeparatorIfNeeded() {
+            showTableViewWithFade()
+            Task {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                await self.checkAndFetchMissingReplies()
+            }
+            return
+        }
+
+        if hasPendingUnreadSeparatorPosition() {
+            loadUnreadMessagesAfterLastReadIfNeeded()
+            return
+        }
+
         // Position at bottom (newest messages) only if no target message
         let lastRowIndex = rowCount - 1
         let indexPath = IndexPath(row: lastRowIndex, section: 0)

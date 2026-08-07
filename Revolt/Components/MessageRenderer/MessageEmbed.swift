@@ -9,6 +9,59 @@ import SwiftUI
 import Types
 import AVKit
 import WebKit
+import Kingfisher
+
+private struct RemoteEmbedImage: View {
+    private enum Phase {
+        case loading
+        case loaded
+        case failed
+    }
+
+    let url: URL
+    let sourceWidth: Int?
+    let sourceHeight: Int?
+
+    @State private var phase: Phase = .loading
+
+    private var aspectRatio: CGFloat {
+        guard let sourceWidth, let sourceHeight, sourceWidth > 0, sourceHeight > 0 else {
+            return 16.0 / 9.0
+        }
+        return CGFloat(sourceWidth) / CGFloat(sourceHeight)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if phase != .loaded {
+                HStack(spacing: 8) {
+                    if phase == .loading {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "photo.badge.exclamationmark")
+                    }
+
+                    Text(phase == .loading ? "Loading preview…" : "Preview unavailable")
+                        .font(.caption)
+                }
+                .foregroundStyle(Color.textGray06)
+                .padding(.vertical, 8)
+            }
+
+            if phase != .failed {
+                KFAnimatedImage(source: .network(url))
+                    .placeholder { Color.clear }
+                    .onSuccess { _ in phase = .loaded }
+                    .onFailure { _ in phase = .failed }
+                    .aspectRatio(aspectRatio, contentMode: .fit)
+                    .frame(maxHeight: phase == .loaded ? 240 : 0)
+                    .opacity(phase == .loaded ? 1 : 0)
+                    .clipped()
+            }
+        }
+    }
+}
 
 /// A view that renders different types of message embeds, such as images, videos, text, websites, and special embeds.
 struct MessageEmbed: View {
@@ -45,7 +98,13 @@ struct MessageEmbed: View {
         switch embed {
         case .image(let image):
             // Render an image embed
-            LazyImage(source: .url(URL(string: image.url)!), clipTo: Rectangle())
+            if let url = URL(string: image.url) {
+                RemoteEmbedImage(
+                    url: url,
+                    sourceWidth: image.width,
+                    sourceHeight: image.height
+                )
+            }
         case .video(let video):
             // Render a video embed using AVPlayer
             if let url = URL(string: video.url) {
@@ -120,7 +179,7 @@ struct MessageEmbed: View {
                             
                             // Icon and site name
                             if let icon_url = embed.icon_url, embed.site_name != nil, let url = URL(string: icon_url) {
-                                LazyImage(source: .url(url), height: .size64, width: .size64, clipTo: Rectangle())
+                                LazyImage(source: .url(url), height: .size20, width: .size20, clipTo: Rectangle())
                                     .clipShape(UnevenRoundedRectangle(topLeadingRadius: .radiusXSmall, bottomLeadingRadius: .radiusXSmall, bottomTrailingRadius: .radiusXSmall, topTrailingRadius: .radiusXSmall))
                                     .padding(.top, .padding8)
                             }
@@ -143,7 +202,11 @@ struct MessageEmbed: View {
                             .aspectRatio(CGSize(width: video.width, height: video.height), contentMode: .fit)
                             .frame(maxWidth: CGFloat(integerLiteral: video.width), maxHeight: CGFloat(integerLiteral: video.height))
                     } else if let image = embed.image, image.size == JanuaryImage.Size.large, let url = URL(string: image.url) {
-                            LazyImage(source: .url(url), clipTo: Rectangle())
+                            RemoteEmbedImage(
+                                url: url,
+                                sourceWidth: image.width,
+                                sourceHeight: image.height
+                            )
                             .clipShape(RoundedRectangle(cornerRadius: .radiusXSmall))
                             .padding(.top, .padding8)
                         }
@@ -151,7 +214,11 @@ struct MessageEmbed: View {
                     // Preview image for smaller embeds
                     if let image = embed.image, embed.special == nil || embed.special == WebsiteSpecial.none, embed.video == nil {
                         if image.size == JanuaryImage.Size.preview, let url = URL(string: image.url) {
-                            LazyImage(source: .url(url), clipTo: Rectangle())
+                            RemoteEmbedImage(
+                                url: url,
+                                sourceWidth: image.width,
+                                sourceHeight: image.height
+                            )
                                 .clipShape(RoundedRectangle(cornerRadius: .radiusXSmall))
                                 .padding(.top, .padding8)
                         }

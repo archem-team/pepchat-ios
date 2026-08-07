@@ -9,6 +9,7 @@ import SwiftUI
 import Types
 import OrderedCollections
 import UniformTypeIdentifiers
+import PopupView
 
 /// A view that displays a scrollable list of servers with options to add a new server,
 /// access discovery, and settings. It also shows the user's avatar for direct messages (DMs).
@@ -144,7 +145,7 @@ struct ServerScrollView: View {
                                       color: .iconYellow07)
                             .frame(width: buttonSize, height: buttonSize)
                             .background{
-                                if case .discover = viewState.currentSelection {
+                                if case .discover = viewState.currentSelection, viewState.selectedDiscoverTab == .home {
                                     RoundedRectangle(cornerSize: .init(width: .size16, height: .size16))
                                         .fill(.bgPurple07)
                                 }else{
@@ -154,7 +155,38 @@ struct ServerScrollView: View {
                             }
                             .padding(.horizontal, .padding8)
                             
-                            if viewState.currentSelection == .discover {
+                            if case .discover = viewState.currentSelection, viewState.selectedDiscoverTab == .home {
+                                
+                                SlideShape(buttonSize: buttonSize)
+                                
+                            }
+                        }
+                        
+                    }
+                    
+                    Button {
+                        withAnimation(.easeOut(duration: 1.0)){
+                            viewState.selectDiscover(tab: .promos)
+                        }
+                    } label: {
+                        
+                        ZStack(alignment: .leading) {
+                            
+                            PeptideIcon(iconName: .promo,
+                                      color: .iconYellow07)
+                            .frame(width: buttonSize, height: buttonSize)
+                            .background{
+                                if case .discover = viewState.currentSelection, viewState.selectedDiscoverTab == .promos {
+                                    RoundedRectangle(cornerSize: .init(width: .size16, height: .size16))
+                                        .fill(.bgPurple07)
+                                }else{
+                                    Circle().fill(.bgGray11)
+                                }
+                                
+                            }
+                            .padding(.horizontal, .padding8)
+                            
+                            if case .discover = viewState.currentSelection, viewState.selectedDiscoverTab == .promos {
                                 
                                 SlideShape(buttonSize: buttonSize)
                                 
@@ -238,8 +270,16 @@ struct ServerScrollView: View {
                             viewState.path.append(NavigationDestination.server_overview_settings(serverId))
                         case .channels:
                             viewState.path.append(NavigationDestination.server_channels(serverId))
-                        default:
-                            debugPrint("")
+                        case .roles:
+                            viewState.path.append(NavigationDestination.server_role_setting(serverId))
+                        case .emojis:
+                            viewState.path.append(NavigationDestination.server_emoji_settings(serverId))
+                        case .members:
+                            viewState.path.append(NavigationDestination.server_members_view(serverId))
+                        case .invite:
+                            viewState.path.append(NavigationDestination.server_invites(serverId))
+                        case .banned:
+                            viewState.path.append(NavigationDestination.server_banned_users(serverId))
                         }
                     }
                 })
@@ -289,6 +329,7 @@ struct ServerItemView: View {
     @Binding var selectedServer: Server?
     @Binding var showServerSheet: Bool
     @Binding var isPresentedNotificationSetting: Bool
+    @State private var isPresentedServerLeave = false
     
     var body: some View {
         Button {
@@ -390,7 +431,42 @@ struct ServerItemView: View {
                         PeptideIcon(iconName: .peptideSetting, color: .iconGray04)
                     }
                 }
+
+                if !viewState.isCurrentUserOwner(of: server.id) {
+                    Divider()
+
+                    Button(role: .destructive) {
+                        isPresentedServerLeave.toggle()
+                    } label: {
+                        HStack(spacing: .zero) {
+                            PeptideText(text: "Leave Server", textColor: .textRed07)
+                            PeptideIcon(iconName: .peptideSignOutLeave, color: .iconRed07)
+                        }
+                    }
+
+                    Button(role: .destructive) {
+                        viewState.path.append(NavigationDestination.report(nil, server.id, nil))
+                    } label: {
+                        HStack(spacing: .zero) {
+                            PeptideText(text: "Report Server", textColor: .textRed07)
+                            PeptideIcon(iconName: .peptideReportFlag, color: .iconRed07)
+                        }
+                    }
+                }
             }
+            .popup(isPresented: $isPresentedServerLeave, view: {
+                DeleteServerSheet(isPresented: $isPresentedServerLeave,
+                                  isPresentedServerSheet: .constant(true),
+                                  server: server,
+                                  isOwner: false)
+            }, customize: {
+                $0.type(.default)
+                  .isOpaque(true)
+                  .appearFrom(.bottomSlide)
+                  .backgroundColor(Color.bgDefaultPurple13.opacity(0.7))
+                  .closeOnTap(false)
+                  .closeOnTapOutside(false)
+            })
         }
     }
 

@@ -36,8 +36,10 @@ extension ViewState {
     func signOut(afterRemoveSession : Bool = false) async -> Result<(), UserStateError>  {
         // Clear channel cache at the very start, before any await (§0.2, Channel.md). So even if signOut returns failure (e.g. invalid_session), cache is already cleared.
         ViewState.clearChannelCacheFile(userId: currentUser?.id, baseURL: baseURL)
+        clearShareExtensionData()
         channelCacheSaveWorkItem?.cancel()
         channelCacheSaveWorkItem = nil
+        serverMembersCounts.removeAll()
         
         if !afterRemoveSession {
             let status = try? await http.signout().get()
@@ -149,6 +151,7 @@ extension ViewState {
     
     func destroyCache() {
         clearAllDraftsForCurrentAccount()
+        clearShareExtensionData()
         // Channel cache: clear at start so no write runs after clear (§0.2, §0.11, Channel.md)
         ViewState.clearChannelCacheFile(userId: currentUser?.id, baseURL: baseURL)
         channelCacheSaveWorkItem?.cancel()
@@ -180,6 +183,7 @@ extension ViewState {
         channels.removeAll()
         messages.removeAll()
         members.removeAll()
+        serverMembersCounts.removeAll()
         emojis.removeAll()
         dms.removeAll()
         clearAllTyping()

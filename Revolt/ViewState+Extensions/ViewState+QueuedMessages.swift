@@ -77,9 +77,16 @@ extension ViewState {
                 
                 // Keep sending from the front of the queue until it's empty or send fails
                 while await MainActor.run(body: { self.queuedMessages[channelId]?.isEmpty == false }) {
-                    // Safely get and remove the first message atomically
+                    // Safely get and remove the first retryable message atomically.
+                    // Attachment sends also live in queuedMessages while their upload UI is active;
+                    // those are owned by MessageInputHandler's in-flight send task and must not be
+                    // retried here or the same nonce can be sent as an empty/duplicate message.
                     let msg = await MainActor.run { () -> QueuedMessage? in
                         guard let first = self.queuedMessages[channelId]?.first else {
+                            return nil
+                        }
+                        guard !first.isUploading else {
+                            print("⏳ Skipping active upload queued message - nonce: \(first.nonce)")
                             return nil
                         }
                         // Remove it immediately to prevent duplicate sends
@@ -100,7 +107,7 @@ extension ViewState {
                             channel: channelId,
                             replies: msg.replies,
                             content: msg.content,
-                            attachments: [],
+                            attachments: msg.attachmentData,
                             nonce: msg.nonce
                         ).get()
                         print("📤 Sent queued message \(sentCount) successfully - nonce: \(msg.nonce)")

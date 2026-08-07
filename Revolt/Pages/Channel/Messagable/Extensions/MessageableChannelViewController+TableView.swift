@@ -12,21 +12,22 @@ extension MessageableChannelViewController: UITableViewDelegate {
     // Note: UITableViewDataSource methods are now handled by LocalMessagesDataSource class
     
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
-        if indexPath.row == 0 {
-            isLoadingMore = true
-        }
-
         // Safety check for localMessages count
         guard !localMessages.isEmpty, indexPath.row < localMessages.count else {
             return
         }
 
-        if indexPath.row == localMessages.count - 1 {
+        if indexPath.row == localMessages.count - 1,
+           unreadSeparatorMessageId == nil,
+           unreadAnchorLastReadMessageId == nil,
+           !hasUnreadMessages {
             markLastMessageAsSeen()
         }
 
         if let currentCell = cell as? MessageCell {
             let currentMessageId = localMessages[indexPath.row]
+            animateSlideInIfNeeded(cell: currentCell, messageId: currentMessageId)
+
             let currentMessage = viewModel.viewState.messages[currentMessageId]
             let currentHasReply = !(currentMessage?.replies?.isEmpty ?? true)
             let nextHasReply: Bool = {
@@ -96,8 +97,8 @@ extension MessageableChannelViewController: UITableViewDelegate {
                 // If height changed between passes, first pass was premature — trigger re-query
                 if abs(finalHeight - firstHeight) > 1.0 {
                     DispatchQueue.main.async { [weak self] in
-                        self?.tableView.beginUpdates()
-                        self?.tableView.endUpdates()
+                        guard let self = self, self.canMutateTableView() else { return }
+                        self.tableView.performBatchUpdates(nil)
                     }
                 }
             }
@@ -118,8 +119,8 @@ extension MessageableChannelViewController: UITableViewDelegate {
                 // If the visible cell height differs from measured height, request table re-query.
                 if abs(normalizedMeasuredHeight - currentCell.bounds.height) > 1.0 {
                     DispatchQueue.main.async { [weak self] in
-                        self?.tableView.beginUpdates()
-                        self?.tableView.endUpdates()
+                        guard let self = self, self.canMutateTableView() else { return }
+                        self.tableView.performBatchUpdates(nil)
                     }
                 }
             }
@@ -130,7 +131,8 @@ extension MessageableChannelViewController: UITableViewDelegate {
             let key = CellHeightCacheKey(
                 messageId: messageId,
                 isContinuation: isContinuation,
-                tableWidth: Int(tableView.bounds.width)
+                tableWidth: Int(tableView.bounds.width),
+                hasUnreadSeparator: shouldShowUnreadSeparator(for: messageId)
             )
             cellHeightCache.store(height: finalHeight, for: key)
         }
@@ -148,7 +150,8 @@ extension MessageableChannelViewController: UITableViewDelegate {
         let key = CellHeightCacheKey(
             messageId: messageId,
             isContinuation: isContinuation,
-            tableWidth: Int(tableView.bounds.width)
+            tableWidth: Int(tableView.bounds.width),
+            hasUnreadSeparator: shouldShowUnreadSeparator(for: messageId)
         )
         let cachedHeight = cellHeightCache.height(for: key)
         
@@ -166,7 +169,8 @@ extension MessageableChannelViewController: UITableViewDelegate {
         let key = CellHeightCacheKey(
             messageId: messageId,
             isContinuation: isContinuation,
-            tableWidth: Int(tableView.bounds.width)
+            tableWidth: Int(tableView.bounds.width),
+            hasUnreadSeparator: shouldShowUnreadSeparator(for: messageId)
         )
 
         return cellHeightCache.height(for: key) ?? 120
@@ -209,4 +213,3 @@ extension MessageableChannelViewController: UITableViewDelegate {
         }
     }
 }
-

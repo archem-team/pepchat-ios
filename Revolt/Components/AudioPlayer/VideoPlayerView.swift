@@ -8,6 +8,7 @@ import UIKit
 import AVFoundation
 import AVKit
 import Kingfisher
+import Photos
 
 // MARK: - VideoPlayerView
 class VideoPlayerView: UIView {
@@ -503,8 +504,10 @@ class VideoPlayerView: UIView {
         }
         
         let downloadTask = URLSession.shared.downloadTask(with: request) { [weak self] location, response, error in
+            let preservedLocation = self?.preserveDownloadLocation(location)
+
             DispatchQueue.main.async {
-                self?.handleDownloadCompletion(location: location, response: response, error: error, filename: downloadFilename)
+                self?.handleDownloadCompletion(location: preservedLocation, response: response, error: error, filename: downloadFilename)
             }
         }
         
@@ -520,31 +523,86 @@ class VideoPlayerView: UIView {
             showAlert(title: "Download Failed", message: "Failed to download video: \(error.localizedDescription)")
             return
         }
+
+        if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+            showAlert(title: "Download Failed", message: "Server returned status code \(httpResponse.statusCode)")
+            return
+        }
         
         guard let location = location else {
             showAlert(title: "Download Failed", message: "Download location not found")
             return
         }
         
-        // Save file to Documents directory
         do {
-            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            let destinationURL = documentsPath.appendingPathComponent(filename)
-            
-            // Remove existing file if it exists
-            if FileManager.default.fileExists(atPath: destinationURL.path) {
-                try FileManager.default.removeItem(at: destinationURL)
-            }
-            
-            // Move downloaded file to destination
-            try FileManager.default.moveItem(at: location, to: destinationURL)
-            
-            // Show success message with option to open in Files app
-            showDownloadSuccessAlert(fileURL: destinationURL, filename: filename)
-            
+            let destinationURL = try saveDownloadedVideo(from: location, filename: filename)
+            saveVideoToPhotoLibrary(fileURL: destinationURL, filename: destinationURL.lastPathComponent)
         } catch {
             showAlert(title: "Save Failed", message: "Failed to save video: \(error.localizedDescription)")
         }
+    }
+
+    private func preserveDownloadLocation(_ location: URL?) -> URL? {
+        guard let location = location else { return nil }
+
+        let fm = FileManager.default
+        let uniqueTemp = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString + "_" + location.lastPathComponent)
+
+        do {
+            try fm.moveItem(at: location, to: uniqueTemp)
+            return uniqueTemp
+        } catch {
+            do {
+                let data = try Data(contentsOf: location)
+                try data.write(to: uniqueTemp, options: .atomic)
+                return uniqueTemp
+            } catch {
+                print("⚠️ [VideoPlayer] Failed to preserve download temp file: \(error)")
+                return location
+            }
+        }
+    }
+
+    private func saveDownloadedVideo(from location: URL, filename: String) throws -> URL {
+        let fm = FileManager.default
+        let documentsPath = fm.urls(for: .documentDirectory, in: .userDomainMask).first!
+        try fm.createDirectory(at: documentsPath, withIntermediateDirectories: true)
+
+        var destinationURL = documentsPath.appendingPathComponent(filename)
+
+        if fm.fileExists(atPath: destinationURL.path) {
+            do {
+                try fm.removeItem(at: destinationURL)
+            } catch {
+                destinationURL = uniqueDestinationURL(for: destinationURL, fileManager: fm)
+            }
+        }
+
+        do {
+            try fm.moveItem(at: location, to: destinationURL)
+        } catch {
+            let data = try Data(contentsOf: location)
+            try data.write(to: destinationURL, options: .atomic)
+            try? fm.removeItem(at: location)
+        }
+
+        return destinationURL
+    }
+
+    private func uniqueDestinationURL(for url: URL, fileManager: FileManager) -> URL {
+        let directory = url.deletingLastPathComponent()
+        let base = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
+        var counter = 1
+        var candidate = url
+
+        repeat {
+            let filename = "\(base) (\(counter))" + (ext.isEmpty ? "" : ".\(ext)")
+            candidate = directory.appendingPathComponent(filename)
+            counter += 1
+        } while fileManager.fileExists(atPath: candidate.path)
+
+        return candidate
     }
     
     private func getDownloadFilename() -> String {
@@ -619,17 +677,15 @@ class VideoPlayerView: UIView {
         updateDownloadButtonState()
     }
     
-    private func showDownloadSuccessAlert(fileURL: URL, filename: String) {
+    private func showDownloadSuccessAlert(fileURL: URL, filename: String, photosStatus: String) {
         let fileSize = getFileSize(at: fileURL)
-        let message = "Video saved successfully!\n\nFile: \(filename)\nSize: \(fileSize)\nLocation: Documents folder"
+        let message = "\(photosStatus)\n\nFile: \(filename)\nSize: \(fileSize)\nLocation: App Documents folder"
         
         let alert = UIAlertController(title: "Download Complete", message: message, preferredStyle: .alert)
         
         // Add action to open in Files app
         alert.addAction(UIAlertAction(title: "Open in Files", style: .default) { _ in
-            if UIApplication.shared.canOpenURL(fileURL) {
-                UIApplication.shared.open(fileURL)
-            }
+            self.openInFiles(at: fileURL)
         })
         
         // Add action to share file
@@ -652,20 +708,87 @@ class VideoPlayerView: UIView {
             presentingViewController.present(alert, animated: true)
         }
     }
+
+    private func saveVideoToPhotoLibrary(fileURL: URL, filename: String) {
+        requestPhotoLibrarySaveAuthorization { [weak self] isAuthorized in
+            guard let self else { return }
+
+            guard isAuthorized else {
+                self.showDownloadSuccessAlert(
+                    fileURL: fileURL,
+                    filename: filename,
+                    photosStatus: "Video saved to app Documents. Photos access was not granted."
+                )
+                return
+            }
+
+            PHPhotoLibrary.shared().performChanges({
+                let options = PHAssetResourceCreationOptions()
+                options.originalFilename = filename
+
+                let request = PHAssetCreationRequest.forAsset()
+                request.addResource(with: .video, fileURL: fileURL, options: options)
+            }) { [weak self] success, error in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+
+                    if success {
+                        self.showDownloadSuccessAlert(
+                            fileURL: fileURL,
+                            filename: filename,
+                            photosStatus: "Video saved to Photos and app Documents."
+                        )
+                    } else if let error {
+                        self.showDownloadSuccessAlert(
+                            fileURL: fileURL,
+                            filename: filename,
+                            photosStatus: "Video saved to app Documents. Photos save failed: \(error.localizedDescription)"
+                        )
+                    } else {
+                        self.showDownloadSuccessAlert(
+                            fileURL: fileURL,
+                            filename: filename,
+                            photosStatus: "Video saved to app Documents. Photos save failed."
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func requestPhotoLibrarySaveAuthorization(completion: @escaping (Bool) -> Void) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+
+        switch status {
+        case .authorized, .limited:
+            completion(true)
+        case .denied, .restricted:
+            completion(false)
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
+                DispatchQueue.main.async {
+                    completion(newStatus == .authorized || newStatus == .limited)
+                }
+            }
+        @unknown default:
+            completion(false)
+        }
+    }
+
+    private func openInFiles(at fileURL: URL) {
+        let picker = UIDocumentPickerViewController(forExporting: [fileURL])
+        picker.modalPresentationStyle = .formSheet
+
+        if let presentingViewController = topMostViewController() {
+            presentingViewController.present(picker, animated: true)
+        }
+    }
     
     private func shareFile(at fileURL: URL) {
         let activityViewController = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
         
         // Present from the first available view controller
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first,
-           let rootViewController = window.rootViewController {
-            
-            var presentingViewController = rootViewController
-            while let presentedViewController = presentingViewController.presentedViewController {
-                presentingViewController = presentedViewController
-            }
-            
+        if let presentingViewController = topMostViewController() {
             // For iPad
             if let popover = activityViewController.popoverPresentationController {
                 popover.sourceView = downloadButton
@@ -674,6 +797,20 @@ class VideoPlayerView: UIView {
             
             presentingViewController.present(activityViewController, animated: true)
         }
+    }
+
+    private func topMostViewController() -> UIViewController? {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first,
+              var presentingViewController = window.rootViewController else {
+            return nil
+        }
+
+        while let presentedViewController = presentingViewController.presentedViewController {
+            presentingViewController = presentedViewController
+        }
+
+        return presentingViewController
     }
     
     private func getFileSize(at url: URL) -> String {

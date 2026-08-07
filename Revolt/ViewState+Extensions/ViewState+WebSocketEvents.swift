@@ -19,6 +19,56 @@ import Darwin
 import Network
 
 extension ViewState {
+    func applyLocalReactionUpdate(
+        messageId: String,
+        channelId: String,
+        emojiId: String,
+        userId: String,
+        isAdding: Bool
+    ) {
+        guard var message = messages[messageId] else { return }
+
+        var reactions = message.reactions ?? [:]
+        var users = reactions[emojiId] ?? []
+        let hadReaction = users.contains(userId)
+
+        if isAdding {
+            guard !hadReaction else { return }
+            users.append(userId)
+            reactions[emojiId] = users
+        } else {
+            guard hadReaction else { return }
+            users.removeAll { $0 == userId }
+            if users.isEmpty {
+                reactions.removeValue(forKey: emojiId)
+            } else {
+                reactions[emojiId] = users
+            }
+        }
+
+        message.reactions = reactions
+        messages[messageId] = message
+
+        if let currentUserId = currentUser?.id, let baseURL = baseURL {
+            MessageCacheWriter.shared.enqueueUpdateMessageReactions(
+                id: messageId,
+                reactions: message.reactions,
+                channelId: channelId,
+                userId: currentUserId,
+                baseURL: baseURL
+            )
+        }
+
+        NotificationCenter.default.post(
+            name: NSNotification.Name("MessagesDidChange"),
+            object: [
+                "channelId": channelId,
+                "messageId": messageId,
+                "type": isAdding ? "reaction_added" : "reaction_removed"
+            ]
+        )
+    }
+
     internal func processEvent(_ event: WsMessage) async {
         switch event {
         case .ready(let event):
@@ -149,20 +199,15 @@ extension ViewState {
                 members[member.id.server]?[member.id.user] = member
             }
             
-            let userMentioned = m.mentions?.contains(where: {
-                $0 == currentUser?.id
-            }) ?? false
+            let userMentioned = currentUser.map { m.mentionsUser($0.id) } ?? false
             
             // Check if message is from current user
             let isFromCurrentUser = m.author == currentUser?.id
+            let previousLastMessageId = (channels[m.channel] ?? allEventChannels[m.channel])?.last_message_id
                         
-            if let unread = unreads[m.channel]{
+            if unreads[m.channel] != nil {
                 // Don't update unread for messages sent by the current user
                 if !isFromCurrentUser {
-                    // Update last_id for messages from other users
-                    // This ensures unread count properly reflects new messages
-                    unreads[m.channel]?.last_id = m.id
-                    
                     if userMentioned {
                         if unreads[m.channel]?.mentions != nil {
                             unreads[m.channel]?.mentions?.append(m.id)
@@ -174,7 +219,7 @@ extension ViewState {
             } else if !isFromCurrentUser {
                 // Only create unread entry for messages from other users
                 unreads[m.channel] = .init(id: .init(channel: m.channel, user: currentUser?.id ?? ""),
-                                           last_id: m.id,
+                                           last_id: previousLastMessageId,
                                            mentions: userMentioned ? [m.id]:[])
             }
             
@@ -269,43 +314,6 @@ extension ViewState {
                 userInfo: ["channelId": m.channel]
             )
             
-            if let index = dms.firstIndex(where: { $0.id == m.channel }) {
-                let dmChannel = dms.remove(at: index)
-
-                let updatedDM: Channel
-                switch dmChannel {
-                    case .dm_channel(var c):
-                        c.last_message_id = m.id
-                        updatedDM = .dm_channel(c)
-                    case .group_dm_channel(var c):
-                        c.last_message_id = m.id
-                        updatedDM = .group_dm_channel(c)
-                    default:
-                        updatedDM = dmChannel
-                }
-
-                dms.insert(updatedDM, at: 0)
-            }
-
-            // Always keep canonical DM order (most recent at top), even when user is not on DMs tab,
-            // so that when they open DMs the list is correct and does not revert on scroll.
-            let isDM: Bool = {
-                if let ch = channels[m.channel] {
-                    if case .dm_channel = ch { return true }
-                    if case .group_dm_channel = ch { return true }
-                }
-                return false
-            }()
-            if isDM {
-                if let idx = allDmChannelIds.firstIndex(of: m.channel) {
-                    allDmChannelIds.remove(at: idx)
-                    allDmChannelIds.insert(m.channel, at: 0)
-                } else {
-                    // New DM (e.g. from another device) or not yet in list
-                    allDmChannelIds.insert(m.channel, at: 0)
-                }
-            }
-
             if var existing = channels[m.channel] {
                 switch existing {
                 case .dm_channel(var c):
@@ -320,6 +328,10 @@ extension ViewState {
                 default:
                     break
                 }
+            }
+
+            if isDmOrGroupDmChannelId(m.channel) {
+                applyServerDmListOrder()
             }
             if var existing = allEventChannels[m.channel], existing.server != nil {
                 if case .text_channel(var c) = existing {
@@ -605,21 +617,13 @@ extension ViewState {
 
             // Handle different channel types
             switch channel {
-            case .dm_channel(_):
-                // DMs are always loaded immediately
+            case .dm_channel(_), .group_dm_channel(_):
                 self.channels[channel.id] = channel
                 self.channelMessages[channel.id] = []
-                self.dms.insert(channel, at: 0)
-                self.allDmChannelIds.removeAll { $0 == channel.id }
-                self.allDmChannelIds.insert(channel.id, at: 0)
-
-            case .group_dm_channel(_):
-                // Group DMs are always loaded immediately
-                self.channels[channel.id] = channel
-                self.channelMessages[channel.id] = []
-                self.dms.insert(channel, at: 0)
-                self.allDmChannelIds.removeAll { $0 == channel.id }
-                self.allDmChannelIds.insert(channel.id, at: 0)
+                if !self.allDmChannelIds.contains(channel.id) {
+                    self.allDmChannelIds.append(channel.id)
+                }
+                self.applyServerDmListOrder()
 
             case .text_channel(let textChannel):
                 // Server channels: only load if server is currently active
@@ -853,8 +857,12 @@ extension ViewState {
                 switch memberResult {
                     case .success(let member):
                         var serverMembers = self.members[e.id, default: [:]]
+                        let alreadyHadMember = serverMembers[e.user] != nil
                         serverMembers[e.user] = member
                         self.members[e.id] = serverMembers
+                        if !alreadyHadMember, let count = self.serverMembersCounts[e.id] {
+                            self.serverMembersCounts[e.id] = count + 1
+                        }
                     case .failure(_):
                          // print("error fetching member")
                         break
@@ -869,8 +877,11 @@ extension ViewState {
                 guard var serverMembers = self.members[e.id] else {
                     return
                 }
-                serverMembers.removeValue(forKey: e.user)
+                let removedMember = serverMembers.removeValue(forKey: e.user) != nil
                 self.members[e.id] = serverMembers
+                if removedMember, let count = self.serverMembersCounts[e.id] {
+                    self.serverMembersCounts[e.id] = max(0, count - 1)
+                }
             
         case .server_role_update(let e):
                 // Ensure the server exists
@@ -954,6 +965,28 @@ extension ViewState {
             }
             
         }
+
+        if shouldRefreshShareRecipientIndex(after: event) {
+            saveShareRecipientIndexAsync()
+        }
         
+    }
+
+    private func shouldRefreshShareRecipientIndex(after event: WsMessage) -> Bool {
+        switch event {
+        case .ready,
+             .server_create,
+             .server_delete,
+             .server_update,
+             .channel_create,
+             .channel_update,
+             .channel_delete,
+             .channel_group_join,
+             .channel_group_leave,
+             .user_relationship:
+            return true
+        default:
+            return false
+        }
     }
 }

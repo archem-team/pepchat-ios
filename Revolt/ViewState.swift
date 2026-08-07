@@ -91,6 +91,7 @@ public class ViewState: ObservableObject {
     @Published var sessionToken: String? = nil {
         didSet {
             keychain["sessionToken"] = sessionToken
+            SharedKeychain.writeSessionToken(sessionToken)
         }
     }
     var users: [String: Types.User] {
@@ -146,9 +147,9 @@ public class ViewState: ObservableObject {
         }
         didSet {
             if _batchDepth == 0 {
-                let channelMessagesSnapshot = self.channelMessages
-                debouncedSave(key: "channelMessages") {
-                    try? JSONEncoder().encode(channelMessagesSnapshot)
+                debouncedSave(key: "channelMessages") { [weak self] in
+                    guard let self else { return nil }
+                    return try? JSONEncoder().encode(self.channelMessagesPersistenceSnapshot())
                 }
             }
             // Loading state check (lightweight, runs always)
@@ -333,9 +334,10 @@ public class ViewState: ObservableObject {
     
     @Published var alert : (String?,ImageResource?, Color?) = (nil,nil, nil)
     
-    @Published var serverMembersCount : String? = nil
+    @Published var serverMembersCounts: [String: Int] = [:]
     
     @Published var mentionedUser : String? = nil
+    @Published var selectedDiscoverTab: DiscoverHomeTab = .home
     
     
     @Published var currentSelection: MainSelection {
@@ -420,7 +422,7 @@ public class ViewState: ObservableObject {
     @Published var isLoadingChannelMessages: Bool = false
     
     // CRITICAL FIX: Flag to prevent memory cleanup during older message loading
-    private var isLoadingOlderMessages: Bool = false
+    internal var isLoadingOlderMessages: Bool = false
     
     var userSettingsStore: UserSettingsData
     
@@ -596,7 +598,7 @@ public class ViewState: ObservableObject {
         let decoder = JSONDecoder()
         
         // Read token from keychain before any self access
-        let token = Keychain(service: "chat.peptide.app")["sessionToken"]
+        let token = SharedKeychain.readSessionToken() ?? Keychain(service: "chat.peptide.app")["sessionToken"]
 
         // === FAST PATH: Minimum needed for first frame ===
         self.http = HTTPClient(token: nil, baseURL: "https://peptide.chat/api", viewState: nil)
@@ -689,6 +691,7 @@ public class ViewState: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            guard let self, self.enableAutomaticPreloading else { return }
             Task { [weak self] in
                 await self?.preloadImportantChannels()
             }
@@ -819,32 +822,14 @@ public class ViewState: ObservableObject {
             // print("   - Servers: \(self.servers.count)")
             // print("   - Channel messages lists: \(self.channelMessages.count)")
             
-            // COMPLETE PROTECTION for DM View - NO CLEANUP at all
-            if currentSelection == .dms {
-                // print("🔄 VIRTUAL_DM: DM view active - ALL automatic memory management DISABLED")
-                return // Skip all cleanup when in DM view
-            }
-            
-            // CRITICAL FIX: Skip cleanup when loading older messages
-            if isLoadingOlderMessages {
-                // print("🔄 LOADING_PROTECTION: Loading older messages - skipping cleanup")
-                return
-            }
-            
-            // DISABLED: No immediate user cleanup to prevent black messages
-            if users.count > maxUsersInMemory {
-                // print("⚠️ MEMORY WARNING: \(users.count) users exceed limit of \(maxUsersInMemory), but cleanup is disabled")
-                // Don't call smartUserCleanup() to prevent black messages
-            }
-            
-            // Warning if memory usage is high (only for non-DM views)
-            if memoryUsage > 1500 { // Increased threshold to 1.5GB for better performance
-                // print("⚠️ MEMORY WARNING: High memory usage detected!")
-                
-                // Force immediate aggressive cleanup
+            if isLoadingOlderMessages { return }
+
+            if memoryUsage > 1000 {
                 enforceMemoryLimits()
                 smartUserCleanup()
-                smartChannelCleanup()
+                if currentSelection != .dms {
+                    smartChannelCleanup()
+                }
             }
         }
     }
@@ -869,22 +854,13 @@ public class ViewState: ObservableObject {
         }
     }
     
-    // DISABLED: Add proactive cleanup when adding new messages/users
     @MainActor
     func checkAndCleanupIfNeeded() {
-        // CRITICAL FIX: Disable all proactive cleanup to prevent black messages
-        // print("🧠 MEMORY: Proactive cleanup DISABLED to prevent black messages")
-        
-        // Only log warnings if approaching limits
-        if messages.count > Int(Double(maxMessagesInMemory) * 0.9) {
-            // print("⚠️ MEMORY WARNING: Approaching message limit (\(messages.count)/\(maxMessagesInMemory))")
+        if isLoadingOlderMessages { return }
+        if messages.count > Int(Double(maxMessagesInMemory) * 0.9)
+            || users.count > Int(Double(maxUsersInMemory) * 0.9) {
+            enforceMemoryLimits()
         }
-        
-        if users.count > Int(Double(maxUsersInMemory) * 0.9) {
-            // print("⚠️ MEMORY WARNING: Approaching user limit (\(users.count)/\(maxUsersInMemory))")
-        }
-        
-        return // Exit early, no cleanup
     }
     
     // Helper function to extract timestamp from ULID
@@ -1132,13 +1108,70 @@ public class ViewState: ObservableObject {
     }
     
     func formatUrl(with: File) -> String {
-        
-        if case .video(_) = with.metadata {
-            return "\(apiInfo!.features.autumn.url)/\(with.tag)/\(with.id)/\(with.filename)"
-        } else {
-            return "\(apiInfo!.features.autumn.url)/\(with.tag)/\(with.id)"
+        let baseUrl = "\(apiInfo!.features.autumn.url)/\(with.tag)/\(with.id)"
+        let filename = filenameWithInferredExtension(for: with)
+
+        guard !filename.isEmpty,
+              let encodedFilename = filename.addingPercentEncoding(withAllowedCharacters: Self.urlPathComponentAllowedCharacters) else {
+            return baseUrl
         }
-        
+
+        return "\(baseUrl)/\(encodedFilename)"
+    }
+
+    private static let urlPathComponentAllowedCharacters = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
+
+    private func filenameWithInferredExtension(for file: File) -> String {
+        var filename = file.filename
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !filename.isEmpty else { return "" }
+
+        if (filename as NSString).pathExtension.isEmpty,
+           let inferredExtension = preferredFilenameExtension(forContentType: file.content_type) {
+            filename += ".\(inferredExtension)"
+        }
+
+        return filename
+    }
+
+    private func preferredFilenameExtension(forContentType contentType: String) -> String? {
+        switch contentType.lowercased().split(separator: ";", maxSplits: 1).first.map(String.init) {
+        case "image/jpeg":
+            return "jpg"
+        case "image/png":
+            return "png"
+        case "image/gif":
+            return "gif"
+        case "image/webp":
+            return "webp"
+        case "video/mp4":
+            return "mp4"
+        case "video/quicktime":
+            return "mov"
+        case "video/webm":
+            return "webm"
+        case "audio/mpeg":
+            return "mp3"
+        case "audio/mp4":
+            return "m4a"
+        case "audio/wav", "audio/x-wav":
+            return "wav"
+        case "audio/ogg", "application/ogg":
+            return "ogg"
+        case "application/pdf":
+            return "pdf"
+        case "text/plain":
+            return "txt"
+        case "application/zip":
+            return "zip"
+        default:
+            return nil
+        }
     }
     
     func formatUrl(fromEmoji emojiId: String) -> String {
@@ -1759,28 +1792,8 @@ public class ViewState: ObservableObject {
                 }
             }
             
-            // Sort DM channels
-            let sortedDmChannels = dmChannels.sorted { first, second in
-                let firstLast = first.last_message_id
-                let secondLast = second.last_message_id
-                
-                let firstUnreadLast = unreads[first.id]?.last_id
-                let secondUnreadLast = unreads[second.id]?.last_id
-                
-                let firstIsUnread = firstLast != nil && firstLast != firstUnreadLast
-                let secondIsUnread = secondLast != nil && secondLast != secondUnreadLast
-                
-                // Show unread DMs first
-                if firstIsUnread && !secondIsUnread {
-                    return true
-                } else if !firstIsUnread && secondIsUnread {
-                    return false
-                } else {
-                    return (firstLast ?? "") > (secondLast ?? "")
-                }
-            }
-            
-            allDmChannelIds = sortedDmChannels.map { $0.id }
+            allDmChannelIds = dmChannels.map(\.id)
+            applyServerDmListOrder()
             // print("🔄 DM_REINIT: Rebuilt \(allDmChannelIds.count) DM channel IDs")
         }
         
@@ -1994,7 +2007,15 @@ public class ViewState: ObservableObject {
             case .success(let openedChannel):
                 channel = openedChannel
                 await MainActor.run {
-                    dms.append(openedChannel)
+                    channels[openedChannel.id] = openedChannel
+                    if !allDmChannelIds.contains(openedChannel.id) {
+                        allDmChannelIds.append(openedChannel.id)
+                    }
+                    if loadedDmBatches.isEmpty {
+                        dms.append(openedChannel)
+                    } else {
+                        applyServerDmListOrder()
+                    }
                 }
             case .failure(let error):
                 // Log and show a safe error to the user instead of crashing
@@ -2346,46 +2367,31 @@ public class ViewState: ObservableObject {
     }
     
     
-    func getServerMembers(target : String) async{
-        // FAST: Update UI immediately with loading state
-        await MainActor.run {
-            serverMembersCount = nil
+    func serverMembersCount(for serverId: String) -> String? {
+        if let count = serverMembersCounts[serverId] {
+            return count.formattedWithSeparator()
         }
-        
-        let serverMembers = await self.http.fetchServerMembers(target: target)
-        
-        // OPTIMIZED: Process data in background, then update UI on main thread
-        switch serverMembers {
-            case .success(let success):
-                // Process data in background
-                var newUsers = self.users
-                var newMembers = self.members
+        return nil
+    }
 
-                for user in success.users {
-                    newUsers[user.id] = user
-                }
+    func serverMembersLabel(for serverId: String) -> String {
+        if let count = serverMembersCount(for: serverId) {
+            return "\(count) members"
+        }
+        return "Loading members"
+    }
 
-                for member in success.members {
-                    let serverId = member.id.server
-                    let userId = member.id.user
+    func getServerMembers(target : String) async{
+        let serverId = target
 
-                    if newMembers[serverId] == nil {
-                        newMembers[serverId] = [:]
-                    }
-                    newMembers[serverId]?[userId] = member
-                }
-                
-                // FAST: Update UI on main thread
-                await MainActor.run {
-                    self.serverMembersCount = success.members.count.formattedWithSeparator()
-                    self.users = newUsers
-                    self.members = newMembers
-                }
-            
+        let result = await http.fetchServerMembersCount(target: serverId)
+        await MainActor.run {
+            switch result {
+            case .success(let count):
+                self.serverMembersCounts[serverId] = count
             case .failure(_):
-                await MainActor.run {
-                    self.serverMembersCount = nil
-                }
+                break
+            }
         }
     }
     

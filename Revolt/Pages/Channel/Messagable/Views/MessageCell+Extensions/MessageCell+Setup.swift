@@ -16,6 +16,53 @@ extension MessageCell {
         backgroundColor = .clear
         contentView.backgroundColor = .clear
         selectionStyle = .none
+
+        unreadSeparatorView.translatesAutoresizingMaskIntoConstraints = false
+        unreadSeparatorView.isHidden = true
+        unreadSeparatorView.backgroundColor = .clear
+        contentView.addSubview(unreadSeparatorView)
+
+        let leadingLine = UIView()
+        leadingLine.translatesAutoresizingMaskIntoConstraints = false
+        leadingLine.backgroundColor = UIColor.systemRed.withAlphaComponent(0.7)
+        unreadSeparatorView.addSubview(leadingLine)
+
+        let trailingLine = UIView()
+        trailingLine.translatesAutoresizingMaskIntoConstraints = false
+        trailingLine.backgroundColor = UIColor.systemRed.withAlphaComponent(0.7)
+        unreadSeparatorView.addSubview(trailingLine)
+
+        unreadSeparatorLabel.translatesAutoresizingMaskIntoConstraints = false
+        unreadSeparatorLabel.text = "NEW MESSAGES"
+        unreadSeparatorLabel.font = UIFont.systemFont(ofSize: 13, weight: .bold)
+        unreadSeparatorLabel.textColor = .systemRed
+        unreadSeparatorLabel.textAlignment = .center
+        unreadSeparatorLabel.backgroundColor = UIColor(named: "bgDefaultPurple13") ?? .clear
+        unreadSeparatorView.addSubview(unreadSeparatorLabel)
+
+        unreadSeparatorHeightConstraint = unreadSeparatorView.heightAnchor.constraint(equalToConstant: 0)
+        unreadSeparatorHeightConstraint?.isActive = true
+
+        NSLayoutConstraint.activate([
+            unreadSeparatorView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            unreadSeparatorView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            unreadSeparatorView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+
+            unreadSeparatorLabel.centerXAnchor.constraint(equalTo: unreadSeparatorView.centerXAnchor),
+            unreadSeparatorLabel.centerYAnchor.constraint(equalTo: unreadSeparatorView.centerYAnchor),
+            unreadSeparatorLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 116),
+            unreadSeparatorLabel.heightAnchor.constraint(equalToConstant: 22),
+
+            leadingLine.leadingAnchor.constraint(equalTo: unreadSeparatorView.leadingAnchor),
+            leadingLine.trailingAnchor.constraint(equalTo: unreadSeparatorLabel.leadingAnchor, constant: -12),
+            leadingLine.centerYAnchor.constraint(equalTo: unreadSeparatorLabel.centerYAnchor),
+            leadingLine.heightAnchor.constraint(equalToConstant: 1),
+
+            trailingLine.leadingAnchor.constraint(equalTo: unreadSeparatorLabel.trailingAnchor, constant: 12),
+            trailingLine.trailingAnchor.constraint(equalTo: unreadSeparatorView.trailingAnchor),
+            trailingLine.centerYAnchor.constraint(equalTo: unreadSeparatorLabel.centerYAnchor),
+            trailingLine.heightAnchor.constraint(equalToConstant: 1)
+        ])
         
         // Reply view setup
         replyView.translatesAutoresizingMaskIntoConstraints = false
@@ -30,11 +77,12 @@ extension MessageCell {
         // Add visual feedback for tap
         replyView.layer.cornerRadius = 4
         replyView.layer.masksToBounds = true
+        replyView.backgroundColor = (UIColor(named: "bgGray12") ?? .secondarySystemBackground).withAlphaComponent(0.7)
         
         // Reply indicator icon
         replyIndicatorImageView.translatesAutoresizingMaskIntoConstraints = false
         replyIndicatorImageView.image = UIImage(systemName: "arrow.turn.up.right")
-        replyIndicatorImageView.tintColor = .bgOrane07
+        replyIndicatorImageView.tintColor = UIColor(named: "textGray04") ?? .secondaryLabel
         replyIndicatorImageView.contentMode = .scaleAspectFit
         replyView.addSubview(replyIndicatorImageView)
 
@@ -50,16 +98,28 @@ extension MessageCell {
         // Reply author label
         replyAuthorLabel.translatesAutoresizingMaskIntoConstraints = false
         replyAuthorLabel.font = UIFont.boldSystemFont(ofSize: 13)
-        replyAuthorLabel.textColor = .bgOrane07
+        replyAuthorLabel.textColor = .textDefaultGray01
         // Keep author compact so preview text starts right after a minimum gap.
         replyAuthorLabel.setContentHuggingPriority(.required, for: .horizontal)
         replyAuthorLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         replyView.addSubview(replyAuthorLabel)
+
+        replyAuthorBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        replyAuthorBadgeLabel.font = UIFont.boldSystemFont(ofSize: 9)
+        replyAuthorBadgeLabel.textColor = .white
+        replyAuthorBadgeLabel.backgroundColor = UIColor(named: "bgPurple10") ?? .systemPurple
+        replyAuthorBadgeLabel.layer.cornerRadius = 6
+        replyAuthorBadgeLabel.clipsToBounds = true
+        replyAuthorBadgeLabel.textAlignment = .center
+        replyAuthorBadgeLabel.isHidden = true
+        replyView.addSubview(replyAuthorBadgeLabel)
+        replyAuthorBadgeWidthConstraint = replyAuthorBadgeLabel.widthAnchor.constraint(equalToConstant: 0)
+        replyAuthorBadgeWidthConstraint?.isActive = true
         
         // Reply content label
         replyContentLabel.translatesAutoresizingMaskIntoConstraints = false
         replyContentLabel.font = UIFont.systemFont(ofSize: 13)
-        replyContentLabel.textColor = .bgOrane07
+        replyContentLabel.textColor = UIColor(named: "textGray04") ?? .secondaryLabel
         replyContentLabel.lineBreakMode = .byTruncatingTail
         replyContentLabel.numberOfLines = 1
         // Let preview text absorb compression/truncation first, Discord-like behavior.
@@ -110,8 +170,8 @@ extension MessageCell {
         
         // Time label
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
-        timeLabel.font = UIFont.systemFont(ofSize: 12)
-        timeLabel.textColor = .textGray06
+        timeLabel.font = UIFont.systemFont(ofSize: 12, weight: .medium)
+        timeLabel.textColor = UIColor(named: "textGray04") ?? .secondaryLabel
         contentView.addSubview(timeLabel)
         
         // Bridge badge label
@@ -128,10 +188,12 @@ extension MessageCell {
         // Add padding to the badge
         bridgeBadgeLabel.layer.masksToBounds = true
         contentView.addSubview(bridgeBadgeLabel)
+        bridgeBadgeWidthConstraint = bridgeBadgeLabel.widthAnchor.constraint(equalToConstant: 0)
+        bridgeBadgeWidthConstraint?.isActive = true
         
         // Content text view - optimized for markdown and performance
         contentLabel.translatesAutoresizingMaskIntoConstraints = false
-        contentLabel.font = UIFont.systemFont(ofSize: 15, weight: .light)
+        contentLabel.font = UIFont.systemFont(ofSize: 15, weight: .regular)
         contentLabel.textColor = .textDefaultGray01
         contentLabel.backgroundColor = .clear // Make background transparent
         contentLabel.isScrollEnabled = false // Disable scrolling
@@ -173,13 +235,15 @@ extension MessageCell {
         
         NSLayoutConstraint.activate([
             // Reply view constraints
-            replyView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
             replyView.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 10),
             replyView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
         ])
 
+        replyViewTopConstraint = replyView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4)
+        replyViewTopConstraint?.isActive = true
+
         // Create height constraint with lower priority
-        let replyHeightConstraint = replyView.heightAnchor.constraint(equalToConstant: 18)
+        let replyHeightConstraint = replyView.heightAnchor.constraint(equalToConstant: 22)
         replyHeightConstraint.priority = UILayoutPriority(999) // Just below required but still high
         replyHeightConstraint.isActive = true
 
@@ -201,9 +265,14 @@ extension MessageCell {
             replyAuthorLabel.leadingAnchor.constraint(equalTo: replyAuthorAvatarImageView.trailingAnchor, constant: 4),
             replyAuthorLabel.centerYAnchor.constraint(equalTo: replyView.centerYAnchor),
             replyAuthorLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 110),
+
+            // Reply author badge
+            replyAuthorBadgeLabel.leadingAnchor.constraint(equalTo: replyAuthorLabel.trailingAnchor, constant: 4),
+            replyAuthorBadgeLabel.centerYAnchor.constraint(equalTo: replyView.centerYAnchor),
+            replyAuthorBadgeLabel.heightAnchor.constraint(equalToConstant: 14),
             
             // Reply content label
-            replyContentLabel.leadingAnchor.constraint(equalTo: replyAuthorLabel.trailingAnchor, constant: 4),
+            replyContentLabel.leadingAnchor.constraint(equalTo: replyAuthorBadgeLabel.trailingAnchor, constant: 4),
             replyContentLabel.trailingAnchor.constraint(equalTo: replyView.trailingAnchor),
             replyContentLabel.centerYAnchor.constraint(equalTo: replyView.centerYAnchor),
             
@@ -213,7 +282,6 @@ extension MessageCell {
             
             // Avatar - increased size
             avatarImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            avatarImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
             avatarImageView.widthAnchor.constraint(equalToConstant: 40), // Increased from 32
             avatarImageView.heightAnchor.constraint(equalToConstant: 40), // Increased from 32
             
@@ -225,30 +293,32 @@ extension MessageCell {
             usernameVerifiedBadgeImageView.centerYAnchor.constraint(equalTo: usernameLabel.centerYAnchor),
             usernameVerifiedBadgeImageView.heightAnchor.constraint(equalToConstant: 14),
             
-            // Time
-            timeLabel.leadingAnchor.constraint(equalTo: usernameVerifiedBadgeImageView.trailingAnchor, constant: 8),
-            timeLabel.centerYAnchor.constraint(equalTo: usernameLabel.centerYAnchor),
-            
-            // Bridge badge
-            bridgeBadgeLabel.leadingAnchor.constraint(equalTo: timeLabel.trailingAnchor, constant: 8),
+            // Author badge
+            bridgeBadgeLabel.leadingAnchor.constraint(equalTo: usernameVerifiedBadgeImageView.trailingAnchor, constant: 6),
             bridgeBadgeLabel.centerYAnchor.constraint(equalTo: usernameLabel.centerYAnchor),
-            bridgeBadgeLabel.widthAnchor.constraint(equalToConstant: 50),
             bridgeBadgeLabel.heightAnchor.constraint(equalToConstant: 16),
-            bridgeBadgeLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -16),
+            
+            // Time
+            timeLabel.leadingAnchor.constraint(equalTo: bridgeBadgeLabel.trailingAnchor, constant: 8),
+            timeLabel.centerYAnchor.constraint(equalTo: usernameLabel.centerYAnchor),
+            timeLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -16),
             
             // Content trailing — always active regardless of continuation state
             contentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
         ])
 
+        avatarTopConstraint = avatarImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8)
+        avatarTopConstraint?.isActive = true
+
         // PERF Issue #9: Pre-build four constraint variants for continuation/reply combinations.
         // These are toggled via isActive in updateAppearanceForContinuation() instead of
         // scanning and removing/recreating constraints on every cell reuse.
         continuationNoReplyConstraints = [
-            contentLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            contentLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
             contentLabel.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 10)
         ]
         continuationWithReplyConstraints = [
-            contentLabel.topAnchor.constraint(equalTo: replyView.bottomAnchor, constant: 8),
+            contentLabel.topAnchor.constraint(equalTo: replyView.bottomAnchor, constant: 6),
             contentLabel.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 10)
         ]
         let ncNoReplyUsernameHeight = usernameLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 19)

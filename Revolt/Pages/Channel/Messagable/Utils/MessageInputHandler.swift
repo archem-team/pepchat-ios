@@ -7,6 +7,7 @@ import Types
 import SwiftUI
 import PhotosUI
 import Network
+import UniformTypeIdentifiers
 
 class InternetMonitor: ObservableObject {
     static let shared = InternetMonitor()
@@ -31,7 +32,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
     weak var viewController: MessageableChannelViewController?
     private let viewModel: MessageableChannelViewModel
     private let repliesManager: RepliesManager
-    private var isSendingMessage = false
+    private var isSendingAttachmentMessage = false
     
     init(viewModel: MessageableChannelViewModel, viewController: MessageableChannelViewController, repliesManager: RepliesManager) {
         self.viewModel = viewModel
@@ -65,6 +66,67 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
     
     private static let messageTooLongAlertMessage = "Your message is too long. Please limit it to 2000 characters."
 
+    private func normalizedAttachmentFileName(_ rawName: String?, fallbackBaseName: String, preferredType: UTType?) -> String {
+        var filename = (rawName?.isEmpty == false ? rawName! : fallbackBaseName)
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if filename.isEmpty {
+            filename = fallbackBaseName
+        }
+
+        if (filename as NSString).pathExtension.isEmpty,
+           let preferredExtension = preferredFilenameExtension(for: preferredType) {
+            filename += ".\(preferredExtension)"
+        }
+
+        return filename
+    }
+
+    private func normalizedAttachmentFileName(for url: URL, fallbackBaseName: String, preferredType: UTType? = nil) -> String {
+        let resourceType = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType
+        return normalizedAttachmentFileName(
+            url.lastPathComponent,
+            fallbackBaseName: fallbackBaseName,
+            preferredType: preferredType ?? resourceType
+        )
+    }
+
+    private func preferredType(from provider: NSItemProvider, conformingTo expectedType: UTType) -> UTType? {
+        provider.registeredTypeIdentifiers
+            .compactMap { UTType($0) }
+            .first { $0.conforms(to: expectedType) && preferredFilenameExtension(for: $0) != nil }
+    }
+
+    private func preferredFilenameExtension(for type: UTType?) -> String? {
+        guard let type else { return nil }
+
+        if let preferredExtension = type.preferredFilenameExtension {
+            return preferredExtension
+        }
+
+        if type.conforms(to: .jpeg) {
+            return "jpg"
+        } else if type.conforms(to: .png) {
+            return "png"
+        } else if type.conforms(to: .mpeg4Movie) {
+            return "mp4"
+        } else if type.conforms(to: .quickTimeMovie) || type.conforms(to: .movie) {
+            return "mov"
+        } else if type.conforms(to: .mp3) {
+            return "mp3"
+        } else if type.conforms(to: .pdf) {
+            return "pdf"
+        } else if type.conforms(to: .plainText) {
+            return "txt"
+        } else if type.conforms(to: .zip) {
+            return "zip"
+        }
+
+        return nil
+    }
+
     private func isPayloadTooLargeError(_ error: Error) -> Bool {
         guard let revoltError = error as? RevoltError,
               case .HTTPError(let body, let code) = revoltError,
@@ -79,20 +141,21 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: nil)
     }
 
-    func checkForCharacterLimit(text: String) {
-        guard let viewController = viewController else { return }
+    func checkForCharacterLimit(text: String) -> Bool {
+        guard let viewController = viewController else { return false }
         
         guard text.count <= 2000 else {
             viewController.showErrorAlert(message: Self.messageTooLongAlertMessage)
-            return
+            return false
         }
+
+        return true
     }
     
     // MARK: - Message Sending
     
     func sendMessage(_ text: String) {
         guard let viewController = viewController else { return }
-        guard !isSendingMessage else { return }
         
         // Convert mentions from display format (@username) to server format (<@USER_ID>)
         let convertedText = viewController.messageInputView.convertTextForSending()
@@ -100,7 +163,8 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         // print("📝 MESSAGE_INPUT_HANDLER: User sent message: \"\(text)\"")
         // print("📝 MESSAGE_INPUT_HANDLER: Converted message: \"\(convertedText)\"")
         
-        checkForCharacterLimit(text: convertedText)
+        guard checkForCharacterLimit(text: convertedText) else { return }
+        let latestReadMessageIdBeforeSending = viewController.localMessages.last ?? viewModel.messages.last
         
         if InternetMonitor.shared.isConnected {
             // print("Internet Monitor: ❤️ ❤️ ❤️ ❤️ ❤️ Internet is available")
@@ -108,6 +172,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             // print("Internet Monitor: 😭 😭 😭 😭 😭 Internet not available")
             queueMessage(convertedText)
             viewModel.viewState.clearDraft(channelId: viewModel.channel.id)
+            viewController.clearUnreadMarkerAndAcknowledgeLatest(messageId: latestReadMessageIdBeforeSending)
             // print("Message sent to Queue: ✅ ✅ ✅ ✅ ✅")
             viewController.showErrorAlert(message: "You're offline. Will send when internet comes back.")
             // print("Alert Sent to user: ⚠️ ⚠️ ⚠️ ⚠️ ⚠️")
@@ -120,7 +185,6 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         } else {
             // print("Web Socket: ❤️ ❤️ ❤️ ❤️ ❤️ Websocket is connected")
         }
-        isSendingMessage = true
         // Create a queued message immediately for local display (no attachments)
         if let currentUser = viewModel.viewState.currentUser {
             let messageNonce = UUID().uuidString
@@ -155,15 +219,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             
             // print("📝 MESSAGE_INPUT_HANDLER: Sending with \(apiReplies.count) replies")
             
-            // Hide new message button when sending message
-            if viewController.hasUnreadMessages {
-                UIView.animate(withDuration: 0.3) {
-                    viewController.newMessageButton.alpha = 0
-                } completion: { _ in
-                    viewController.newMessageButton.isHidden = true
-                    viewController.hasUnreadMessages = false
-                }
-            }
+            viewController.clearUnreadMarkerAndAcknowledgeLatest(messageId: latestReadMessageIdBeforeSending)
             
             // IMPROVED: Handle new message sent with better keyboard coordination
             // print("📝 MESSAGE_INPUT_HANDLER: Calling handleNewMessageSent()")
@@ -216,7 +272,6 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                         // print("📝 MESSAGE_INPUT_HANDLER: Posting MessagesDidChange notification after API success")
                         NotificationCenter.default.post(name: NSNotification.Name("MessagesDidChange"), object: nil)
                         // Note: No additional scroll here - handleNewMessageSent() already handled it
-                        self.isSendingMessage = false
                     }
                 } catch {
                     // print("❌ MESSAGE_INPUT_HANDLER: Error sending message: \(error)")
@@ -229,7 +284,6 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                         } else {
                             viewController.showErrorAlert(message: "Failed to send message: \(error.localizedDescription)")
                         }
-                        self.isSendingMessage = false
                     }
                 }
             }
@@ -238,13 +292,12 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             repliesManager.clearReplies()
         } else {
             // print("⚠️ MESSAGE_INPUT_HANDLER: currentUser is nil, can't send message")
-            isSendingMessage = false
         }
     }
     
     func sendMessageWithAttachments(_ text: String, attachments: [(Data, String)]) {
         guard let viewController = viewController else { return }
-        guard !isSendingMessage else { return }
+        guard !isSendingAttachmentMessage else { return }
         
         // Convert mentions from display format (@username) to server format (<@USER_ID>)
         let convertedText = viewController.messageInputView.convertTextForSending()
@@ -252,9 +305,9 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         // print("📝 MESSAGE_INPUT_HANDLER: User sent message with attachments: \"\(text)\", attachments count: \(attachments.count)")
         // print("📝 MESSAGE_INPUT_HANDLER: Converted message: \"\(convertedText)\"")
         
-        checkForCharacterLimit(text: convertedText)
+        guard checkForCharacterLimit(text: convertedText) else { return }
         
-        isSendingMessage = true
+        isSendingAttachmentMessage = true
         // For messages with attachments, show optimistic update with upload progress
         if let currentUser = viewModel.viewState.currentUser {
             let messageNonce = UUID().uuidString
@@ -297,6 +350,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                 } completion: { _ in
                     viewController.newMessageButton.isHidden = true
                     viewController.hasUnreadMessages = false
+                    viewController.updateLiveUnreadMessageBadge()
                 }
             }
             
@@ -354,7 +408,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                         }
                         
                         // print("📝 MESSAGE_INPUT_HANDLER: Upload complete handler finished")
-                        self.isSendingMessage = false
+                        self.isSendingAttachmentMessage = false
                     }
                 } catch {
                     // print("❌ MESSAGE_INPUT_HANDLER: Error sending message with attachments: \(error)")
@@ -376,7 +430,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                             // print("❌ MESSAGE_INPUT_HANDLER: messageInputView is nil on error!")
                         }
                         // print("📝 MESSAGE_INPUT_HANDLER: Error handler finished")
-                        self.isSendingMessage = false
+                        self.isSendingAttachmentMessage = false
                     }
                 }
             }
@@ -385,7 +439,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             repliesManager.clearReplies()
         } else {
             // print("⚠️ MESSAGE_INPUT_HANDLER: currentUser is nil, can't send message")
-            isSendingMessage = false
+            isSendingAttachmentMessage = false
         }
     }
     
@@ -402,7 +456,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
             return
         }
         
-        checkForCharacterLimit(text: newText)
+        guard checkForCharacterLimit(text: newText) else { return }
         
         // Start a Task to edit the message
         Task {
@@ -573,7 +627,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
     private func presentPhotoPicker() {
         guard let viewController = viewController else { return }
         var config = PHPickerConfiguration()
-        config.selectionLimit = 10 // You can adjust the max number of images/videos
+        config.selectionLimit = 5
         config.filter = .any(of: [.images, .videos]) // Allow both images and videos
         let picker = PHPickerViewController(configuration: config)
         picker.delegate = self
@@ -600,7 +654,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
         do {
             // Read the file data
             let fileData = try Data(contentsOf: fileURL)
-            let fileName = fileURL.lastPathComponent
+            let fileName = normalizedAttachmentFileName(for: fileURL, fallbackBaseName: "attachment")
             
             // Add document to pending attachments instead of sending immediately
             if let messageInputView = viewController?.messageInputView {
@@ -667,7 +721,11 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                 DispatchQueue.main.async {
                     do {
                         let videoData = try Data(contentsOf: videoURL)
-                        let fileName = videoURL.lastPathComponent
+                        let fileName = self?.normalizedAttachmentFileName(
+                            for: videoURL,
+                            fallbackBaseName: "video",
+                            preferredType: .quickTimeMovie
+                        ) ?? "video.mov"
                         
                         if let messageInputView = self?.viewController?.messageInputView {
                             let success = messageInputView.addVideo(data: videoData, fileName: fileName)
@@ -728,7 +786,11 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
                     if let videoURL = url, error == nil {
                         do {
                             let videoData = try Data(contentsOf: videoURL)
-                            let fileName = videoURL.lastPathComponent
+                            let fileName = self.normalizedAttachmentFileName(
+                                result.itemProvider.suggestedName ?? videoURL.lastPathComponent,
+                                fallbackBaseName: "video",
+                                preferredType: self.preferredType(from: result.itemProvider, conformingTo: .movie) ?? .quickTimeMovie
+                            )
                             
                             DispatchQueue.main.async {
                                 let success = messageInputView.addVideo(data: videoData, fileName: fileName)
@@ -826,4 +888,3 @@ extension MessageInputHandler: MessageInputViewDelegate {
         }
     }
 }
-

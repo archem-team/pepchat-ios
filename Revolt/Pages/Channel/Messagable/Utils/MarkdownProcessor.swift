@@ -27,7 +27,7 @@ func processMarkdownOptimized(_ text: String) -> NSAttributedString {
 
     // Apply default font and color
     mutableAttributedString.addAttributes([
-        .font: UIFont.systemFont(ofSize: 15, weight: .light),
+        .font: UIFont.systemFont(ofSize: 15, weight: .regular),
         .foregroundColor: UIColor.textDefaultGray01
     ], range: NSRange(location: 0, length: mutableAttributedString.length))
 
@@ -649,4 +649,3 @@ func createHeaderParagraphStyle() -> NSParagraphStyle {
     paragraphStyle.headIndent = 0.0 // No indentation for subsequent lines
     return paragraphStyle
 }
-

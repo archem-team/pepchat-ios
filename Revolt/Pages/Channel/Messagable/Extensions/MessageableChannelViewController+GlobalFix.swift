@@ -24,6 +24,10 @@ extension MessageableChannelViewController {
             return
         }
 
+        if unreadAnchorLastReadMessageId != nil || unreadSeparatorMessageId != nil {
+            return
+        }
+
         // Store current scroll position before fix
         let currentOffset = self.tableView.contentOffset.y
         let wasNearBottom = self.isUserNearBottom()

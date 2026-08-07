@@ -265,7 +265,11 @@ struct MessageContentsView: View {
                                 if !mediaAttachments.isEmpty {
                                     
                                     if mediaAttachments.count == 1 {
-                                        MessageAttachment(attachment: mediaAttachments[0], height: 295)
+                                        MessageAttachment(
+                                            attachment: mediaAttachments[0],
+                                            height: 295,
+                                            usesAdaptiveSingleImageLayout: true
+                                        )
                                             .padding(.top, .padding4)
                                     } else if mediaAttachments.count == 2 {
                                         

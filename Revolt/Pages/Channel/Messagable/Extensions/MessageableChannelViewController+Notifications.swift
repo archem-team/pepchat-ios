@@ -16,7 +16,10 @@ import ULID
 extension MessageableChannelViewController {
     // Update handleNewMessages to only scroll if user is near bottom
     @objc internal func handleNewMessages(_ notification: Notification) {
-        let notifChannel = notification.userInfo?["channelId"] as? String
+        guard canMutateTableView() else { return }
+        let notifChannel =
+            notification.userInfo?["channelId"] as? String
+            ?? (notification.object as? [String: Any])?["channelId"] as? String
 
         // If notification includes channelId, only refresh when the new message is for this channel (e.g. message from another device).
         if let notifChannel = notifChannel, notifChannel != viewModel.channel.id {
@@ -38,16 +41,36 @@ extension MessageableChannelViewController {
             return
         }
 
-        let currentMessageCount = viewModel.messages.count
-        let storedMessageCount = UserDefaults.standard.integer(
-            forKey: "LastMessageCount_\(viewModel.channel.id)")
-
-        guard currentMessageCount > storedMessageCount else {
-            return
-        }
+        let wasNearBottom = isUserNearBottom()
+        let previousMessages = localMessages
+        syncLocalMessagesWithViewState()
+        let previousMessageSet = Set(previousMessages)
+        let newMessageIds = localMessages.filter { !previousMessageSet.contains($0) }
+        guard !newMessageIds.isEmpty else { return }
+        scheduleSlideInAnimationForNewMessages(
+            previousMessages: previousMessages,
+            updatedMessages: localMessages
+        )
 
         UserDefaults.standard.set(
-            currentMessageCount, forKey: "LastMessageCount_\(viewModel.channel.id)")
+            localMessages.count, forKey: "LastMessageCount_\(viewModel.channel.id)")
+
+        let hasMessageFromOtherUser = newMessageIds.contains { messageId in
+            guard let message = viewModel.viewState.messages[messageId] else { return false }
+            return message.author != viewModel.viewState.currentUser?.id
+        }
+        if localMessages != previousMessages {
+            if let localDataSource = dataSource as? LocalMessagesDataSource {
+                localDataSource.updateMessages(localMessages)
+            }
+            tableView.reloadData()
+            updateTableViewBouncing()
+        }
+
+        guard hasMessageFromOtherUser else {
+            scrollToBottom(animated: true)
+            return
+        }
 
         // Check if user has manually scrolled up recently
         let hasManuallyScrolledUp =
@@ -55,14 +78,25 @@ extension MessageableChannelViewController {
             && Date().timeIntervalSince(lastManualScrollUpTime!) < 10.0
 
         // Only auto-scroll if user is already near bottom and not actively reading older messages.
-        if isUserNearBottom() && !hasManuallyScrolledUp {
+        if wasNearBottom && !hasManuallyScrolledUp {
             scrollToBottom(animated: true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self = self, self.canMutateTableView() else { return }
                 self.scrollToBottom(animated: true)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                    guard let self = self, self.canMutateTableView() else { return }
                     self.scrollToBottom(animated: false)
                 }
             }
+        } else {
+            captureUnreadSeparatorForIncomingMessages(previousMessages: previousMessages)
+            let incomingMessageIds = newMessageIds.filter { messageId in
+                guard let message = viewModel.viewState.messages[messageId] else { return false }
+                return message.author != viewModel.viewState.currentUser?.id
+            }
+            liveUnreadMessageIds.formUnion(incomingMessageIds)
+            tableView.reloadData()
+            showNewMessageButton(markUnread: true)
         }
     }
     
@@ -94,7 +128,8 @@ extension MessageableChannelViewController {
         // print("🔍 SEARCH_CLOSED: Channel search closed for channel \(channelId), setting flag to prevent scroll")
 
         // Reset the flag after a short delay to ensure it doesn't interfere with future navigation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            guard let self = self, !self.isViewDisappearing else { return }
             self.isReturningFromSearch = false
         }
     }
@@ -111,7 +146,8 @@ extension MessageableChannelViewController {
         view.layoutIfNeeded()
 
         // Double-check after a short delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self = self, !self.isViewDisappearing else { return }
             self.navigationController?.setNavigationBarHidden(true, animated: false)
         }
     }
@@ -125,15 +161,26 @@ extension MessageableChannelViewController {
 
         // print debug info for socket message
         // print("🔔 SOCKET: Received socket message for channel \(channelId)")
+        let wasNearBottom = isUserNearBottom()
 
         let hasManuallyScrolledUp =
             lastManualScrollUpTime != nil
             && Date().timeIntervalSince(lastManualScrollUpTime!) < 10.0
 
+        let latestMessageId = viewModel.viewState.channelMessages[channelId]?.last
+        let latestMessage = latestMessageId.flatMap { viewModel.viewState.messages[$0] }
+        let isFromCurrentUser = latestMessage?.author == viewModel.viewState.currentUser?.id
+
+        guard !isFromCurrentUser else {
+            scrollToBottom(animated: true)
+            return
+        }
+
         // COMPREHENSIVE TARGET MESSAGE PROTECTION
-        if !isUserNearBottom() || hasManuallyScrolledUp || targetMessageProtectionActive {
+        if !wasNearBottom || hasManuallyScrolledUp || targetMessageProtectionActive {
+            captureUnreadSeparatorForIncomingMessages(previousMessages: localMessages)
             // This is the ONLY place where showNewMessageButton should be called
-            showNewMessageButton()
+            showNewMessageButton(markUnread: true)
             // print("🔔 SOCKET: Showing new message button because user is not at bottom or target highlighted")
         } else {
             // print("🔔 SOCKET: User is at bottom, auto-scrolling instead of showing button")

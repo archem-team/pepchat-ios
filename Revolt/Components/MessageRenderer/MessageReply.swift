@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Types
+import ULID
 
 /// `MessageReplyView` is a SwiftUI view that displays a reply to a message.
 /// It dynamically loads the message if it's not already present in the app's state.
@@ -74,6 +75,47 @@ struct InnerMessageReplyView: View {
     func formatName(message: Message, author: User, member: Member?) -> String {
         (mentions?.contains(message.author) == true ? "@" : "") + (message.masquerade?.name ?? member?.nickname ?? author.display_name ?? author.username)
     }
+
+    func authorBadge(message: Message, author: User) -> (text: String, color: Color)? {
+        if author.bot != nil {
+            return message.masquerade == nil
+                ? (String(localized: "BOT"), .bgPurple10.opacity(0.8))
+                : (String(localized: "BRIDGE"), .bgGray10.opacity(0.85))
+        }
+
+        if isNewAccount(author) {
+            return (String(localized: "NEW"), .bgGreen07.opacity(0.75))
+        }
+
+        return nil
+    }
+
+    private func isNewAccount(_ user: User) -> Bool {
+        guard user.id != String(repeating: "0", count: 26),
+              let ulid = ULID(ulidString: user.id) else {
+            return false
+        }
+
+        let accountAge = Calendar.current.dateComponents([.day], from: ulid.timestamp, to: Date()).day ?? Int.max
+        return accountAge <= 14
+    }
+
+    private func attachmentSummary(_ attachments: [Types.File]) -> String {
+        guard attachments.count == 1, let attachment = attachments.first else {
+            return String(localized: "\(attachments.count) attachments")
+        }
+
+        if attachment.content_type.hasPrefix("image/") {
+            return String(localized: "Photo")
+        }
+        if attachment.content_type.hasPrefix("video/") {
+            return String(localized: "Video")
+        }
+        if attachment.content_type.hasPrefix("audio/") {
+            return String(localized: "Audio")
+        }
+        return attachment.filename
+    }
     
     var body: some View {
         if let message = message {
@@ -100,6 +142,10 @@ struct InnerMessageReplyView: View {
                                     textColor: .textDefaultGray01,
                                     lineLimit: 1)
                         .truncationMode(.tail)
+
+                        if let badge = authorBadge(message: message, author: author) {
+                            MessageBadge(text: badge.text, color: badge.color)
+                        }
                         
                         //.foregroundStyle(member?.displayColour(theme: viewState.theme, server: server!) ?? AnyShapeStyle(viewState.theme.foreground.color))
                         //.font(.caption)
@@ -108,7 +154,7 @@ struct InnerMessageReplyView: View {
                             
                             HStack(spacing: .spacing2){
                                 
-                                PeptideText(text: "Tap to see  attachment",
+                                PeptideText(text: attachmentSummary(message.attachments ?? []),
                                             font: .peptideFootnote,
                                             textColor: .textGray06,
                                             lineLimit: 1)
@@ -171,5 +217,3 @@ struct InnerMessageReplyView: View {
         }
     }
 }
-
-

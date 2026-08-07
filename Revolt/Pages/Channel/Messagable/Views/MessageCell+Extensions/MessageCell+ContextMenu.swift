@@ -62,10 +62,14 @@ extension MessageCell {
            if #available(iOS 15.0, *) {
                if let sheet = optionSheet.sheetPresentationController {
                    sheet.prefersGrabberVisible = true
-                   sheet.detents = [UISheetPresentationController.Detent.medium()]
+                   sheet.detents = [
+                       UISheetPresentationController.Detent.medium(),
+                       UISheetPresentationController.Detent.large()
+                   ]
+                   sheet.selectedDetentIdentifier = .medium
                    sheet.preferredCornerRadius = 16
                    if #available(iOS 16.0, *) {
-                       // Lets sheet detent gestures win over inner scroll expansion (reduces nested-scroll fights).
+                       // Keep the first upward swipe inside the options list instead of expanding the sheet.
                        sheet.prefersScrollingExpandsWhenScrolledToEdge = false
                    }
                }

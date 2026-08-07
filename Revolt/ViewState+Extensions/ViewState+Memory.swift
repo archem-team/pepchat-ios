@@ -19,109 +19,31 @@ import Darwin
 import Network
 
 extension ViewState {
+    /// Max message IDs stored per channel in UserDefaults (full in-memory lists are unchanged).
+    internal static let channelMessagesPersistenceCapPerChannel = 200
+
+    /// Snapshot for persistence — caps ID lists so JSON encode does not allocate multi‑GB buffers.
+    @MainActor
+    internal func channelMessagesPersistenceSnapshot() -> [String: [String]] {
+        let cap = Self.channelMessagesPersistenceCapPerChannel
+        var snapshot: [String: [String]] = [:]
+        snapshot.reserveCapacity(channelMessages.count)
+        for (channelId, ids) in channelMessages {
+            snapshot[channelId] = ids.count <= cap ? ids : Array(ids.suffix(cap))
+        }
+        return snapshot
+    }
+
     @MainActor
     internal func enforceMemoryLimits() {
-        // CRITICAL FIX: Completely disable enforceMemoryLimits to prevent infinite loop and black messages
-        // print("🚫 MEMORY_CLEANUP: enforceMemoryLimits DISABLED to prevent infinite loop and black messages")
-        return
-        
-        // Check current memory usage
-        let currentMemoryMB = getCurrentMemoryUsage()
-        
-        // EMERGENCY MEMORY RESET if over 4GB
-        if currentMemoryMB > 4000 {
-            // print("🚨 EMERGENCY: Memory over 4GB (\(currentMemoryMB)MB)! Performing complete reset!")
-            
-            // Clear everything except current user
-            let currentUserId = currentUser?.id
-            let currentUserObject = currentUser
-            
-            messages.removeAll()
-            channelMessages.removeAll()
-            users.removeAll()
-            channels.removeAll()
-            servers.removeAll()
-            members.removeAll()
-            dms.removeAll()
-            emojis.removeAll()
-            unreads.removeAll()
-            
-            // Restore only current user
-            if let currentUserId = currentUserId, let currentUserObject = currentUserObject {
-                users[currentUserId] = currentUserObject
-                currentUser = currentUserObject
-            }
-            
-            // print("🚨 EMERGENCY RESET COMPLETED! Memory should now be minimal.")
-            return
-        }
-        
-                    // AGGRESSIVE MEMORY CLEANUP if over 2GB (increased threshold for better performance)
-            if currentMemoryMB > 2000 {
-                // print("🚨 AGGRESSIVE CLEANUP: Memory over 2GB (\(currentMemoryMB)MB)!")
-                
-                // VIRTUAL SCROLLING PROTECTION: Skip aggressive cleanup if in DM view
-                if currentSelection == .dms {
-                    // print("🔄 VIRTUAL_DM: Skipping aggressive cleanup - user is in DM view with Virtual Scrolling active")
-                    return
-                }
-                
-                                    // CRITICAL FIX: Keep ALL users to prevent black messages - only clear non-essential data
-                    // print("🚨 EMERGENCY: Keeping ALL users to prevent black messages")
-                    // Don't touch users at all - they are needed for message display
-                
-                // Keep only last 100 messages
-                let sortedMessages = messages.sorted { $0.value.id > $1.value.id }
-                let recentMessages = Array(sortedMessages.prefix(100))
-                messages = Dictionary(uniqueKeysWithValues: recentMessages)
-                
-                // Keep ALL DMs and current channel
-                var channelsToKeep: [String: Channel] = [:]
-                
-                if case .channel(let currentChannelId) = currentChannel {
-                    if let currentChannel = channels[currentChannelId] {
-                        channelsToKeep[currentChannelId] = currentChannel
-                    }
-                }
-                
-                // Keep ALL DM and Group DM channels (don't limit to 10)
-                for channel in channels.values {
-                    switch channel {
-                    case .dm_channel:
-                        channelsToKeep[channel.id] = channel
-                    case .group_dm_channel:
-                        channelsToKeep[channel.id] = channel
-                    default:
-                        break
-                    }
-                }
-                
-                channels = channelsToKeep
-                
-                // Clear all but essential channel messages
-                for (channelId, _) in channelMessages {
-                    if channelsToKeep[channelId] != nil {
-                        channelMessages[channelId] = Array((channelMessages[channelId] ?? []).suffix(10))
-                    } else {
-                        channelMessages.removeValue(forKey: channelId)
-                    }
-                }
-                
-                // Keep more servers in emergency cleanup (increased from 5 to 20)
-                let topServers = Array(servers.prefix(20))
-                servers = OrderedDictionary(uniqueKeysWithValues: topServers)
-                
-                // FIX: Don't clear DM list state during aggressive cleanup
-                if isDmListInitialized {
-                    // Keep DM list state intact, just reinitialize it
-                    reinitializeDmListFromCache()
-                }
-                
-                // print("🚨 AGGRESSIVE CLEANUP COMPLETED!")
-                return
-            }
-        
-        // NORMAL CLEANUP: Remove excess messages
+        if isLoadingOlderMessages { return }
+
+        let activeChannelId: String? = {
+            if case .channel(let id) = currentChannel { return id }
+            return nil
+        }()
+
+        // Remove excess messages from the global store
         if messages.count > maxMessagesInMemory {
             // print("🧠 MEMORY: Enforcing message limit. Current: \(messages.count), Max: \(maxMessagesInMemory)")
             
@@ -152,44 +74,33 @@ extension ViewState {
             // print("🧠 MEMORY: Removed \(messagesToRemove) old messages")
         }
         
-        // AGGRESSIVE CHANNEL MESSAGE CLEANUP
+        // Trim per-channel ID lists (keep the channel the user is viewing intact)
         for (channelId, messageIds) in channelMessages {
-            if messageIds.count > maxChannelMessages {
-                let trimmedIds = Array(messageIds.suffix(maxChannelMessages))
-                channelMessages[channelId] = trimmedIds
-                // print("🧠 MEMORY: Trimmed channel \(channelId) messages from \(messageIds.count) to \(trimmedIds.count)")
-            }
+            guard channelId != activeChannelId, messageIds.count > maxChannelMessages else { continue }
+            channelMessages[channelId] = Array(messageIds.suffix(maxChannelMessages))
         }
+
+        cleanupOrphanedMessages()
     }
 
-    // DISABLED: Smart message cleanup based on current channel and loading direction
     @MainActor
     private func smartMessageCleanup() {
-        // CRITICAL FIX: Disable message cleanup to prevent black messages
-        // print("🚫 MEMORY_CLEANUP: smartMessageCleanup DISABLED to prevent black messages")
-        return
+        enforceMemoryLimits()
     }
-    
-    // Smart user cleanup to prevent excessive memory usage - DISABLED to prevent black messages
+
     @MainActor
     internal func smartUserCleanup() {
-        // CRITICAL FIX: Completely disable user cleanup to prevent black messages
-        // print("🧠 MEMORY: User cleanup DISABLED to prevent black messages. Current users: \(users.count)")
-        
-        // Only log warning if we have too many users, but don't clean them up
-        if users.count > maxUsersInMemory {
-            // print("⚠️ MEMORY WARNING: \(users.count) users exceed limit of \(maxUsersInMemory), but cleanup is disabled")
-        }
-        
-        return // Exit early, no cleanup
+        guard users.count > maxUsersInMemory, users.count <= 2000 else { return }
+        let excluding: String = {
+            if case .channel(let id) = currentChannel { return id }
+            return ""
+        }()
+        cleanupUnusedUsersInstant(excludingChannelId: excluding)
     }
-    
-    
+
     @MainActor
     private func cleanupMemory() {
-        // CRITICAL FIX: Completely disable cleanupMemory to prevent infinite loop and black messages
-        // print("🚫 MEMORY: cleanupMemory DISABLED to prevent infinite loop and black messages")
-        return
+        enforceMemoryLimits()
     }
     
     // Smart channel cleanup to prevent excessive memory usage
@@ -367,12 +278,17 @@ extension ViewState {
         
         // print("🚀 PRELOAD: Starting preload for \(channelsToPreload.count) channels")
         
-        // Preload channels in parallel for better performance
-        await withTaskGroup(of: Void.self) { group in
-            for channelId in channelsToPreload {
-                group.addTask {
-                    await self.preloadChannel(channelId: channelId)
-        }
+        // Preload at most two channels at a time to avoid memory/network spikes
+        let channelList = Array(channelsToPreload)
+        for chunkStart in stride(from: 0, to: channelList.count, by: 2) {
+            let chunkEnd = min(chunkStart + 2, channelList.count)
+            let chunk = Array(channelList[chunkStart..<chunkEnd])
+            await withTaskGroup(of: Void.self) { group in
+                for channelId in chunk {
+                    group.addTask {
+                        await self.preloadChannel(channelId: channelId)
+                    }
+                }
             }
         }
         

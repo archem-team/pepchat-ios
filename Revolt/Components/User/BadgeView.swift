@@ -8,6 +8,15 @@ import SwiftUI
 import Types
 import Kingfisher
 
+private enum UserBadgeImageCache {
+    static let cache: ImageCache = {
+        let cache = ImageCache(name: "user-badges")
+        cache.memoryStorage.config.expiration = .days(30)
+        cache.diskStorage.config.expiration = .days(30)
+        return cache
+    }()
+}
+
 /// A view that displays a single badge
 struct BadgeView: View {
     let badge: Badges
@@ -23,6 +32,8 @@ struct BadgeView: View {
         
         if let url = URL(string: urlString) {
             KFImage(url)
+                .targetCache(UserBadgeImageCache.cache)
+                .cacheOriginalImage()
                 .placeholder {
                     // Show placeholder while loading
                     RoundedRectangle(cornerRadius: 4)
@@ -35,9 +46,6 @@ struct BadgeView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
-                .onAppear {
-                    print("Loading badge from URL: \(urlString)")
-                }
         } else {
             // Fallback to local image if URL creation fails
             Image(badge.getImage())

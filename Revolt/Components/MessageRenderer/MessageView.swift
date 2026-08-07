@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Types
+import ULID
 
 struct MessageView: View {
     
@@ -94,6 +95,30 @@ struct MessageView: View {
         }
             
             /*.foregroundStyle(viewModel.member?.displayColour(theme: viewState.theme, server: viewModel.server!) ?? AnyShapeStyle(viewState.theme.foreground.color))*/
+    }
+
+    private var authorBadge: (text: String, color: Color)? {
+        if viewModel.author.bot != nil {
+            return viewModel.message.masquerade == nil
+                ? (String(localized: "BOT"), .bgPurple10.opacity(0.8))
+                : (String(localized: "BRIDGE"), .bgGray10.opacity(0.85))
+        }
+
+        if isNewAccount(viewModel.author) {
+            return (String(localized: "NEW"), .bgGreen07.opacity(0.75))
+        }
+
+        return nil
+    }
+
+    private func isNewAccount(_ user: User) -> Bool {
+        guard user.id != String(repeating: "0", count: 26),
+              let ulid = ULID(ulidString: user.id) else {
+            return false
+        }
+
+        let accountAge = Calendar.current.dateComponents([.day], from: ulid.timestamp, to: Date()).day ?? Int.max
+        return accountAge <= 14
     }
     
     @State private var replayParentSize : CGSize = .zero
@@ -219,8 +244,8 @@ struct MessageView: View {
                                 
                                 nameView
                                 
-                                if viewModel.author.bot != nil {
-                                    MessageBadge(text: String(localized: "BOT"), color: .bgPurple10)
+                                if let authorBadge {
+                                    MessageBadge(text: authorBadge.text, color: authorBadge.color)
                                 }
                             }
                             
@@ -243,16 +268,15 @@ struct MessageView: View {
                                     
                                     HStack(spacing: .spacing4){
                                         nameView
+
+                                        if let authorBadge {
+                                            MessageBadge(text: authorBadge.text, color: authorBadge.color)
+                                        }
                                         
                                         Text(formattedMessageDate(from: createdAt(id: viewModel.message.id)))
                                             .font(.peptideFootnoteFont)
-                                            .foregroundStyle(.textGray06)
+                                            .foregroundStyle(.textGray04)
                                             .lineLimit(1)
-                                    }
-                                    
-                                    //TODO:
-                                    if viewModel.author.bot != nil {
-                                        MessageBadge(text: String(localized: "BOT"), color: .bgPurple10)
                                     }
                                     
                                     //TODO:

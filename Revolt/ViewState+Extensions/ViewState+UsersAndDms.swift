@@ -337,64 +337,153 @@ extension ViewState {
     
     internal func processMembers(_ eventMembers: [Member]) {
         for member in eventMembers {
-            members[member.id.server]?[member.id.user] = member
+            members[member.id.server, default: [:]][member.id.user] = member
         }
     }
     
-    internal func processDMs(channels: [Channel]) {
-        // LAZY LOADING: Store all DM IDs but only load the first batch
-        let dmChannels: [Channel] = channels.filter {
-            switch $0 {
-            case .dm_channel:
-                return true // Include both active and inactive DMs
-            case .group_dm_channel:
-                return true
-            default:
-                return false
+    /// Keeps the newer ULID when merging Ready snapshots with in-memory channel state.
+    internal func mergedLastMessageId(existing: String?, incoming: String?) -> String? {
+        switch (existing, incoming) {
+        case let (a?, b?):
+            return a > b ? a : b
+        case (nil, let b?):
+            return b
+        case (let a?, nil):
+            return a
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    internal func isDmOrGroupDmChannel(_ channel: Channel) -> Bool {
+        switch channel {
+        case .dm_channel, .group_dm_channel:
+            return true
+        default:
+            return false
+        }
+    }
+
+    internal func isDmOrGroupDmChannelId(_ channelId: String) -> Bool {
+        guard let channel = channels[channelId] else { return false }
+        return isDmOrGroupDmChannel(channel)
+    }
+
+    /// Merges Ready channel data without discarding a newer local `last_message_id`.
+    internal func mergeChannelFromReady(existing: Channel, incoming: Channel) -> Channel {
+        let mergedLast = mergedLastMessageId(
+            existing: existing.last_message_id,
+            incoming: incoming.last_message_id
+        )
+        switch incoming {
+        case .dm_channel(var c):
+            c.last_message_id = mergedLast
+            return .dm_channel(c)
+        case .group_dm_channel(var c):
+            c.last_message_id = mergedLast
+            return .group_dm_channel(c)
+        default:
+            return incoming
+        }
+    }
+
+    internal func dmActivityMessageId(for channelId: String) -> String {
+        channels[channelId]?.last_message_id
+            ?? channelMessages[channelId]?.last
+            ?? ""
+    }
+
+    /// DM order matches chat clients: newest activity first, using the channel's
+    /// latest message regardless of whether the current user sent or received it.
+    @MainActor
+    internal func buildServerOrderedDmIds(from incomingDmChannels: [Channel]) -> [String] {
+        var ordered: [String] = []
+        var seen = Set<String>()
+        var readyIndexById: [String: Int] = [:]
+        for channel in incomingDmChannels where isDmOrGroupDmChannel(channel) {
+            if seen.insert(channel.id).inserted {
+                ordered.append(channel.id)
+                readyIndexById[channel.id] = readyIndexById.count
             }
         }
-        
-        // print("🚀 VIEWSTATE: Processing \(dmChannels.count) DM channels with lazy loading")
-        
-        let originalOrder = Dictionary(uniqueKeysWithValues: dmChannels.enumerated().map { ($0.element.id, $0.offset) })
 
-        // Sort all DM channels. When two channels have the same/missing last_message_id,
-        // keep the Ready payload order so the tail of the list matches other clients.
-        let sortedDmChannels = dmChannels.sorted { first, second in
-            let firstLast = first.last_message_id
-            let secondLast = second.last_message_id
-            
-            let firstUnreadLast = unreads[first.id]?.last_id
-            let secondUnreadLast = unreads[second.id]?.last_id
-            
-            let firstIsUnread = firstLast != nil && firstLast != firstUnreadLast
-            let secondIsUnread = secondLast != nil && secondLast != secondUnreadLast
-            
-            // Show unread DMs first
-            if firstIsUnread && !secondIsUnread {
-                return true
-            } else if !firstIsUnread && secondIsUnread {
-                return false
-            } else if (firstLast ?? "") != (secondLast ?? "") {
-                return (firstLast ?? "") > (secondLast ?? "")
-            }
-
-            return (originalOrder[first.id] ?? Int.max) < (originalOrder[second.id] ?? Int.max)
+        var orphans: [String] = []
+        for id in allDmChannelIds where !seen.contains(id) && isDmOrGroupDmChannelId(id) {
+            orphans.append(id)
+            seen.insert(id)
         }
-        
-        // Store all DM IDs in order
-        allDmChannelIds = sortedDmChannels.map { $0.id }
-        
-        // Load users for visible DMs after we have the sorted list
+        for id in channels.keys where !seen.contains(id) && isDmOrGroupDmChannelId(id) {
+            orphans.append(id)
+        }
+
+        let previousIndexById = Dictionary(uniqueKeysWithValues: allDmChannelIds.enumerated().map { ($1, $0) })
+        ordered.append(contentsOf: orphans)
+        ordered.sort { lhs, rhs in
+            let l = dmActivityMessageId(for: lhs)
+            let r = dmActivityMessageId(for: rhs)
+            if l != r { return l > r }
+            let lReadyIndex = readyIndexById[lhs] ?? previousIndexById[lhs] ?? Int.max
+            let rReadyIndex = readyIndexById[rhs] ?? previousIndexById[rhs] ?? Int.max
+            if lReadyIndex != rReadyIndex { return lReadyIndex < rReadyIndex }
+            return lhs < rhs
+        }
+        return ordered
+    }
+
+    /// Re-sort DMs by latest activity on each channel (no unread-first, no active-chat bump).
+    @MainActor
+    internal func applyServerDmListOrder() {
+        guard !allDmChannelIds.isEmpty else { return }
+        let previousIndex = Dictionary(uniqueKeysWithValues: allDmChannelIds.enumerated().map { ($1, $0) })
+        allDmChannelIds.sort { lhs, rhs in
+            let l = dmActivityMessageId(for: lhs)
+            let r = dmActivityMessageId(for: rhs)
+            if l != r { return l > r }
+            return (previousIndex[lhs] ?? Int.max) < (previousIndex[rhs] ?? Int.max)
+        }
+        if !loadedDmBatches.isEmpty {
+            rebuildVisibleDmsFromLoadedBatches()
+        }
+    }
+
+    @MainActor
+    private func rebuildVisibleDmsFromLoadedBatches() {
+        guard !loadedDmBatches.isEmpty else {
+            loadDmBatch(0)
+            return
+        }
+
+        var rebuiltDms: [Channel] = []
+        var addedChannelIds = Set<String>()
+        for loadedBatch in loadedDmBatches.sorted() {
+            let batchStart = loadedBatch * dmBatchSize
+            let batchEnd = min(batchStart + dmBatchSize, allDmChannelIds.count)
+            for i in batchStart..<batchEnd {
+                let channelId = allDmChannelIds[i]
+                guard !addedChannelIds.contains(channelId),
+                      let channel = channels[channelId]
+                else { continue }
+                rebuiltDms.append(channel)
+                addedChannelIds.insert(channelId)
+            }
+        }
+        dms = rebuiltDms
+    }
+
+    internal func processDMs(channels incomingDmChannels: [Channel]) {
+        let wasInitialized = isDmListInitialized
+        allDmChannelIds = buildServerOrderedDmIds(from: incomingDmChannels)
         loadUsersForFirstDmBatch()
-        
-        // Simple lazy loading: start fresh
-        loadedDmBatches.removeAll()
-        dms.removeAll() // Clear existing DMs
-        loadDmBatch(0) // Load first batch
-        
+
+        if wasInitialized && !loadedDmBatches.isEmpty {
+            rebuildVisibleDmsFromLoadedBatches()
+        } else {
+            loadedDmBatches.removeAll()
+            dms.removeAll()
+            loadDmBatch(0)
+        }
+
         isDmListInitialized = true
-        // print("🚀 VIEWSTATE: Stored \(allDmChannelIds.count) DM IDs, loaded first batch")
     }
     
     // Load a specific batch of DMs

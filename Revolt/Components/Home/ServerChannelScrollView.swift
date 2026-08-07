@@ -411,7 +411,7 @@ struct ServerChannelScrollView: View {
                                             size: .size16,
                                             color: .iconGray07)
                                 
-                                PeptideText(textVerbatim: "\(self.viewState.serverMembersCount ?? "---") members",
+                                PeptideText(textVerbatim: self.viewState.serverMembersLabel(for: server.id),
                                             font: .peptideBody4,
                                             textColor: .textGray07,
                                             lineLimit: 1)
@@ -529,8 +529,16 @@ struct ServerChannelScrollView: View {
                                                     viewState.path.append(NavigationDestination.server_overview_settings(serverId))
                                                 case .channels:
                                                     viewState.path.append(NavigationDestination.server_channels(serverId))
-                                                default:
-                                                    debugPrint("")
+                                                case .roles:
+                                                    viewState.path.append(NavigationDestination.server_role_setting(serverId))
+                                                case .emojis:
+                                                    viewState.path.append(NavigationDestination.server_emoji_settings(serverId))
+                                                case .members:
+                                                    viewState.path.append(NavigationDestination.server_members_view(serverId))
+                                                case .invite:
+                                                    viewState.path.append(NavigationDestination.server_invites(serverId))
+                                                case .banned:
+                                                    viewState.path.append(NavigationDestination.server_banned_users(serverId))
                                             }
                                         }
                                     })

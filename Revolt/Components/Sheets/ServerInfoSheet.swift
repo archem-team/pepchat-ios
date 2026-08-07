@@ -33,8 +33,6 @@ struct ServerInfoSheet: View {
     @State private var isPresentedNotificationSetting : Bool = false
     @State private var isPresentedServerDelete: Bool = false
     @State private var isPresentedIdentitSheet: Bool = false
-    @State private var serverMembersCount : String? = nil
-    
     var onNavigation : (ServerInfoRouteType, String) -> Void
     
     var serverPermissions: Permissions{
@@ -74,7 +72,7 @@ struct ServerInfoSheet: View {
             .background(.bgDefaultPurple13)
         }
         .task {
-            await getMembersCount()
+            await viewState.getServerMembers(target: server.id)
         }
         .sheet(isPresented: $isPresentedInviteSheet) {
             if let inviteSheetUrl {
@@ -118,22 +116,6 @@ struct ServerInfoSheet: View {
         
     }
     
-    private func getMembersCount() async {
-        
-        Task{
-            
-            let serverMembers = await self.viewState.http.fetchServerMembers(target: server.id)
-            switch serverMembers {
-            case .success(let success):
-                serverMembersCount = success.members.count.formattedWithSeparator()
-            case .failure(_):
-                serverMembersCount = nil
-            }
-            
-        }
-        
-    }
-
     // MARK: - Header View
     private var headerView: some View {
         ZStack(alignment: .bottomLeading) {
@@ -202,7 +184,7 @@ struct ServerInfoSheet: View {
                 PeptideIcon(iconName: .peptideTeamUsers,
                             size: .size16,
                             color: .iconGray07)
-                PeptideText(textVerbatim: "\(serverMembersCount ?? "---") members",
+                PeptideText(textVerbatim: viewState.serverMembersLabel(for: server.id),
                             font: .peptideBody4,
                             textColor: .textGray07,
                             lineLimit: 1)
@@ -306,8 +288,7 @@ struct ServerInfoSheet: View {
                 
                 if serverPermissions.contains(.manageServer) {
                     Button {
-                        dismiss()
-                        onNavigation(.overview,server.id)
+                        navigate(.overview)
                     } label: {
                         PeptideActionButton(icon: .peptideInfo2, title: "Overview", hasArrow: true)
                     }
@@ -325,8 +306,7 @@ struct ServerInfoSheet: View {
                 if serverPermissions.contains(.manageChannel){
                     
                     Button {
-                        dismiss()
-                        onNavigation(.channels,server.id)
+                        navigate(.channels)
                     } label: {
                         PeptideActionButton(icon: .peptideList, title: "Channels", hasArrow: true)
                     }
@@ -342,8 +322,7 @@ struct ServerInfoSheet: View {
                 if serverPermissions.contains(.manageRole){
                     
                     Button {
-                        viewState.path.append(NavigationDestination.server_role_setting(server.id))
-                        dismiss()
+                        navigate(.roles)
                     } label: {
                         PeptideActionButton(icon: .peptideRoleIdCard, title: "Roles", hasArrow: true)
                     }
@@ -364,8 +343,7 @@ struct ServerInfoSheet: View {
             section(title: "Customization") {
                 
                 Button {
-                    dismiss()
-                    onNavigation(.emojis, server.id)
+                    navigate(.emojis)
                 } label: {
                     PeptideActionButton(icon: .peptideSmile, title: "Emojis", hasArrow: true)
                 }
@@ -377,10 +355,7 @@ struct ServerInfoSheet: View {
     private var userManagementSection: some View {
         section(title: "User Management") {
             Button {
-                dismiss()
-                onNavigation(.members, server.id)
-                print("Members button is tapped 🎉🎉🎉🎉🎉")
-                viewState.path.append(NavigationDestination.server_members_view(server.id))
+                navigate(.members)
             } label: {
                 PeptideActionButton(icon: .peptideTeamUsers, title: "Members", hasArrow: true)
             }
@@ -390,10 +365,7 @@ struct ServerInfoSheet: View {
                 PeptideDivider().padding(.leading, .padding48)
                 
                 Button {
-                    dismiss()
-                    onNavigation(.invite, server.id)
-                    print("Invites button is tapped 🎉🎉🎉🎉🎉")
-                    viewState.path.append(NavigationDestination.server_invites(server.id))
+                    navigate(.invite)
                 } label: {
                     PeptideActionButton(icon: .peptideMail, title: "Invites", hasArrow: true)
                 }
@@ -404,8 +376,7 @@ struct ServerInfoSheet: View {
                 PeptideDivider().padding(.leading, .padding48)
                 
                 Button {
-                    dismiss()
-                    onNavigation(.banned, server.id)
+                    navigate(.banned)
                 } label: {
                     PeptideActionButton(icon: .peptideCancelFriendRequest, title: "Banned Users", hasArrow: true)
                 }
@@ -434,6 +405,12 @@ struct ServerInfoSheet: View {
     }
 
     // MARK: - Helpers
+    private func navigate(_ route: ServerInfoRouteType) {
+        isPresentedServerSheet = false
+        dismiss()
+        onNavigation(route, server.id)
+    }
+
     private func section(title: String, @ViewBuilder content: () -> some View) -> some View {
         Group {
             PeptideText(text: title, font: .peptideHeadline)

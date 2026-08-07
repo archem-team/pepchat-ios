@@ -252,9 +252,10 @@ extension MessageableChannelViewController {
 
         let startTime = CFAbsoluteTimeGetCurrent()
 
-        // 1. IMMEDIATE: Clear table view synchronously
-        self.tableView.dataSource = nil
-        self.tableView.delegate = nil
+        // 1. Release table-owned message references. Late UI callbacks are already
+        // blocked by isViewDisappearing/canMutateTableView(), so teardown can be
+        // aggressive without allowing invalid batch updates.
+        releaseTableResourcesForDisappearingView()
 
         // 2. Defer ViewState cleanup to next run loop to avoid blocking teardown (watchdog/OOM on back)
         let state = viewModel.viewState
@@ -323,6 +324,7 @@ extension MessageableChannelViewController {
 
     /// Reloads the table view while maintaining the user's scroll position using message IDs as anchors
     func reloadTableViewMaintainingScrollPosition(messagesForDataSource: [String]) {
+        guard canMutateTableView() else { return }
         guard let visibleIndexPaths = tableView.indexPathsForVisibleRows,
             !visibleIndexPaths.isEmpty
         else {
