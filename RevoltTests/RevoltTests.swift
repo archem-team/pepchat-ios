@@ -97,6 +97,56 @@ final class RevoltTests: XCTestCase {
         XCTAssertEqual(ranges.map { nsText.substring(with: $0) }, ["@everyone", "@everyone"])
     }
 
+    func testSingleImagePreviewPreservesAspectRatioWithinCaps() {
+        let portrait = ImageAttachmentPreviewLayout.singleSize(
+            sourceSize: CGSize(width: 1080, height: 1440),
+            availableWidth: 311
+        )
+        XCTAssertEqual(portrait.width, 240, accuracy: 0.01)
+        XCTAssertEqual(portrait.height, 320, accuracy: 0.01)
+
+        let landscape = ImageAttachmentPreviewLayout.singleSize(
+            sourceSize: CGSize(width: 1600, height: 900),
+            availableWidth: 311
+        )
+        XCTAssertEqual(landscape.width, 280, accuracy: 0.01)
+        XCTAssertEqual(landscape.height, 157.5, accuracy: 0.01)
+
+        let veryTall = ImageAttachmentPreviewLayout.singleSize(
+            sourceSize: CGSize(width: 1000, height: 4000),
+            availableWidth: 311
+        )
+        XCTAssertEqual(veryTall.width, 80, accuracy: 0.01)
+        XCTAssertEqual(veryTall.height, 320, accuracy: 0.01)
+    }
+
+    func testImagePreviewLayoutHandlesNarrowWidthsAndMissingMetadata() {
+        let narrow = ImageAttachmentPreviewLayout.singleSize(
+            sourceSize: CGSize(width: 1200, height: 1600),
+            availableWidth: 200
+        )
+        XCTAssertEqual(narrow.width, 200, accuracy: 0.01)
+        XCTAssertEqual(narrow.height, 266.67, accuracy: 0.01)
+
+        let fallback = ImageAttachmentPreviewLayout.singleSize(
+            sourceSize: nil,
+            availableWidth: 311
+        )
+        XCTAssertEqual(fallback.width, 280, accuracy: 0.01)
+        XCTAssertEqual(fallback.height, 210, accuracy: 0.01)
+    }
+
+    func testGalleryPreviewUsesSquareTilesAndStableRowHeight() {
+        let tile = ImageAttachmentPreviewLayout.galleryTileSize(availableWidth: 311)
+        XCTAssertEqual(tile.width, 150, accuracy: 0.01)
+        XCTAssertEqual(tile.height, 150, accuracy: 0.01)
+        XCTAssertEqual(
+            ImageAttachmentPreviewLayout.galleryHeight(imageCount: 5, tileHeight: tile.height),
+            466,
+            accuracy: 0.01
+        )
+    }
+
     func testPerformanceExample() throws {
         // This is an example of a performance test case.
         self.measure {

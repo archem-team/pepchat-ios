@@ -75,6 +75,7 @@ struct MessageAttachment: View {
     @State var isPresented: Bool = false
     var attachment: File  // The file attachment to be displayed
     var height : CGFloat = 0
+    var usesAdaptiveSingleImageLayout = false
     
     
     var body: some View {
@@ -82,12 +83,29 @@ struct MessageAttachment: View {
         
         Group {
             switch attachment.metadata {
-            case .image(_):  // Handle image attachments
-                
-                
-                /*Button {
-                    self.isPresented.toggle()
-                } label: {*/
+            case .image(let metadata):  // Handle image attachments
+                if usesAdaptiveSingleImageLayout {
+                    let availableWidth = max(1, UIScreen.main.bounds.width - 82)
+                    let previewSize = ImageAttachmentPreviewLayout.singleSize(
+                        sourceSize: CGSize(
+                            width: CGFloat(metadata.width),
+                            height: CGFloat(metadata.height)
+                        ),
+                        availableWidth: availableWidth
+                    )
+
+                    LazyImage(
+                        source: .file(attachment),
+                        clipTo: RoundedRectangle(cornerRadius: .radiusXSmall),
+                        contentMode: .fit
+                    )
+                    .frame(width: previewSize.width, height: previewSize.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onTapGesture {
+                        self.isPresented.toggle()
+                    }
+                } else {
                     Color.clear
                         .overlay {
                             LazyImage(source: .file(attachment),
@@ -103,12 +121,7 @@ struct MessageAttachment: View {
                         .onTapGesture{
                             self.isPresented.toggle()
                         }
-               // }
-                
-                
-                
-                
-                
+                }
             case .video(_):  // Handle video attachments (same UIKit player as chat)
                 let videoURL = viewState.formatUrl(fromId: attachment.id, withTag: "attachments")
                 ChannelVideoAttachmentPlayerView(
@@ -221,9 +234,6 @@ struct ZoomableMessageAttachment : View {
                         .aspectRatio(contentMode: .fit)  // Maintain aspect ratio
                         .frame(maxHeight: 295)  // Set a maximum height for the image
                     }
-                    
-                    
-                   
                     
                     
                 case .video(_):  // Handle video attachments (same UIKit player as chat)
