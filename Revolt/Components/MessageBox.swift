@@ -877,7 +877,7 @@ struct UploadButton: View {
             .background(Circle().fill(Color.bgGray11))
         }
         // Presents a photo picker when the user taps the button
-        .photosPicker(isPresented: $showingSelectPhoto, selection: $selectedPhotoItems)
+        .photosPicker(isPresented: $showingSelectPhoto, selection: $selectedPhotoItems, maxSelectionCount: 5)
         .photosPickerStyle(.presentation) // Style for the photos picker
         
         // File importer for selecting files from the device

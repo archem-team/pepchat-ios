@@ -627,7 +627,7 @@ class MessageInputHandler: NSObject, UIDocumentPickerDelegate, UIImagePickerCont
     private func presentPhotoPicker() {
         guard let viewController = viewController else { return }
         var config = PHPickerConfiguration()
-        config.selectionLimit = 10 // You can adjust the max number of images/videos
+        config.selectionLimit = 5
         config.filter = .any(of: [.images, .videos]) // Allow both images and videos
         let picker = PHPickerViewController(configuration: config)
         picker.delegate = self

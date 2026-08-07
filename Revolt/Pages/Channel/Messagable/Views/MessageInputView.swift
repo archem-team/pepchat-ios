@@ -226,7 +226,7 @@ class PendingAttachmentsManager: ObservableObject {
     @Published var pendingAttachments: [PendingAttachment] = []
     
     // Maximum number of attachments allowed
-    private let maxAttachments = 10
+    private let maxAttachments = 5
     
     // Maximum file size (8MB)
     private let maxFileSize = 8 * 1024 * 1024
@@ -682,6 +682,7 @@ class MessageInputView: UIView {
             }
         } else {
             // Hide editing indicator when message is nil
+            hideMentionViewImmediately()
             editingIndicator.isHidden = true
             textView.text = nil
             updateTextViewHeight()
@@ -1054,6 +1055,8 @@ class MessageInputView: UIView {
         // Must have at least one non-whitespace character or attachments
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasAttachments else { return }
 
+        hideMentionViewImmediately()
+
         let canMentionEveryone = MentionInputUtilities.canMentionEveryone(
             in: currentChannel,
             server: currentServer,
@@ -1091,7 +1094,8 @@ class MessageInputView: UIView {
     }
 
     private func performSend(text: String, hasAttachments: Bool) {
-        
+        hideMentionViewImmediately()
+
         if let editingMessage = editingMessage {
             // Handle edit message (attachments not supported for editing)
             delegate?.messageInputView(self, didEditMessage: editingMessage, newText: text)
@@ -1151,6 +1155,7 @@ class MessageInputView: UIView {
     
     @objc private func cancelEditButtonTapped() {
         // Reset editing state
+        hideMentionViewImmediately()
         setEditingMessage(nil)
         textView.text = nil
         updateSendButtonState()
