@@ -47,6 +47,45 @@ struct ImageAttachmentPreviewLayout {
         return CGFloat(rowCount) * tileHeight
             + CGFloat(max(0, rowCount - 1)) * gallerySpacing
     }
+
+    static func galleryFrame(index: Int, imageCount: Int, tileSize: CGSize) -> CGRect {
+        guard index >= 0, index < imageCount else { return .zero }
+
+        if imageCount == 3 {
+            switch index {
+            case 0:
+                return CGRect(
+                    x: 0,
+                    y: 0,
+                    width: tileSize.width,
+                    height: tileSize.height * 2 + gallerySpacing
+                )
+            case 1:
+                return CGRect(
+                    x: tileSize.width + gallerySpacing,
+                    y: 0,
+                    width: tileSize.width,
+                    height: tileSize.height
+                )
+            default:
+                return CGRect(
+                    x: tileSize.width + gallerySpacing,
+                    y: tileSize.height + gallerySpacing,
+                    width: tileSize.width,
+                    height: tileSize.height
+                )
+            }
+        }
+
+        let column = index % 2
+        let row = index / 2
+        return CGRect(
+            x: CGFloat(column) * (tileSize.width + gallerySpacing),
+            y: CGFloat(row) * (tileSize.height + gallerySpacing),
+            width: tileSize.width,
+            height: tileSize.height
+        )
+    }
 }
 
 extension MessageCell {
@@ -140,8 +179,6 @@ extension MessageCell {
         // // print("🖼️ Setting up image attachments constraints - spacing: 20px")
         
         // Calculate available width first - needed for constraints
-        let maxImagesPerRow = 2
-        let imageSpacing = ImageAttachmentPreviewLayout.gallerySpacing
         // Calculate available width based on actual layout constraints
         // Account for: avatar leading (16) + avatar width (40) + avatar spacing (10) + content trailing margin (16)
         let totalMargins: CGFloat = 16 + 40 + 10 + 16 // Total: 82px
@@ -192,10 +229,6 @@ extension MessageCell {
         containerHeightConstraint.priority = UILayoutPriority.defaultHigh
         containerHeightConstraint.isActive = true
         
-        var currentX: CGFloat = 0
-        var currentY: CGFloat = 0
-        var imagesInCurrentRow = 0
-        
         for (index, attachment) in attachments.enumerated() {
             let attachmentId = attachment.id
             // Create image view for this attachment
@@ -216,28 +249,26 @@ extension MessageCell {
             imageAttachmentsContainer!.addSubview(imageView)
             imageAttachmentViews.append(imageView)
             
-            // Calculate position
-            let previewSize = isGallery ? galleryTileSize : singlePreviewSize
-            if imagesInCurrentRow >= maxImagesPerRow || (currentX + previewSize.width > availableWidth) {
-                // Move to next row if we've hit the max images per row OR if the next image would overflow
-                currentX = 0
-                currentY += galleryTileSize.height + imageSpacing
-                imagesInCurrentRow = 0
-            }
-
-            let remainingWidth = availableWidth - currentX
-            let actualImageWidth = min(previewSize.width, remainingWidth)
+            let previewFrame = isGallery
+                ? ImageAttachmentPreviewLayout.galleryFrame(
+                    index: index,
+                    imageCount: attachments.count,
+                    tileSize: galleryTileSize
+                )
+                : CGRect(origin: .zero, size: singlePreviewSize)
+            let remainingWidth = availableWidth - previewFrame.minX
+            let actualImageWidth = min(previewFrame.width, remainingWidth)
             
             // Create width constraint with lower priority to prevent conflicts
             let widthConstraint = imageView.widthAnchor.constraint(equalToConstant: actualImageWidth)
             widthConstraint.priority = UILayoutPriority(999) // High but not required
             let imageHeightConstraint = imageView.heightAnchor.constraint(
-                equalToConstant: previewSize.height
+                equalToConstant: previewFrame.height
             )
             
             NSLayoutConstraint.activate([
-                imageView.leadingAnchor.constraint(equalTo: imageAttachmentsContainer!.leadingAnchor, constant: currentX),
-                imageView.topAnchor.constraint(equalTo: imageAttachmentsContainer!.topAnchor, constant: currentY),
+                imageView.leadingAnchor.constraint(equalTo: imageAttachmentsContainer!.leadingAnchor, constant: previewFrame.minX),
+                imageView.topAnchor.constraint(equalTo: imageAttachmentsContainer!.topAnchor, constant: previewFrame.minY),
                 widthConstraint,
                 imageHeightConstraint,
                 // Add trailing constraint to ensure image doesn't exceed container bounds - this is the critical constraint
@@ -266,7 +297,7 @@ extension MessageCell {
             } else {
                 // For real messages, load from server using Kingfisher
                 if let url = URL(string: viewState.formatUrl(fromId: attachmentId, withTag: "attachments")) {
-                    let downsampleSize = previewSize
+                    let downsampleSize = previewFrame.size
                     imageView.kf.setImage(
                         with: url,
                         placeholder: UIImage(systemName: "photo"),
@@ -318,9 +349,6 @@ extension MessageCell {
                 }
             }
             
-            // Update position for next image
-            currentX += actualImageWidth + imageSpacing
-            imagesInCurrentRow += 1
         }
     }
 

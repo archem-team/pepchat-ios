@@ -147,6 +147,33 @@ final class RevoltTests: XCTestCase {
         )
     }
 
+    func testThreeImageGalleryUsesLargeLeadingTileAndStackedTrailingTiles() {
+        let tile = CGSize(width: 150, height: 150)
+        let frames = (0..<3).map {
+            ImageAttachmentPreviewLayout.galleryFrame(
+                index: $0,
+                imageCount: 3,
+                tileSize: tile
+            )
+        }
+
+        XCTAssertEqual(frames[0], CGRect(x: 0, y: 0, width: 150, height: 308))
+        XCTAssertEqual(frames[1], CGRect(x: 158, y: 0, width: 150, height: 150))
+        XCTAssertEqual(frames[2], CGRect(x: 158, y: 158, width: 150, height: 150))
+    }
+
+    func testEvenImageGalleryKeepsTwoColumnGrid() {
+        let tile = CGSize(width: 150, height: 150)
+        XCTAssertEqual(
+            ImageAttachmentPreviewLayout.galleryFrame(
+                index: 3,
+                imageCount: 4,
+                tileSize: tile
+            ),
+            CGRect(x: 158, y: 158, width: 150, height: 150)
+        )
+    }
+
     func testPerformanceExample() throws {
         // This is an example of a performance test case.
         self.measure {
