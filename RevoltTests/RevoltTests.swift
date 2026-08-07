@@ -211,6 +211,49 @@ final class RevoltTests: XCTestCase {
         )
     }
 
+    func testFullScreenGalleryNavigationMovesOneImageAndStopsAtBounds() {
+        XCTAssertEqual(
+            FullScreenImageGalleryNavigation.destinationIndex(
+                currentIndex: 1,
+                itemCount: 4,
+                step: 1
+            ),
+            2
+        )
+        XCTAssertEqual(
+            FullScreenImageGalleryNavigation.destinationIndex(
+                currentIndex: 2,
+                itemCount: 4,
+                step: -1
+            ),
+            1
+        )
+        XCTAssertNil(
+            FullScreenImageGalleryNavigation.destinationIndex(
+                currentIndex: 0,
+                itemCount: 4,
+                step: -1
+            )
+        )
+        XCTAssertNil(
+            FullScreenImageGalleryNavigation.destinationIndex(
+                currentIndex: 3,
+                itemCount: 4,
+                step: 1
+            )
+        )
+    }
+
+    func testFullScreenGalleryPositionTextOnlyAppearsForMultipleImages() {
+        XCTAssertEqual(
+            FullScreenImageGalleryNavigation.positionText(currentIndex: 1, itemCount: 4),
+            "2 of 4"
+        )
+        XCTAssertNil(
+            FullScreenImageGalleryNavigation.positionText(currentIndex: 0, itemCount: 1)
+        )
+    }
+
     func testPerformanceExample() throws {
         // This is an example of a performance test case.
         self.measure {
