@@ -10,8 +10,86 @@ import Types
 import Kingfisher
 import AVKit
 
+struct ImageAttachmentPreviewLayout {
+    static let singleMaxWidth: CGFloat = 280
+    static let singleMaxHeight: CGFloat = 320
+    static let galleryMaxTileWidth: CGFloat = 150
+    static let gallerySpacing: CGFloat = 8
+
+    static func singleSize(sourceSize: CGSize?, availableWidth: CGFloat) -> CGSize {
+        let maxWidth = max(1, min(availableWidth, singleMaxWidth))
+        let fallback = CGSize(width: maxWidth, height: maxWidth * 0.75)
+
+        guard let sourceSize,
+              sourceSize.width > 0,
+              sourceSize.height > 0 else {
+            return fallback
+        }
+
+        let scale = min(maxWidth / sourceSize.width, singleMaxHeight / sourceSize.height)
+        return CGSize(
+            width: max(1, sourceSize.width * scale),
+            height: max(1, sourceSize.height * scale)
+        )
+    }
+
+    static func galleryTileSize(availableWidth: CGFloat) -> CGSize {
+        let width = max(
+            1,
+            min((availableWidth - gallerySpacing) / 2, galleryMaxTileWidth)
+        )
+        return CGSize(width: width, height: width)
+    }
+
+    static func galleryHeight(imageCount: Int, tileHeight: CGFloat) -> CGFloat {
+        guard imageCount > 0 else { return 0 }
+        let rowCount = (imageCount + 1) / 2
+        return CGFloat(rowCount) * tileHeight
+            + CGFloat(max(0, rowCount - 1)) * gallerySpacing
+    }
+
+    static func galleryFrame(index: Int, imageCount: Int, tileSize: CGSize) -> CGRect {
+        guard index >= 0, index < imageCount else { return .zero }
+
+        if imageCount == 3 {
+            switch index {
+            case 0:
+                return CGRect(
+                    x: 0,
+                    y: 0,
+                    width: tileSize.width,
+                    height: tileSize.height * 2 + gallerySpacing
+                )
+            case 1:
+                return CGRect(
+                    x: tileSize.width + gallerySpacing,
+                    y: 0,
+                    width: tileSize.width,
+                    height: tileSize.height
+                )
+            default:
+                return CGRect(
+                    x: tileSize.width + gallerySpacing,
+                    y: tileSize.height + gallerySpacing,
+                    width: tileSize.width,
+                    height: tileSize.height
+                )
+            }
+        }
+
+        let column = index % 2
+        let row = index / 2
+        return CGRect(
+            x: CGFloat(column) * (tileSize.width + gallerySpacing),
+            y: CGFloat(row) * (tileSize.height + gallerySpacing),
+            width: tileSize.width,
+            height: tileSize.height
+        )
+    }
+}
+
 extension MessageCell {
-    internal func loadImageAttachments(attachments: [String], viewState: ViewState) {
+    internal func loadImageAttachments(attachments: [Types.File], viewState: ViewState) {
         guard !attachments.isEmpty else {
             // If no attachments, remove any existing container
             imageAttachmentsContainer?.removeFromSuperview()
@@ -69,6 +147,7 @@ extension MessageCell {
         let spacerView = contentView.viewWithTag(1001)!
         
         // Clear any existing constraints for the container
+        NSLayoutConstraint.deactivate(imageAttachmentsContainer!.constraints)
         for constraint in contentView.constraints {
             if constraint.firstItem === imageAttachmentsContainer ||
                constraint.secondItem === imageAttachmentsContainer {
@@ -100,12 +179,11 @@ extension MessageCell {
         // // print("🖼️ Setting up image attachments constraints - spacing: 20px")
         
         // Calculate available width first - needed for constraints
-        let maxImagesPerRow = 2
-        let imageSpacing: CGFloat = 8
         // Calculate available width based on actual layout constraints
         // Account for: avatar leading (16) + avatar width (40) + avatar spacing (10) + content trailing margin (16)
         let totalMargins: CGFloat = 16 + 40 + 10 + 16 // Total: 82px
-        let availableWidth = UIScreen.main.bounds.width - totalMargins
+        let measuredWidth = window?.bounds.width ?? UIScreen.main.bounds.width
+        let availableWidth = measuredWidth - totalMargins
         
         // Add a maximum width constraint to prevent overflow - use lower priority to avoid conflicts
         let maxWidthConstraint = imageAttachmentsContainer!.widthAnchor.constraint(lessThanOrEqualToConstant: availableWidth)
@@ -130,24 +208,36 @@ extension MessageCell {
             maxWidthConstraint
         ])
         
-        // Create image views for each attachment
-        let finalImageWidth: CGFloat = attachments.count == 1 ? min(availableWidth * 0.7, 220) : min((availableWidth - imageSpacing) / 2, 150)
-        let imageHeight: CGFloat = attachments.count == 1 ? min(finalImageWidth * 0.75, 165) : min(finalImageWidth * 0.75, 110)
+        let isGallery = attachments.count > 1
+        let galleryTileSize = ImageAttachmentPreviewLayout.galleryTileSize(availableWidth: availableWidth)
+        let singleSourceSize = attachments.first.flatMap {
+            imageSourceSize(for: $0, viewState: viewState)
+        }
+        let singlePreviewSize = ImageAttachmentPreviewLayout.singleSize(
+            sourceSize: singleSourceSize,
+            availableWidth: availableWidth
+        )
+        let initialContainerHeight = isGallery
+            ? ImageAttachmentPreviewLayout.galleryHeight(
+                imageCount: attachments.count,
+                tileHeight: galleryTileSize.height
+            )
+            : singlePreviewSize.height
+        let containerHeightConstraint = imageAttachmentsContainer!.heightAnchor.constraint(
+            equalToConstant: initialContainerHeight
+        )
+        containerHeightConstraint.priority = UILayoutPriority.defaultHigh
+        containerHeightConstraint.isActive = true
         
-        // print("🖼️ Calculated sizes - Image width: \(finalImageWidth), Image height: \(imageHeight), Available width: \(availableWidth), Screen width: \(UIScreen.main.bounds.width)")
-        
-        var currentX: CGFloat = 0
-        var currentY: CGFloat = 0
-        var imagesInCurrentRow = 0
-        
-        for (index, attachmentId) in attachments.enumerated() {
+        for (index, attachment) in attachments.enumerated() {
+            let attachmentId = attachment.id
             // Create image view for this attachment
             let imageView = UIImageView()
             imageView.translatesAutoresizingMaskIntoConstraints = false
-            imageView.contentMode = .scaleAspectFit // Show entire image, preserve aspect ratio
+            imageView.contentMode = .scaleAspectFit
             imageView.clipsToBounds = true
             imageView.layer.cornerRadius = 8
-            imageView.backgroundColor = UIColor.gray.withAlphaComponent(0.1) // Lighter background
+            imageView.backgroundColor = UIColor.gray.withAlphaComponent(0.1)
             imageView.isUserInteractionEnabled = true
             imageView.tag = index // Store index for tap handling
             imageView.accessibilityIdentifier = attachmentId
@@ -159,31 +249,28 @@ extension MessageCell {
             imageAttachmentsContainer!.addSubview(imageView)
             imageAttachmentViews.append(imageView)
             
-            // Calculate position
-            if imagesInCurrentRow >= maxImagesPerRow || (currentX + finalImageWidth > availableWidth) {
-                // Move to next row if we've hit the max images per row OR if the next image would overflow
-                currentX = 0
-                let rowImageHeight = min(finalImageWidth * 0.75, 165) // Match the updated max height
-                currentY += rowImageHeight + 10 // Match container calculation
-                imagesInCurrentRow = 0
-            }
-            
-            // Set up simple constraints for this image
-            let imageViewHeight = min(finalImageWidth * 0.75, 165) // Match container calculation with updated max height
-            
-            // Ensure the image width doesn't exceed the remaining space in the container
-            let remainingWidth = availableWidth - currentX
-            let actualImageWidth = min(finalImageWidth, remainingWidth)
+            let previewFrame = isGallery
+                ? ImageAttachmentPreviewLayout.galleryFrame(
+                    index: index,
+                    imageCount: attachments.count,
+                    tileSize: galleryTileSize
+                )
+                : CGRect(origin: .zero, size: singlePreviewSize)
+            let remainingWidth = availableWidth - previewFrame.minX
+            let actualImageWidth = min(previewFrame.width, remainingWidth)
             
             // Create width constraint with lower priority to prevent conflicts
             let widthConstraint = imageView.widthAnchor.constraint(equalToConstant: actualImageWidth)
             widthConstraint.priority = UILayoutPriority(999) // High but not required
+            let imageHeightConstraint = imageView.heightAnchor.constraint(
+                equalToConstant: previewFrame.height
+            )
             
             NSLayoutConstraint.activate([
-                imageView.leadingAnchor.constraint(equalTo: imageAttachmentsContainer!.leadingAnchor, constant: currentX),
-                imageView.topAnchor.constraint(equalTo: imageAttachmentsContainer!.topAnchor, constant: currentY),
+                imageView.leadingAnchor.constraint(equalTo: imageAttachmentsContainer!.leadingAnchor, constant: previewFrame.minX),
+                imageView.topAnchor.constraint(equalTo: imageAttachmentsContainer!.topAnchor, constant: previewFrame.minY),
                 widthConstraint,
-                imageView.heightAnchor.constraint(equalToConstant: imageViewHeight),
+                imageHeightConstraint,
                 // Add trailing constraint to ensure image doesn't exceed container bounds - this is the critical constraint
                 imageView.trailingAnchor.constraint(lessThanOrEqualTo: imageAttachmentsContainer!.trailingAnchor)
             ])
@@ -198,6 +285,8 @@ extension MessageCell {
                 // For pending messages, show local image data with loading overlay
                 if let localImage = UIImage(data: localImageData) {
                     imageView.image = localImage
+                    imageView.backgroundColor = .clear
+                    imageView.contentMode = isGallery ? .scaleAspectFill : .scaleAspectFit
                     
                     // Add loading overlay to show upload progress
                     addLoadingOverlayToImageView(imageView, attachmentId: attachmentId, queuedMessage: queuedMessage)
@@ -208,7 +297,7 @@ extension MessageCell {
             } else {
                 // For real messages, load from server using Kingfisher
                 if let url = URL(string: viewState.formatUrl(fromId: attachmentId, withTag: "attachments")) {
-                    let downsampleSize = CGSize(width: finalImageWidth, height: imageHeight)
+                    let downsampleSize = previewFrame.size
                     imageView.kf.setImage(
                         with: url,
                         placeholder: UIImage(systemName: "photo"),
@@ -221,11 +310,22 @@ extension MessageCell {
                         ],
                         completionHandler: { [weak self] result in
                             switch result {
-                            case .success(_):
+                            case .success(let value):
                                 // Ensure cell hasn't been reused for a different message
                                 if let currentAttachments = self?.currentMessage?.attachments,
                                    currentAttachments.contains(where: { $0.id == attachmentId }) {
-                                    // Success: keep the loaded image
+                                    imageView.backgroundColor = .clear
+                                    imageView.contentMode = isGallery ? .scaleAspectFill : .scaleAspectFit
+
+                                    if !isGallery, singleSourceSize == nil {
+                                        let fittedSize = ImageAttachmentPreviewLayout.singleSize(
+                                            sourceSize: value.image.size,
+                                            availableWidth: availableWidth
+                                        )
+                                        widthConstraint.constant = fittedSize.width
+                                        imageHeightConstraint.constant = fittedSize.height
+                                        containerHeightConstraint.constant = fittedSize.height
+                                    }
 
                                     // Force layout update to ensure proper positioning
                                     self?.contentView.setNeedsLayout()
@@ -249,22 +349,28 @@ extension MessageCell {
                 }
             }
             
-            // Update position for next image
-            currentX += actualImageWidth + imageSpacing
-            imagesInCurrentRow += 1
         }
-        
-        // Calculate exact container height based on actual image layout
-        let numberOfRows = (attachments.count + maxImagesPerRow - 1) / maxImagesPerRow
-        let containerImageHeight: CGFloat = min(finalImageWidth * 0.75, 165) // Updated max height to match image constraints
-        let totalHeight = CGFloat(numberOfRows) * containerImageHeight + CGFloat(max(0, numberOfRows - 1)) * 10 // 10px spacing between rows
-        
-        let heightConstraint = imageAttachmentsContainer!.heightAnchor.constraint(equalToConstant: totalHeight)
-        heightConstraint.priority = UILayoutPriority.defaultHigh // Lower priority to prevent conflicts
-        heightConstraint.isActive = true
-        
-        // // print("🖼️ Set fixed container height: \(totalHeight) for \(numberOfRows) rows")
-        // // print("🖼️ Image details - Width: \(finalImageWidth), Height: \(containerImageHeight), Attachments: \(attachments.count)")
+    }
+
+    private func imageSourceSize(for attachment: Types.File, viewState: ViewState) -> CGSize? {
+        if case .image(let metadata) = attachment.metadata,
+           metadata.width > 0,
+           metadata.height > 0 {
+            return CGSize(width: CGFloat(metadata.width), height: CGFloat(metadata.height))
+        }
+
+        guard isPendingMessage,
+              let currentMessage,
+              let channelQueuedMessages = viewState.queuedMessages[currentMessage.channel],
+              let queuedMessage = channelQueuedMessages.first(where: { $0.nonce == currentMessage.id }),
+              let localImageData = queuedMessage.attachmentData.first(where: {
+                  $0.1.contains(attachment.id.replacingOccurrences(of: "\(queuedMessage.nonce)_", with: ""))
+              })?.0,
+              let image = UIImage(data: localImageData) else {
+            return nil
+        }
+
+        return image.size
     }
     
     internal func loadFileAttachments(attachments: [Types.File], viewState: ViewState) {
