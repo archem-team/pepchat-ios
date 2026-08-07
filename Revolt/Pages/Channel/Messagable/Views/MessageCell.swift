@@ -119,7 +119,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
     
     // Callback for message actions
     var onMessageAction: ((MessageAction, Message) -> Void)?
-    var onImageTapped: ((UIImage, URL?, String?) -> Void)?
+    var onImageTapped: (([FullScreenImageItem], Int) -> Void)?
     /// Called when async content (images, link previews) finishes loading and may have changed cell height.
     var onAsyncContentLoaded: ((String) -> Void)?
     var onAvatarTap: (() -> Void)?
@@ -447,7 +447,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         usernameLabel.font = UIFont.boldSystemFont(ofSize: 16)
         
         let showVerified = author.hasVerifiedBadge()
-        usernameLabel.textColor = showVerified ? .systemYellow : .white
+        usernameLabel.textColor = .white
         usernameVerifiedBadgeImageView.image = UIImage(systemName: "checkmark.seal.fill")
         usernameVerifiedBadgeImageView.isHidden = !showVerified
         usernameVerifiedBadgeWidthConstraint?.constant = showVerified ? 14 : 0
@@ -507,10 +507,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
 
         if author.bot != nil {
             badge = message.masquerade == nil
-                ? ("BOT", UIColor(named: "bgPurple10") ?? .systemPurple)
-                : ("BRIDGE", UIColor(named: "bgRed07") ?? .systemPink)
+                ? ("BOT", (UIColor(named: "bgPurple10") ?? .systemPurple).withAlphaComponent(0.8))
+                : ("BRIDGE", (UIColor(named: "bgGray10") ?? .systemGray).withAlphaComponent(0.85))
         } else if isNewAccount(author) {
-            badge = ("NEW", UIColor(named: "bgGreen07") ?? .systemGreen)
+            badge = ("NEW", (UIColor(named: "bgGreen07") ?? .systemGreen).withAlphaComponent(0.75))
         } else {
             badge = nil
         }
@@ -614,7 +614,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
                     let userId = String(result[userIdRange])
                     
                     // Try to find user in viewState
-                    if let user = viewState.users[userId] {
+                    if let user = viewState.users[userId] ?? viewState.allEventUsers[userId] {
                         // Get the mention range
                         let mentionRange = Range(match.range, in: result)!
                         
@@ -624,7 +624,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
                     } else {
                         // If user not found, replace with @Unknown User to avoid showing raw ID
                         let mentionRange = Range(match.range, in: result)!
-                        result.replaceSubrange(mentionRange, with: "@Unknown User")
+                        result.replaceSubrange(mentionRange, with: "@unknown-user")
                     }
                 }
             }
@@ -636,7 +636,11 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
     }
     
     // New function to create attributed text with clickable mentions
-    private func createAttributedTextWithClickableMentions(from text: String, viewState: ViewState) -> NSAttributedString {
+    private func createAttributedTextWithClickableMentions(
+        from text: String,
+        viewState: ViewState,
+        mentionsEveryone: Bool
+    ) -> NSAttributedString {
         let mutableAttributedString = NSMutableAttributedString(string: text)
         
         // Set default attributes for the entire text
@@ -780,19 +784,16 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
             for match in matches.reversed() {
                 if let userIdRange = Range(match.range(at: 1), in: mutableAttributedString.string) {
                     let userId = String(mutableAttributedString.string[userIdRange])
-                    
-                    // Try to find user in viewState
-                    if let user = viewState.users[userId] {
-                        // Get the mention range in the current string
-                        let mentionRange = match.range
-                        
-                        // Safety check for range bounds in mutable string
-                        guard mentionRange.location >= 0,
-                              mentionRange.location < mutableAttributedString.length,
-                              mentionRange.location + mentionRange.length <= mutableAttributedString.length else {
-                            // print("DEBUG: Invalid mention range: \(mentionRange) for string length: \(mutableAttributedString.length)")
-                            continue
-                        }
+
+                    let mentionRange = match.range
+                    guard mentionRange.location >= 0,
+                          mentionRange.location < mutableAttributedString.length,
+                          mentionRange.location + mentionRange.length <= mutableAttributedString.length else {
+                        continue
+                    }
+
+                    // Try both user stores before falling back to a privacy-safe label.
+                    if let user = viewState.users[userId] ?? viewState.allEventUsers[userId] {
                         
                         // Replace the mention with username (use display name if available)
                         let displayName = user.display_name ?? user.username
@@ -823,6 +824,17 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
                         } catch {
                             // print("DEBUG: Error adding attributes to mention: \(error)")
                         }
+                    } else {
+                        let mentionText = "@unknown-user"
+                        mutableAttributedString.replaceCharacters(in: mentionRange, with: mentionText)
+                        let newRange = NSRange(
+                            location: mentionRange.location,
+                            length: (mentionText as NSString).length
+                        )
+                        mutableAttributedString.addAttributes([
+                            .foregroundColor: UIColor.secondaryLabel,
+                            .font: UIFont.systemFont(ofSize: 15, weight: .semibold)
+                        ], range: newRange)
                     }
                 }
             }
@@ -830,6 +842,22 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
             // print("Error creating regex for mentions: \(error)")
         }
         
+        if mentionsEveryone {
+            let foregroundColor = UIColor(named: "textYellow07") ?? UIColor.systemYellow
+            let backgroundColor = UIColor(red: 49 / 255, green: 45 / 255, blue: 29 / 255, alpha: 1)
+            for range in MentionInputUtilities.everyoneMentionRanges(in: mutableAttributedString.string) {
+                guard MentionInputUtilities.isValid(
+                    range: range,
+                    inUTF16Length: mutableAttributedString.length
+                ) else { continue }
+                mutableAttributedString.addAttributes([
+                    .foregroundColor: foregroundColor,
+                    .backgroundColor: backgroundColor,
+                    .font: UIFont.systemFont(ofSize: 15, weight: .semibold)
+                ], range: range)
+            }
+        }
+
         return mutableAttributedString
     }
     
@@ -1158,6 +1186,17 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         // print("✅ MessageCell.clearHighlight() COMPLETED")
     }
     
+    private func replyAttachmentSummary(_ attachments: [Types.File]) -> String {
+        guard attachments.count == 1, let attachment = attachments.first else {
+            return "\(attachments.count) attachments"
+        }
+
+        if attachment.content_type.hasPrefix("image/") { return "Photo" }
+        if attachment.content_type.hasPrefix("video/") { return "Video" }
+        if attachment.content_type.hasPrefix("audio/") { return "Audio" }
+        return attachment.filename
+    }
+
     private func configureReplyView(message: Message, replies: [String], viewState: ViewState) {
         // Remove the continuation check - allow reply view for continuations too
         
@@ -1225,12 +1264,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
                         replyContentLabel.text = processedContent
                         replyContentLabel.font = UIFont.systemFont(ofSize: 12) // Reset to normal font
                     } else if !(replyMessage.attachments?.isEmpty ?? true) {
-                        let attachmentCount = replyMessage.attachments?.count ?? 0
-                        if attachmentCount == 1 {
-                            replyContentLabel.text = "[attachment]"
-                        } else {
-                            replyContentLabel.text = "[\(attachmentCount) attachments]"
-                        }
+                        replyContentLabel.text = replyAttachmentSummary(replyMessage.attachments ?? [])
                         replyContentLabel.font = UIFont.systemFont(ofSize: 12) // Reset to normal font
                     } else {
                         replyContentLabel.text = ""
@@ -1508,20 +1542,29 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
     @objc internal func handleImageCellTap(_ gesture: UITapGestureRecognizer) {
         guard let imageView = gesture.view as? UIImageView,
               let image = imageView.image else { return }
-        
-        // Default fallback: still open preview if URL resolution fails
-        var originalURL: URL? = nil
-        var sessionToken: String? = nil
-        
-        
-        if let viewState = viewState,
-           let attachmentId = imageView.accessibilityIdentifier {
-            let urlString = viewState.formatUrl(fromId: attachmentId, withTag: "attachments")
-            originalURL = URL(string: urlString)
-            sessionToken = viewState.sessionToken
+
+        guard let viewState else {
+            onImageTapped?(
+                [FullScreenImageItem(previewImage: image, originalImageURL: nil, sessionToken: nil)],
+                0
+            )
+            return
         }
-        
-        onImageTapped?(image, originalURL, sessionToken)
+
+        let items = imageAttachmentViews.map { attachmentImageView in
+            let originalURL = attachmentImageView.accessibilityIdentifier.flatMap { attachmentId in
+                URL(string: viewState.formatUrl(fromId: attachmentId, withTag: "attachments"))
+            }
+            return FullScreenImageItem(
+                previewImage: attachmentImageView.image,
+                originalImageURL: originalURL,
+                sessionToken: viewState.sessionToken
+            )
+        }
+
+        guard !items.isEmpty else { return }
+        let initialIndex = min(max(0, imageView.tag), items.count - 1)
+        onImageTapped?(items, initialIndex)
     }
     
 
@@ -1744,10 +1787,10 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
             return
         }
         let cacheKey = message.id as NSString
-        let hasMentions = content.contains("<@") || content.contains("<#")
+        let hasMentions = content.contains("<@") || content.contains("<#") || message.mentionsEveryone
 
         // Check message-level cache for the pre-emoji attributed string
-        if let cached = MessageCell.attributedStringCache.object(forKey: cacheKey) {
+        if !hasMentions, let cached = MessageCell.attributedStringCache.object(forKey: cacheKey) {
             let mutableCopy = NSMutableAttributedString(attributedString: cached)
             processCustomEmojis(in: mutableCopy, textView: contentLabel)
             contentLabel.attributedText = mutableCopy
@@ -1761,13 +1804,19 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         let baseAttributedString: NSAttributedString
 
         if hasMentions {
-            baseAttributedString = createAttributedTextWithClickableMentions(from: processedContent, viewState: viewState)
+            baseAttributedString = createAttributedTextWithClickableMentions(
+                from: processedContent,
+                viewState: viewState,
+                mentionsEveryone: message.mentionsEveryone
+            )
         } else {
             baseAttributedString = processMarkdownOptimized(processedContent)
         }
 
         // Cache the pre-emoji result (immutable copy)
-        MessageCell.attributedStringCache.setObject(baseAttributedString, forKey: cacheKey)
+        if !hasMentions {
+            MessageCell.attributedStringCache.setObject(baseAttributedString, forKey: cacheKey)
+        }
 
         // Apply emoji processing on a mutable copy
         let mutableAttributedText = NSMutableAttributedString(attributedString: baseAttributedString)
@@ -1860,8 +1909,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         
         // Load image attachments
         if !imageAttachments.isEmpty {
-            let imageIds = imageAttachments.map { $0.id }
-            loadImageAttachments(attachments: imageIds, viewState: viewState)
+            loadImageAttachments(attachments: imageAttachments, viewState: viewState)
         }
         
         // Load file attachments
@@ -1891,7 +1939,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
             } else if hasImageAttachments {
                 // Image attachments already have bottom constraint
             } else if !hasAttachments {
-                let bottomConstraint = contentLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -16)
+                let bottomConstraint = contentLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -8)
                 bottomConstraint.priority = UILayoutPriority.defaultHigh
                 bottomConstraint.isActive = true
                 // PERF Issue #9: Track for efficient deactivation in clearContentLabelBottomConstraints()
@@ -1906,7 +1954,8 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         
         // Minimum height constraint
         contentViewMinHeightConstraint?.isActive = false
-        let minHeightConstraint = contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 50)
+        let minimumHeight: CGFloat = isContinuation ? 28 : 50
+        let minHeightConstraint = contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: minimumHeight)
         minHeightConstraint.priority = UILayoutPriority.defaultLow
         minHeightConstraint.isActive = true
         contentViewMinHeightConstraint = minHeightConstraint

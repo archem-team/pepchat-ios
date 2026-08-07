@@ -236,7 +236,7 @@ public struct Message: Identifiable, Codable, Equatable {
     ///   - webhook: The webhook information (optional).
     ///   - nonce: Client-provided nonce echoed by server for deduplication (optional).
     ///   - pinned: Defines whether the message is pinned or not
-    public init(id: String, content: String? = nil, author: String, channel: String, system: SystemMessageContent? = nil, attachments: [File]? = nil, mentions: [String]? = nil, replies: [String]? = nil, edited: String? = nil, masquerade: Masquerade? = nil, interactions: Interactions? = nil, reactions: [String: [String]]? = nil, user: User? = nil, member: Member? = nil, embeds: [Embed]? = nil, webhook: MessageWebhook? = nil, nonce: String? = nil, pinned: Bool? = nil ) {
+    public init(id: String, content: String? = nil, author: String, channel: String, system: SystemMessageContent? = nil, attachments: [File]? = nil, mentions: [String]? = nil, replies: [String]? = nil, edited: String? = nil, masquerade: Masquerade? = nil, interactions: Interactions? = nil, reactions: [String: [String]]? = nil, user: User? = nil, member: Member? = nil, embeds: [Embed]? = nil, webhook: MessageWebhook? = nil, nonce: String? = nil, pinned: Bool? = nil, flags: Int? = nil) {
         self.id = id // Initialize the message ID.
         self.content = content // Set the message content (if any).
         self.author = author // Set the author ID.
@@ -255,6 +255,7 @@ public struct Message: Identifiable, Codable, Equatable {
         self.webhook = webhook // Set the webhook information (if any).
         self.nonce = nonce // Set the nonce (if echoed by server).
         self.pinned = pinned // Set the pinned (if any).
+        self.flags = flags
     }
     
     public var id: String // Unique identifier for the message.
@@ -276,10 +277,21 @@ public struct Message: Identifiable, Codable, Equatable {
     public var webhook: MessageWebhook? // The webhook information (if any).
     public var nonce: String? // Client-provided nonce echoed by server for deduplication (optional).
     public var pinned: Bool?
+    public var flags: Int?
+
+    /// Whether the server recognized this message as an `@everyone` mention.
+    public var mentionsEveryone: Bool {
+        ((flags ?? 0) & 2) == 2
+    }
+
+    /// Whether this message should be treated as mentioning a specific user.
+    public func mentionsUser(_ userId: String) -> Bool {
+        mentions?.contains(userId) == true || mentionsEveryone
+    }
     
     enum CodingKeys: String, CodingKey {
         case id = "_id" // Mapping the ID to the JSON key "_id".
-        case content, author, channel, system, attachments, mentions, replies, edited, masquerade, interactions, reactions, user, member, embeds, webhook, nonce, pinned // Other properties mapped directly.
+        case content, author, channel, system, attachments, mentions, replies, edited, masquerade, interactions, reactions, user, member, embeds, webhook, nonce, pinned, flags // Other properties mapped directly.
     }
     
     public func isInviteLink() -> Bool {

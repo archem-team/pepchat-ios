@@ -84,13 +84,15 @@ public struct Permissions: OptionSet, Hashable {
     public static let muteMembers = Permissions(rawValue: 1 << 33) // Permission to mute members
     public static let deafenMembers = Permissions(rawValue: 1 << 34) // Permission to deafen members
     public static let moveMembers = Permissions(rawValue: 1 << 35) // Permission to move members between channels
+    public static let mentionEveryone = Permissions(rawValue: 1 << 36) // Permission to mention everyone in a channel
     
     // Convenience properties for default permissions
     public static let all = Permissions(arrayLiteral: [
         .manageChannel, .manageServer, .managePermissions, .manageRole, .manageCustomisation, .kickMembers, .banMembers,
         .timeoutMembers, .assignRoles, .manageNickname, .changeNicknames, .changeAvatars, .removeAvatars, .viewChannel,
         .readMessageHistory, .sendMessages, .manageMessages, .manageWebhooks, .inviteOthers, .sendEmbeds,
-        .uploadFiles, .masquerade, .react, .connect, .speak, .video, .muteMembers, .deafenMembers, .moveMembers
+        .uploadFiles, .masquerade, .react, .connect, .speak, .video, .muteMembers, .deafenMembers, .moveMembers,
+        .mentionEveryone
     ])
     
     public static let defaultViewOnly = Permissions([.viewChannel, .readMessageHistory]) // Default view-only permissions
@@ -150,6 +152,7 @@ public struct Permissions: OptionSet, Hashable {
             case .muteMembers: return "Mute Members"
             case .deafenMembers: return "Deafen Members"
             case .moveMembers: return "Move Members"
+            case .mentionEveryone: return "Mention Everyone"
             default: return "Unknown"
         }
     }
@@ -186,6 +189,7 @@ public struct Permissions: OptionSet, Hashable {
             case .muteMembers: return "Allows members to mute others in a voice channel."
             case .deafenMembers: return "Allows members to deafen others in a voice channel."
             case .moveMembers: return "Allows members to move others between voice channels."
+            case .mentionEveryone: return "Allows members to mention everyone in a channel."
             default: return "Unknown"
         }
     }

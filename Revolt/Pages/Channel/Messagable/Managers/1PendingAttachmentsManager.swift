@@ -15,7 +15,7 @@ class PendingAttachmentsManager: ObservableObject {
     @Published var pendingAttachments: [PendingAttachment] = []
     
     // Maximum number of attachments allowed
-    private let maxAttachments = 10
+    private let maxAttachments = 5
     
     // Maximum file size (8MB)
     private let maxFileSize = 8 * 1024 * 1024

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 import Kingfisher
 
 struct PromosView: View {
@@ -785,7 +786,9 @@ private struct PromoRemoteImage: View {
 
             if let url, !didFail {
                 KFImage(url)
-                    .cacheOriginalImage()
+                    .setProcessor(DownsamplingImageProcessor(size: downsampleSize))
+                    .scaleFactor(UIScreen.main.scale)
+                    .cacheMemoryOnly()
                     .onSuccess { _ in
                         didFail = false
                     }
@@ -825,6 +828,10 @@ private struct PromoRemoteImage: View {
                 .font(.system(size: min(height * 0.22, 34), weight: .regular))
                 .foregroundStyle(Color.textGray07)
         }
+    }
+
+    private var downsampleSize: CGSize {
+        CGSize(width: width ?? UIScreen.main.bounds.width, height: height)
     }
 }
 
@@ -913,7 +920,9 @@ private struct PromoImageViewer: View {
     private func pageImage(at index: Int, size: CGSize) -> some View {
         if index == selectedIndex, urls.indices.contains(index), !didFail {
             KFImage(urls[index])
-                .cacheOriginalImage()
+                .setProcessor(DownsamplingImageProcessor(size: size))
+                .scaleFactor(UIScreen.main.scale)
+                .cacheMemoryOnly()
                 .onSuccess { _ in
                     didFail = false
                 }
@@ -937,7 +946,9 @@ private struct PromoImageViewer: View {
                 .frame(width: size.width, height: size.height)
         } else if urls.indices.contains(index) {
             KFImage(urls[index])
-                .cacheOriginalImage()
+                .setProcessor(DownsamplingImageProcessor(size: size))
+                .scaleFactor(UIScreen.main.scale)
+                .cacheMemoryOnly()
                 .placeholder {
                     ProgressView()
                         .tint(.white)

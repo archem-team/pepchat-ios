@@ -7,6 +7,175 @@ import UIKit
 import Types
 import Combine
 
+struct MentionReplacement {
+    let text: String
+    let replacedRange: NSRange
+    let insertedRange: NSRange
+    let selectedRange: NSRange
+}
+
+enum MentionInputUtilities {
+    static func isValid(range: NSRange, inUTF16Length length: Int) -> Bool {
+        range.location != NSNotFound
+            && range.location <= length
+            && range.length <= length - range.location
+    }
+
+    static func activeMentionRange(in text: String, selectedRange: NSRange) -> NSRange? {
+        let nsText = text as NSString
+        guard selectedRange.length == 0,
+              isValid(range: selectedRange, inUTF16Length: nsText.length) else {
+            return nil
+        }
+
+        let prefixRange = NSRange(location: 0, length: selectedRange.location)
+        let atRange = nsText.range(of: "@", options: .backwards, range: prefixRange)
+        guard atRange.location != NSNotFound else { return nil }
+
+        let mentionRange = NSRange(
+            location: atRange.location,
+            length: selectedRange.location - atRange.location
+        )
+        let candidate = nsText.substring(with: mentionRange)
+        guard !candidate.contains(where: { $0.isWhitespace }) else { return nil }
+        return mentionRange
+    }
+
+    static func searchText(in text: String, selectedRange: NSRange) -> String? {
+        guard let range = activeMentionRange(in: text, selectedRange: selectedRange) else {
+            return nil
+        }
+        let nsText = text as NSString
+        return nsText.substring(with: NSRange(
+            location: range.location + 1,
+            length: max(0, range.length - 1)
+        ))
+    }
+
+    static func replacingActiveMention(
+        in text: String,
+        selectedRange: NSRange,
+        with replacement: String
+    ) -> MentionReplacement? {
+        guard let activeRange = activeMentionRange(in: text, selectedRange: selectedRange) else {
+            return nil
+        }
+
+        let nsText = text as NSString
+        var replacedRange = activeRange
+        if replacement.last?.isWhitespace == true,
+           NSMaxRange(replacedRange) < nsText.length,
+           nsText.character(at: NSMaxRange(replacedRange)) == 32 {
+            replacedRange.length += 1
+        }
+
+        let mutable = NSMutableString(string: text)
+        mutable.replaceCharacters(in: replacedRange, with: replacement)
+        let insertedRange = NSRange(
+            location: replacedRange.location,
+            length: (replacement as NSString).length
+        )
+        return MentionReplacement(
+            text: mutable as String,
+            replacedRange: replacedRange,
+            insertedRange: insertedRange,
+            selectedRange: NSRange(location: NSMaxRange(insertedRange), length: 0)
+        )
+    }
+
+    static func shouldIncludeEveryone(searchText: String, canMentionEveryone: Bool) -> Bool {
+        canMentionEveryone
+            && (searchText.isEmpty || "everyone".hasPrefix(searchText.lowercased()))
+    }
+
+    @MainActor
+    static func canMentionEveryone(
+        in channel: Channel?,
+        server: Server?,
+        viewState: ViewState?
+    ) -> Bool {
+        guard let channel else { return false }
+
+        switch channel {
+        case .group_dm_channel:
+            return true
+        case .text_channel:
+            guard let server,
+                  let viewState,
+                  let currentUser = viewState.currentUser else {
+                return false
+            }
+            let member = viewState.members[server.id]?[currentUser.id]
+            let permissions = resolveChannelPermissions(
+                from: currentUser,
+                targettingUser: currentUser,
+                targettingMember: member,
+                channel: channel,
+                server: server
+            )
+            return permissions.contains(.mentionEveryone)
+        default:
+            return false
+        }
+    }
+
+    static func requiresPlainTextEveryoneConfirmation(
+        text: String,
+        canMentionEveryone: Bool
+    ) -> Bool {
+        !canMentionEveryone && !everyoneMentionRanges(in: text).isEmpty
+    }
+
+    /// Finds literal mass mentions while excluding escaped text and inline/fenced code.
+    static func everyoneMentionRanges(in text: String) -> [NSRange] {
+        let nsText = text as NSString
+        let mention = "@everyone" as NSString
+        var ranges: [NSRange] = []
+        var codeDelimiterLength: Int?
+        var index = 0
+
+        while index < nsText.length {
+            let character = nsText.character(at: index)
+
+            if character == 92 { // Backslash escapes the next UTF-16 code unit.
+                index += min(2, nsText.length - index)
+                continue
+            }
+
+            if character == 96 { // Backtick.
+                var delimiterLength = 1
+                while index + delimiterLength < nsText.length,
+                      nsText.character(at: index + delimiterLength) == 96 {
+                    delimiterLength += 1
+                }
+
+                let normalizedLength = min(delimiterLength, 3)
+                if let activeLength = codeDelimiterLength {
+                    if normalizedLength == activeLength {
+                        codeDelimiterLength = nil
+                    }
+                } else {
+                    codeDelimiterLength = normalizedLength
+                }
+                index += delimiterLength
+                continue
+            }
+
+            if codeDelimiterLength == nil,
+               index + mention.length <= nsText.length,
+               nsText.substring(with: NSRange(location: index, length: mention.length)) == mention as String {
+                ranges.append(NSRange(location: index, length: mention.length))
+                index += mention.length
+                continue
+            }
+
+            index += 1
+        }
+
+        return ranges
+    }
+}
+
 // MARK: - MentionData structure for storing mention information
 public struct MentionData {
     let userId: String
@@ -57,7 +226,7 @@ class PendingAttachmentsManager: ObservableObject {
     @Published var pendingAttachments: [PendingAttachment] = []
     
     // Maximum number of attachments allowed
-    private let maxAttachments = 10
+    private let maxAttachments = 5
     
     // Maximum file size (8MB)
     private let maxFileSize = 8 * 1024 * 1024
@@ -254,24 +423,12 @@ class MessageInputView: UIView {
     
     // Check for mention in text
     func checkForMention(in text: String) {
-        // print("DEBUG: checkForMention called with text: '\(text)'")
-        
-        // Find the last @ symbol and extract the search term
-        if let lastAtIndex = text.lastIndex(of: "@") {
-            let searchStartIndex = text.index(after: lastAtIndex)
-            let searchText = String(text[searchStartIndex...])
-            
-            // Only show mentions if the search text doesn't contain spaces
-            // This ensures we only show mentions when actively typing a username
-            if !searchText.contains(" ") && !searchText.contains("\n") {
-                // print("DEBUG: Found @ with search text: '\(searchText)'")
-                mentionInputView?.updateSearch(text: searchText)
-            } else {
-                // print("DEBUG: Search text contains spaces or newlines, hiding mention view")
-                hideMentionView()
-            }
+        if let searchText = MentionInputUtilities.searchText(
+            in: text,
+            selectedRange: textView.selectedRange
+        ) {
+            mentionInputView?.updateSearch(text: searchText)
         } else {
-            // print("DEBUG: No @ found in text, hiding mention view")
             hideMentionView()
         }
     }
@@ -291,8 +448,10 @@ class MessageInputView: UIView {
         let nsText = text as NSString
 
         mentionTokens = mentionTokens.filter { token in
-            guard token.range.location >= 0,
-                  token.range.location + token.range.length <= nsText.length else { return false }
+            guard MentionInputUtilities.isValid(
+                range: token.range,
+                inUTF16Length: nsText.length
+            ) else { return false }
             return nsText.substring(with: token.range) == token.displayText
         }
         removeMentionDataNotPresent(in: text)
@@ -314,14 +473,38 @@ class MessageInputView: UIView {
 
         let attributed = NSMutableAttributedString(string: raw, attributes: baseAttrs)
         for token in mentionTokens {
-            guard token.range.location >= 0,
-                  token.range.location + token.range.length <= (raw as NSString).length else { continue }
+            guard MentionInputUtilities.isValid(
+                range: token.range,
+                inUTF16Length: (raw as NSString).length
+            ) else { continue }
             attributed.addAttribute(.foregroundColor, value: mentionTextColor, range: token.range)
+        }
+        for range in MentionInputUtilities.everyoneMentionRanges(in: raw) {
+            attributed.addAttribute(.foregroundColor, value: mentionTextColor, range: range)
         }
 
         textView.attributedText = attributed
         textView.selectedRange = selected
         textView.typingAttributes = baseAttrs
+    }
+
+    private func adjustMentionTokens(for replacement: MentionReplacement) {
+        let replacedEnd = NSMaxRange(replacement.replacedRange)
+        let delta = replacement.insertedRange.length - replacement.replacedRange.length
+
+        mentionTokens = mentionTokens.compactMap { token in
+            if token.range.location >= replacedEnd {
+                var shifted = token
+                shifted.range.location += delta
+                return shifted
+            }
+
+            if NSIntersectionRange(token.range, replacement.replacedRange).length > 0 {
+                return nil
+            }
+
+            return token
+        }
     }
     
     // MARK: - Cleanup Methods
@@ -499,6 +682,7 @@ class MessageInputView: UIView {
             }
         } else {
             // Hide editing indicator when message is nil
+            hideMentionViewImmediately()
             editingIndicator.isHidden = true
             textView.text = nil
             updateTextViewHeight()
@@ -870,7 +1054,48 @@ class MessageInputView: UIView {
         
         // Must have at least one non-whitespace character or attachments
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasAttachments else { return }
-        
+
+        hideMentionViewImmediately()
+
+        let canMentionEveryone = MentionInputUtilities.canMentionEveryone(
+            in: currentChannel,
+            server: currentServer,
+            viewState: currentViewState
+        )
+        if MentionInputUtilities.requiresPlainTextEveryoneConfirmation(
+            text: text,
+            canMentionEveryone: canMentionEveryone
+        ) {
+            presentPlainTextEveryoneConfirmation(text: text, hasAttachments: hasAttachments)
+            return
+        }
+
+        performSend(text: text, hasAttachments: hasAttachments)
+    }
+
+    private func presentPlainTextEveryoneConfirmation(
+        text: String,
+        hasAttachments: Bool
+    ) {
+        guard let presenter = findViewController() else { return }
+
+        let alert = UIAlertController(
+            title: "You can’t mention @everyone",
+            message: "You don’t have permission to mention @everyone in this channel. Please contact the server owner if you believe this is incorrect.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Edit Message", style: .cancel) { [weak self] _ in
+            self?.textView.becomeFirstResponder()
+        })
+        alert.addAction(UIAlertAction(title: "Send as Plain Text", style: .default) { [weak self] _ in
+            self?.performSend(text: text, hasAttachments: hasAttachments)
+        })
+        presenter.present(alert, animated: true)
+    }
+
+    private func performSend(text: String, hasAttachments: Bool) {
+        hideMentionViewImmediately()
+
         if let editingMessage = editingMessage {
             // Handle edit message (attachments not supported for editing)
             delegate?.messageInputView(self, didEditMessage: editingMessage, newText: text)
@@ -930,6 +1155,7 @@ class MessageInputView: UIView {
     
     @objc private func cancelEditButtonTapped() {
         // Reset editing state
+        hideMentionViewImmediately()
         setEditingMessage(nil)
         textView.text = nil
         updateSendButtonState()
@@ -1064,13 +1290,11 @@ extension MessageInputView: MentionInputViewDelegate {
         // Get current text
         let currentText = textView.text ?? ""
         
-        // Find the last @ symbol
-        if let lastAtIndex = currentText.lastIndex(of: "@") {
-            // Get the text from @ to the end
-            let startIndex = lastAtIndex
-            let endIndex = currentText.endIndex
-            let range = startIndex..<endIndex
-            
+        if let replacement = MentionInputUtilities.replacingActiveMention(
+            in: currentText,
+            selectedRange: textView.selectedRange,
+            with: "@\(user.username) "
+        ) {
             // Create the mention data
             let displayText = "@\(user.username)"
             let mentionData = MentionData(
@@ -1082,17 +1306,14 @@ extension MessageInputView: MentionInputViewDelegate {
             // Store the mention data
             storeMentionData(mentionData)
             
-            // Replace the text from @ to the end with the display text
-            let newText = currentText.replacingCharacters(in: range, with: "\(displayText) ")
-            textView.text = newText
-
-            let nsText = newText as NSString
-            let insertedRange = nsText.range(of: displayText, options: .backwards)
-            if insertedRange.location != NSNotFound {
-                mentionTokens.append(
-                    MentionToken(userId: user.id, displayText: displayText, range: insertedRange)
-                )
-            }
+            adjustMentionTokens(for: replacement)
+            textView.text = replacement.text
+            textView.selectedRange = replacement.selectedRange
+            mentionTokens.append(MentionToken(
+                userId: user.id,
+                displayText: displayText,
+                range: NSRange(location: replacement.insertedRange.location, length: (displayText as NSString).length)
+            ))
             
             // Update UI
             updateSendButtonState()
@@ -1106,6 +1327,26 @@ extension MessageInputView: MentionInputViewDelegate {
         }
         
         // Hide the mention view
+        hideMentionView()
+    }
+
+    func mentionInputViewDidSelectEveryone(_ mentionView: MentionInputView) {
+        guard let replacement = MentionInputUtilities.replacingActiveMention(
+            in: textView.text ?? "",
+            selectedRange: textView.selectedRange,
+            with: "@everyone "
+        ) else {
+            hideMentionView()
+            return
+        }
+
+        adjustMentionTokens(for: replacement)
+        textView.text = replacement.text
+        textView.selectedRange = replacement.selectedRange
+        updateSendButtonState()
+        updateTextViewHeight()
+        applyMentionStyling()
+        textView.delegate?.textViewDidChange?(textView)
         hideMentionView()
     }
     
@@ -1157,8 +1398,10 @@ extension MessageInputView: MentionInputViewDelegate {
         let mutable = NSMutableString(string: originalText)
         let validTokens = mentionTokens
             .filter { token in
-                token.range.location >= 0
-                    && token.range.location + token.range.length <= mutable.length
+                MentionInputUtilities.isValid(
+                    range: token.range,
+                    inUTF16Length: mutable.length
+                )
                     && mutable.substring(with: token.range) == token.displayText
             }
             .sorted { $0.range.location > $1.range.location }

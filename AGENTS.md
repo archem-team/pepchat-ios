@@ -10,11 +10,12 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 - `Shared/AttachmentSharing/` holds code compiled into both the main app and Share Extension (`ShareExtensionShared.swift`: `ShareRecipientIndex`, `ShareStorage`, App Group I/O, shared Keychain session read).
 - `Types/` holds shared model types.
 - `RevoltTests/`, `RevoltUITests/`, and `Tests/` contain unit/UI tests (XCTest).
-- `Revolt/Resources/` stores assets, xcassets catalogs, and localized strings (`Localizable.xcstrings`).
+- `Revolt/Resources/` stores assets and xcassets catalogs. Localized strings are maintained in `.xcstrings` catalogs, including root `Localizable.xcstrings` and `Revolt/Localizable.xcstrings` when both are present.
 - `Revolt/1Storage/` contains local storage managers: `MessageCacheManager` (SQLite-based message cache, reads and internal write API) and `MessageCacheWriter` (single session-scoped write path used by ViewModel, WebSocket, MessageInputHandler, RepliesManager, MessageContentsView).
 - `Revolt/Pages/Features/Core/` contains base architecture components (e.g., `BaseViewModel` for MVVM pattern).
 - `Revolt/ViewState+Extensions/` contains ViewState extensions split by responsibility (see State Management section below).
 - `Revolt/Components/Home/Discover/` contains the Discover servers feature: `DiscoverScrollView`, `DiscoverItem`, `DiscoverItemView`, and `ServerChatDataFetcher` (CSV-backed server list with membership cache).
+- `Revolt/Components/Home/Promos/` contains the Promos feature (`PromosView`, `PromosSubmitView`, `PromosManager`, related models/views). Promo cards and image viewer use Kingfisher with downsampling plus memory-only caching to avoid retaining full-size remote images.
 - `Revolt/Components/MessageRenderer/` contains shared message presentation and reactions: `MessageView`, `MessageContentsView`, `MessageReactionsSheet` (SwiftUI), and `MessageReactionsSheetUIKit` (used from UIKit flows such as `MessageCell+ContextMenu`).
 - `Revolt/Pages/Channel/Messagable/` is organized into subdirectories:
   - `Managers/` - Business logic managers (PermissionsManager, RepliesManager, TypingIndicatorManager, ScrollPositionManager, PendingAttachmentsManager, MessageLoader, MessageGroupingManager, CellHeightCache for UITableView height caching, etc.)
@@ -34,8 +35,9 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 - Feature screens live under `Revolt/Pages/`, while reusable UI is under `Revolt/Components/`.
 - Networking and realtime behavior live in `Revolt/Api/` (HTTP + websocket).
 - Shared domain models live in `Types/` and are used across UI and networking layers.
-- Key flows: auth screens under `Revolt/Pages/Login/`, channel + message UI under `Revolt/Pages/Channel/` (primary list UI is UIKit `MessageableChannelViewController`; SwiftUI `MessageableChannel` also exists), settings under `Revolt/Pages/Settings/`, Discover servers under `Revolt/Components/Home/Discover/` (CSV-backed server list with membership cache for peptide.chat), and system share-sheet attachment sharing via the `ShareExtension` target (recipient index written by the main app; see Share Extension section below).
+- Key flows: auth screens under `Revolt/Pages/Login/`, channel + message UI under `Revolt/Pages/Channel/` (primary list UI is UIKit `MessageableChannelViewController`; SwiftUI `MessageableChannel` also exists), settings under `Revolt/Pages/Settings/`, Discover servers under `Revolt/Components/Home/Discover/` (CSV-backed server list with membership cache for peptide.chat), Promos under `Revolt/Components/Home/Promos/`, and system share-sheet attachment sharing via the `ShareExtension` target (recipient index written by the main app; see Share Extension section below).
 - DM list virtual scrolling: `ViewState` tracks visible DM batches (`visibleStartBatch` / `visibleEndBatch`, `loadedDmBatches`, `dmBatchSize`) to limit in-memory DM rows while keeping smooth scrolling.
+- DM list search/sort lives in `DMScrollView`: it builds rows from `viewState.allDmChannelIds` when possible, filters out saved messages and inactive one-to-one DMs, searches display names/usernames/discriminators/user IDs, and sorts by latest/oldest activity with display-name tie-breaking. When updating lazy loading in this view, preserve the mapping back to the full `allDmChannelIds` index.
 - Data flow: `Revolt/Api/` → `Types/` → view models (ex: `Revolt/Pages/.../*ViewModel.swift`) → views (`Revolt/Pages/`, `Revolt/Components/`).
 
 ### State Management
@@ -118,6 +120,7 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 - **Fix / investigation logs** (`docs/Fix/`): `DeleteMessagesIssue.md`, `ContactMessage.md`, `MessageReaction.md`, `ChatSynchronization.md`, `ChatOrdering.md`, `DuplicateMessage.md`, `ProfilePicture.md`, `ReplyMessageLoadingCrash.md`, `LoadingMessagePlaceholder.md`, `MultilineMessage.md`, `LinkPreviewImage.md`, `BrokenInvites.md`, and related notes.
 - `docs/TestCases.md` - Rules and template for AI agents to derive and write test cases: user POV, step-by-step format, expected outcome/result, edge-case coverage, and feature-area mapping; use when preparing manual or automated test cases for a feature or flow.
 - `docs/UIKitImplementation.md` - UIKit channel architecture and implementation notes.
+- When adding user-facing strings, update the appropriate `.xcstrings` catalog. Attachment preview strings currently include media labels such as `Photo`, `Video`, `Audio`, `Loading preview…`, `Preview unavailable`, and plural attachment counts.
 
 ## Build, Test, and Development Commands
 
@@ -125,6 +128,7 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 - Resolve SwiftPM packages: `xcodebuild -resolvePackageDependencies`.
 - Build from CLI (example): `xcodebuild -scheme Revolt -destination 'platform=iOS Simulator,name=iPhone 15' build`.
 - Run tests (example): `xcodebuild -scheme Revolt -destination 'platform=iOS Simulator,name=iPhone 15' test`.
+- App release settings live in `Revolt.xcodeproj/project.pbxproj`; keep Debug and Release `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` aligned when changing version numbers.
 
 ## Coding Style & Naming Conventions
 
@@ -165,6 +169,7 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 - Channel preloading: Important channels are preloaded in the background for faster access.
 - UITableView message list: `CellHeightCache` avoids repeated height calculation for stable rows; DM sidebar uses batched visible-window loading in `ViewState` to cap loaded DM batches.
 - SwiftUI refresh churn: `ViewState.batchUpdate` reduces redundant view invalidations when many properties change in one WebSocket tick.
+- Remote promo images: `PromosView` intentionally downscales Kingfisher images to the rendered card/viewer size and uses `.cacheMemoryOnly()`; avoid restoring original-image disk caching unless the memory/disk tradeoff is re-evaluated.
 
 ## Code Organization Notes
 
@@ -173,10 +178,13 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 - **Message cache writes**: Any new code that should persist messages/users to the SQLite cache must use `MessageCacheWriter.shared` (e.g. `enqueueCacheMessagesAndUsers`, `enqueueUpdateMessage`, `enqueueDeleteMessage`), not direct `MessageCacheManager` write APIs, to avoid races and cross-account leakage.
 - **Scroll/Navigation safety**: When modifying `MessageableChannelViewController`, `ScrollPositionManager`, or `MessageableChannelViewController+TargetMessage`, guard scroll operations: ensure `tableView.dataSource != nil` and target row index is valid before `scrollToRow(at:animated:)`. Cancel pending scroll `DispatchWorkItem`s in `viewWillDisappear` to avoid crashes during navigation (see `docs/Sentry.md`).
 - **Draft messages**: Implemented per `docs/Feature/DraftMessage.md`. Draft storage lives in `ViewState+Drafts.swift` and `ViewState.channelDrafts`; do not use the message cache for drafts. Clear drafts at commit-to-send (in `MessageInputHandler`), not only after API success; clear on sign-out in both `signOut()` and at the start of `destroyCache()`. When restoring in `viewWillAppear`, if there is no stored draft do not clear the composer (same-channel return and return-from-search). Debounced save uses `draftSaveWorkItem` in `MessageableChannelViewController`; cancel it in `viewWillDisappear`.
+- **Message composer attachments**: In-composer attachment limits are 5 items max and 8MB per file. Keep the limit consistent across `MessageBox.UploadButton`, UIKit `MessageInputHandler.presentPhotoPicker()`, and both `PendingAttachmentsManager` definitions (`Views/MessageInputView.swift` and `Managers/1PendingAttachmentsManager.swift`) until the duplicate manager is consolidated.
+- **Mention input cleanup**: `MessageInputView` should hide the mention suggestions immediately when clearing edit state, cancelling edits, or sending (`hideMentionViewImmediately()`); preserve this when touching send/edit flows so stale mention UI does not linger.
 - **Ready-event resilience/perf**: `processEvent(.ready)` preserves `currentChannel` / `currentSelection`, processes extracted ready data, then restores selection and eagerly reloads the selected server’s channels if needed. Unreads are fetched in parallel with ready processing and merged afterward; stale unreads are cleaned after ready reconciliation.
 - **Message channel UI sync**: The channel message list is UIKit (`MessageableChannelViewController` + `LocalMessagesDataSource`) and keeps a local copy of message IDs. (1) **Local delete**: After a successful delete (from `RepliesManager` or `MessageContentsView`), ViewState is updated and the table must refresh: `refreshMessagesAfterLocalDelete()` syncs `localMessages` from ViewState, updates the data source, and reloads the table; it is called from `RepliesManager` on success and from the VC when it receives the `MessageDeletedLocally` notification (posted by `MessageContentsView` after delete). (2) **New messages from other devices**: When a new message arrives via WebSocket, ViewState is updated and `NewMessagesReceived` is posted with `userInfo: ["channelId": m.channel]`. `handleNewMessages` (`MessageableChannelViewController+Notifications.swift`) only runs sync/reload when the notification is for the current channel; it then syncs from ViewState, updates the data source, and reloads the table so messages sent from another device appear without leaving the channel.
 - **New DM edge cases**: For first-message reliability in newly opened DMs and delete-to-empty transitions, see `docs/Fix/ContactMessage.md`. Keep `openDm(with:)` channel hydration (`channels`, `allEventChannels`, `channelMessages`) and ensure `syncLocalMessagesWithViewState()` correctly handles fully empty sources to clear stale `localMessages`.
 - **DM ordering contract**: DM sorting in `processDMs` prioritizes unread channels first, then `last_message_id` descending, with Ready payload order as a tie-breaker. Preserve this fallback so same-timestamp/missing-last-message DMs stay consistent across devices/clients.
+- **DM list filtering/search UI**: `DMScrollView.displayedDms` applies local search/sort on top of the ViewState DM ordering. Search should include group names plus participant display names/usernames/discriminators; the empty-search state uses `Image(.peptideNotFound)` and the list dismisses the keyboard immediately while scrolling.
 - **Verified username badge**: Verified state is derived from user badge bitfield (`Types/User.hasVerifiedBadge()`, currently using `Badges.responsible_disclosure` bit). Username-level verified indicator in message rows is rendered as yellow SF Symbol `checkmark.seal.fill` in both UIKit (`MessageCell`) and SwiftUI (`MessageView`). Keep spacing behavior (collapsed width when hidden) and continuation-row hiding consistent; see `docs/Feature/VerifiedBadges.md`.
 - **Message reactions**: SwiftUI sheet (`MessageReactionsSheet`) and UIKit-oriented wrapper (`MessageReactionsSheetUIKit`) live under `Revolt/Components/MessageRenderer/`; reaction add/remove should stay consistent with ViewState / WebSocket updates (see `docs/Fix/MessageReaction.md` when debugging stale counts or UI).
 - **Mention unread UI**: Server and DM channel rows show mention-aware unread affordances via `UnreadMentionsView` and unread enum cases (`mentions`, `unreadWithMentions`) in components such as `ServerChannelScrollView` and `ChannelIcon`; see `docs/Feature/MentionIndicator.md`.
@@ -184,3 +192,34 @@ API docs: https://developers.revolt.chat/developers/endpoints.html
 - **Save attachment to Photos**: `FullScreenImageViewController` (`Messagable/Controllers/`) saves the displayed image (preferring original URL/data with auth when available) via `PHPhotoLibrary` add-only authorization. In-composer pending files remain `PendingAttachmentsManager` / `1PendingAttachmentsManager.swift`.
 - **API history reconcile**: When merging fetched messages in `MessageableChannelViewController+MessageLoading.swift`, only treat cache-only IDs as server-deleted if the API page is full (100 messages); otherwise older local IDs may simply be off the end of the fetched window.
 
+## Shared `@everyone` QA Accounts
+
+Use these persistent production QA accounts for cross-client `@everyone` testing. Do not create
+duplicates, change their Archem roles, or delete them. Passwords are stored in the macOS login
+Keychain and must never be pasted into source, logs, test reports, commits, or chat.
+
+- API: `https://peptide.chat/api`
+- Server: Archem Team (`01J8W7NPV2DM3XR48JAYB1RDFK`)
+- Channel: `testing` (`01J8Y8T3XQ75D9KW32CG522952`)
+- Allowed sender: `qa-ios-everyone-sender-20260806@peptide.chat`, username
+  `ios_everyone_sender`, user `01KZBZP1BQ8603X1NKW721W732`, Keychain service
+  `pepchat-ios.qa.everyone.sender`
+- Denied sender: `qa-ios-everyone-denied-20260806@peptide.chat`, username
+  `ios_everyone_denied`, user `01KZBZP401HX40WWT9P4QGPEG7`, Keychain service
+  `pepchat-ios.qa.everyone.denied`
+- Recipient: `qa-ios-everyone-recipient-20260806@peptide.chat`, username
+  `ios_everyone_recipient`, user `01KZBZP60EV4M26MVXE5NZF040`, Keychain service
+  `pepchat-ios.qa.everyone.recipient`
+
+Retrieve a password directly into a shell variable without displaying it:
+
+```bash
+test_password="$(security find-generic-password -w -s '<keychain-service>' -a '<email>')"
+```
+
+The allowed account has the dedicated `iOS @everyone QA allowed` role; the denied account has the
+dedicated deny role; the recipient has neither. Expected server behavior: allowed `@everyone`
+messages have `flags: 2` and enter the recipient's unread `mentions`; manually typed text from the
+denied account may send successfully but has no everyone flag and must not create a mention. The
+latest non-secret session manifest is
+`.codex/test-sessions/pepchat-everyone-latest.json` (local and git-ignored).
