@@ -1608,11 +1608,11 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
     }
 
     // MARK: - Image Handling
-    func showFullScreenImage(_ image: UIImage, originalImageURL: URL?, sessionToken: String?) {
+    func showFullScreenImages(_ items: [FullScreenImageItem], initialIndex: Int) {
+        guard !items.isEmpty else { return }
         let imageViewController = FullScreenImageViewController(
-            image: image,
-            originalImageURL: originalImageURL,
-            sessionToken: sessionToken
+            items: items,
+            initialIndex: initialIndex
         )
         imageViewController.modalPresentationStyle = .overFullScreen
         present(imageViewController, animated: true, completion: nil)
@@ -2052,12 +2052,8 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
                     viewController?.handleMessageAction(action, message: message)
                 }
 
-                messageCell.onImageTapped = { [weak viewController = viewControllerRef] image, originalURL, sessionToken in
-                    viewController?.showFullScreenImage(
-                        image,
-                        originalImageURL: originalURL,
-                        sessionToken: sessionToken
-                    )
+                messageCell.onImageTapped = { [weak viewController = viewControllerRef] items, initialIndex in
+                    viewController?.showFullScreenImages(items, initialIndex: initialIndex)
                 }
 
                 messageCell.onAvatarTap = { [weak viewModel = viewModelRef] in
@@ -3456,7 +3452,10 @@ class MessageableChannelViewController: UIViewController, UITextFieldDelegate,
 extension MessageCell {
     @objc func handleImageTap(_ gesture: UITapGestureRecognizer) {
         if let imageView = gesture.view as? UIImageView, let image = imageView.image {
-            onImageTapped?(image, nil, nil)
+            onImageTapped?(
+                [FullScreenImageItem(previewImage: image, originalImageURL: nil, sessionToken: nil)],
+                0
+            )
         }
     }
 }
