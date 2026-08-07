@@ -671,28 +671,11 @@ class MentionInputView: UIView {
     }
 
     private var canMentionEveryone: Bool {
-        guard let channel = currentChannel else { return false }
-
-        switch channel {
-        case .group_dm_channel:
-            return true
-        case .text_channel:
-            guard let server = currentServer,
-                  let currentUser = viewState.currentUser else {
-                return false
-            }
-            let member = viewState.members[server.id]?[currentUser.id]
-            let permissions = resolveChannelPermissions(
-                from: currentUser,
-                targettingUser: currentUser,
-                targettingMember: member,
-                channel: channel,
-                server: server
-            )
-            return permissions.contains(.mentionEveryone)
-        default:
-            return false
-        }
+        MentionInputUtilities.canMentionEveryone(
+            in: currentChannel,
+            server: currentServer,
+            viewState: viewState
+        )
     }
     
     private func insertMentionText(for user: User, member: Member?) {

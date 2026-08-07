@@ -63,6 +63,25 @@ final class RevoltTests: XCTestCase {
         XCTAssertFalse(MentionInputUtilities.shouldIncludeEveryone(searchText: "eve", canMentionEveryone: false))
     }
 
+    func testUnauthorizedEveryoneRequiresPlainTextConfirmation() {
+        XCTAssertTrue(MentionInputUtilities.requiresPlainTextEveryoneConfirmation(
+            text: "Please review, @everyone",
+            canMentionEveryone: false
+        ))
+        XCTAssertFalse(MentionInputUtilities.requiresPlainTextEveryoneConfirmation(
+            text: "Please review, @everyone",
+            canMentionEveryone: true
+        ))
+        XCTAssertFalse(MentionInputUtilities.requiresPlainTextEveryoneConfirmation(
+            text: #"Send \@everyone and `@everyone` literally"#,
+            canMentionEveryone: false
+        ))
+        XCTAssertFalse(MentionInputUtilities.requiresPlainTextEveryoneConfirmation(
+            text: "No mass mention here",
+            canMentionEveryone: false
+        ))
+    }
+
     func testReplacingActiveMentionIsCursorAndUTF16Safe() throws {
         let text = "😀 Hello @eve world"
         let cursor = NSRange(location: ("😀 Hello @eve" as NSString).length, length: 0)

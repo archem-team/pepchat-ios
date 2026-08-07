@@ -88,6 +88,44 @@ enum MentionInputUtilities {
             && (searchText.isEmpty || "everyone".hasPrefix(searchText.lowercased()))
     }
 
+    @MainActor
+    static func canMentionEveryone(
+        in channel: Channel?,
+        server: Server?,
+        viewState: ViewState?
+    ) -> Bool {
+        guard let channel else { return false }
+
+        switch channel {
+        case .group_dm_channel:
+            return true
+        case .text_channel:
+            guard let server,
+                  let viewState,
+                  let currentUser = viewState.currentUser else {
+                return false
+            }
+            let member = viewState.members[server.id]?[currentUser.id]
+            let permissions = resolveChannelPermissions(
+                from: currentUser,
+                targettingUser: currentUser,
+                targettingMember: member,
+                channel: channel,
+                server: server
+            )
+            return permissions.contains(.mentionEveryone)
+        default:
+            return false
+        }
+    }
+
+    static func requiresPlainTextEveryoneConfirmation(
+        text: String,
+        canMentionEveryone: Bool
+    ) -> Bool {
+        !canMentionEveryone && !everyoneMentionRanges(in: text).isEmpty
+    }
+
     /// Finds literal mass mentions while excluding escaped text and inline/fenced code.
     static func everyoneMentionRanges(in text: String) -> [NSRange] {
         let nsText = text as NSString
@@ -1015,6 +1053,44 @@ class MessageInputView: UIView {
         
         // Must have at least one non-whitespace character or attachments
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasAttachments else { return }
+
+        let canMentionEveryone = MentionInputUtilities.canMentionEveryone(
+            in: currentChannel,
+            server: currentServer,
+            viewState: currentViewState
+        )
+        if MentionInputUtilities.requiresPlainTextEveryoneConfirmation(
+            text: text,
+            canMentionEveryone: canMentionEveryone
+        ) {
+            presentPlainTextEveryoneConfirmation(text: text, hasAttachments: hasAttachments)
+            return
+        }
+
+        performSend(text: text, hasAttachments: hasAttachments)
+    }
+
+    private func presentPlainTextEveryoneConfirmation(
+        text: String,
+        hasAttachments: Bool
+    ) {
+        guard let presenter = findViewController() else { return }
+
+        let alert = UIAlertController(
+            title: "You can’t mention @everyone",
+            message: "You don’t have permission to mention @everyone in this channel. Please contact the server owner if you believe this is incorrect.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Edit Message", style: .cancel) { [weak self] _ in
+            self?.textView.becomeFirstResponder()
+        })
+        alert.addAction(UIAlertAction(title: "Send as Plain Text", style: .default) { [weak self] _ in
+            self?.performSend(text: text, hasAttachments: hasAttachments)
+        })
+        presenter.present(alert, animated: true)
+    }
+
+    private func performSend(text: String, hasAttachments: Bool) {
         
         if let editingMessage = editingMessage {
             // Handle edit message (attachments not supported for editing)
