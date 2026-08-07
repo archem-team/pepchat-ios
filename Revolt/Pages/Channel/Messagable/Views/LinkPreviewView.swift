@@ -11,7 +11,7 @@ import Kingfisher
 import WebKit
 
 /// A UIView that renders different types of message embeds, such as website previews, images, videos, and text embeds.
-class LinkPreviewView: UIView {
+class LinkPreviewView: UIView, WKNavigationDelegate {
     private static let fallbackMediaAspectRatio: CGFloat = 16.0 / 9.0
     
     // MARK: - UI Components
@@ -27,6 +27,7 @@ class LinkPreviewView: UIView {
     // Content components
     private let descriptionLabel = UILabel()
     private let previewImageView = UIImageView()
+    private let mediaStatusLabel = UILabel()
     private let videoView = UIView()
     private var webView: WKWebView?
     
@@ -103,6 +104,11 @@ class LinkPreviewView: UIView {
         previewImageView.clipsToBounds = true
         previewImageView.layer.cornerRadius = 6
         previewImageView.isHidden = true
+
+        mediaStatusLabel.translatesAutoresizingMaskIntoConstraints = false
+        mediaStatusLabel.font = UIFont.systemFont(ofSize: 13, weight: .medium)
+        mediaStatusLabel.textColor = UIColor(named: "textGray06") ?? .secondaryLabel
+        mediaStatusLabel.numberOfLines = 1
         
         // Setup constraints
         setupConstraints()
@@ -129,8 +135,8 @@ class LinkPreviewView: UIView {
             contentStackView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -8),
             
             // Icon image view
-            iconImageView.widthAnchor.constraint(equalToConstant: 64),
-            iconImageView.heightAnchor.constraint(equalToConstant: 64),
+            iconImageView.widthAnchor.constraint(equalToConstant: 20),
+            iconImageView.heightAnchor.constraint(equalToConstant: 20),
             
             // Preview image view
             previewImageView.heightAnchor.constraint(equalToConstant: 200),
@@ -180,9 +186,25 @@ class LinkPreviewView: UIView {
         previewImageView.image = nil
         previewImageView.isHidden = true
         iconImageView.image = nil
+        webView?.stopLoading()
+        webView?.navigationDelegate = nil
         webView?.removeFromSuperview()
         webView = nil
+        mediaStatusLabel.text = nil
         isHidden = false
+    }
+
+    private func showMediaStatus(_ text: String) {
+        mediaStatusLabel.text = text
+        if mediaStatusLabel.superview == nil {
+            contentStackView.addArrangedSubview(mediaStatusLabel)
+        }
+    }
+
+    private func hideMediaStatus() {
+        contentStackView.removeArrangedSubview(mediaStatusLabel)
+        mediaStatusLabel.removeFromSuperview()
+        mediaStatusLabel.text = nil
     }
     
     // MARK: - Website Embed Configuration
@@ -247,9 +269,12 @@ class LinkPreviewView: UIView {
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.isOpaque = false
         webView.backgroundColor = .clear
+        webView.navigationDelegate = self
+        webView.isHidden = true
         
         let aspectRatio = getSpecialEmbedAspectRatio(special, websiteEmbed: websiteEmbed)
         
+        showMediaStatus("Loading preview…")
         contentStackView.addArrangedSubview(webView)
         
         NSLayoutConstraint.activate([
@@ -265,6 +290,32 @@ class LinkPreviewView: UIView {
         self.webView = webView
         
         return true
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard webView === self.webView else { return }
+        hideMediaStatus()
+        webView.isHidden = false
+        onAsyncLayoutAffectingContentLoaded?()
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        didFail navigation: WKNavigation!,
+        withError error: Error
+    ) {
+        guard webView === self.webView else { return }
+        webView.removeFromSuperview()
+        showMediaStatus("Preview unavailable")
+        onAsyncLayoutAffectingContentLoaded?()
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        didFailProvisionalNavigation navigation: WKNavigation!,
+        withError error: Error
+    ) {
+        self.webView(webView, didFail: navigation, withError: error)
     }
     
     private func getSpecialEmbedUrl(_ websiteEmbed: WebsiteEmbed, special: WebsiteSpecial) -> URL? {
@@ -340,16 +391,21 @@ class LinkPreviewView: UIView {
     private func configureImagePreview(_ image: JanuaryImage) -> Bool {
         guard let url = URL(string: image.url) else { return false }
         
-        previewImageView.isHidden = false
+        showMediaStatus("Loading preview…")
+        previewImageView.isHidden = true
         previewImageView.kf.setImage(with: url) { [weak self] result in
             guard let self = self else { return }
             switch result {
             case .success:
+                self.hideMediaStatus()
+                self.previewImageView.isHidden = false
                 self.setNeedsLayout()
                 self.layoutIfNeeded()
                 self.onAsyncLayoutAffectingContentLoaded?()
-            case .failure(let error):
-                _ = error
+            case .failure:
+                self.previewImageView.isHidden = true
+                self.showMediaStatus("Preview unavailable")
+                self.onAsyncLayoutAffectingContentLoaded?()
             }
         }
         contentStackView.addArrangedSubview(previewImageView)
@@ -374,10 +430,22 @@ class LinkPreviewView: UIView {
     private func configureVideoPreview(_ video: JanuaryVideo) -> Bool {
         guard let url = URL(string: video.url) else { return false }
         
-        previewImageView.isHidden = false
+        showMediaStatus("Loading preview…")
+        previewImageView.isHidden = true
         // For video, you might want to show a thumbnail or use AVPlayerLayer
         // For now, we'll treat it like an image
-        previewImageView.kf.setImage(with: url)
+        previewImageView.kf.setImage(with: url) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success:
+                self.hideMediaStatus()
+                self.previewImageView.isHidden = false
+            case .failure:
+                self.previewImageView.isHidden = true
+                self.showMediaStatus("Preview unavailable")
+            }
+            self.onAsyncLayoutAffectingContentLoaded?()
+        }
         contentStackView.addArrangedSubview(previewImageView)
         
         let aspectRatio = mediaAspectRatio(width: video.width, height: video.height)

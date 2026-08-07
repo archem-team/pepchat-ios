@@ -77,11 +77,12 @@ extension MessageCell {
         // Add visual feedback for tap
         replyView.layer.cornerRadius = 4
         replyView.layer.masksToBounds = true
+        replyView.backgroundColor = (UIColor(named: "bgGray12") ?? .secondarySystemBackground).withAlphaComponent(0.7)
         
         // Reply indicator icon
         replyIndicatorImageView.translatesAutoresizingMaskIntoConstraints = false
         replyIndicatorImageView.image = UIImage(systemName: "arrow.turn.up.right")
-        replyIndicatorImageView.tintColor = .bgOrane07
+        replyIndicatorImageView.tintColor = UIColor(named: "textGray04") ?? .secondaryLabel
         replyIndicatorImageView.contentMode = .scaleAspectFit
         replyView.addSubview(replyIndicatorImageView)
 
@@ -97,7 +98,7 @@ extension MessageCell {
         // Reply author label
         replyAuthorLabel.translatesAutoresizingMaskIntoConstraints = false
         replyAuthorLabel.font = UIFont.boldSystemFont(ofSize: 13)
-        replyAuthorLabel.textColor = .bgOrane07
+        replyAuthorLabel.textColor = .textDefaultGray01
         // Keep author compact so preview text starts right after a minimum gap.
         replyAuthorLabel.setContentHuggingPriority(.required, for: .horizontal)
         replyAuthorLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -118,7 +119,7 @@ extension MessageCell {
         // Reply content label
         replyContentLabel.translatesAutoresizingMaskIntoConstraints = false
         replyContentLabel.font = UIFont.systemFont(ofSize: 13)
-        replyContentLabel.textColor = .bgOrane07
+        replyContentLabel.textColor = UIColor(named: "textGray04") ?? .secondaryLabel
         replyContentLabel.lineBreakMode = .byTruncatingTail
         replyContentLabel.numberOfLines = 1
         // Let preview text absorb compression/truncation first, Discord-like behavior.
@@ -169,8 +170,8 @@ extension MessageCell {
         
         // Time label
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
-        timeLabel.font = UIFont.systemFont(ofSize: 12)
-        timeLabel.textColor = .textGray06
+        timeLabel.font = UIFont.systemFont(ofSize: 12, weight: .medium)
+        timeLabel.textColor = UIColor(named: "textGray04") ?? .secondaryLabel
         contentView.addSubview(timeLabel)
         
         // Bridge badge label
@@ -192,7 +193,7 @@ extension MessageCell {
         
         // Content text view - optimized for markdown and performance
         contentLabel.translatesAutoresizingMaskIntoConstraints = false
-        contentLabel.font = UIFont.systemFont(ofSize: 15, weight: .light)
+        contentLabel.font = UIFont.systemFont(ofSize: 15, weight: .regular)
         contentLabel.textColor = .textDefaultGray01
         contentLabel.backgroundColor = .clear // Make background transparent
         contentLabel.isScrollEnabled = false // Disable scrolling
@@ -242,7 +243,7 @@ extension MessageCell {
         replyViewTopConstraint?.isActive = true
 
         // Create height constraint with lower priority
-        let replyHeightConstraint = replyView.heightAnchor.constraint(equalToConstant: 18)
+        let replyHeightConstraint = replyView.heightAnchor.constraint(equalToConstant: 22)
         replyHeightConstraint.priority = UILayoutPriority(999) // Just below required but still high
         replyHeightConstraint.isActive = true
 
@@ -313,11 +314,11 @@ extension MessageCell {
         // These are toggled via isActive in updateAppearanceForContinuation() instead of
         // scanning and removing/recreating constraints on every cell reuse.
         continuationNoReplyConstraints = [
-            contentLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            contentLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
             contentLabel.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 10)
         ]
         continuationWithReplyConstraints = [
-            contentLabel.topAnchor.constraint(equalTo: replyView.bottomAnchor, constant: 8),
+            contentLabel.topAnchor.constraint(equalTo: replyView.bottomAnchor, constant: 6),
             contentLabel.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 10)
         ]
         let ncNoReplyUsernameHeight = usernameLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 19)

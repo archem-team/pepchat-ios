@@ -97,6 +97,24 @@ final class RevoltTests: XCTestCase {
         XCTAssertEqual(ranges.map { nsText.substring(with: $0) }, ["@everyone", "@everyone"])
     }
 
+    func testUserMentionTokensResolveNumericAndULIDIdentifiers() {
+        let text = "Hi <@1297812287981359106> and <@01TESTUSER000000000000000>"
+        let resolved = text.replacingUserMentionTokens { userId in
+            userId == "01TESTUSER000000000000000" ? "Akshat" : nil
+        }
+
+        XCTAssertEqual(resolved, "Hi @unknown-user and @Akshat")
+        XCTAssertFalse(resolved.contains("<@"))
+    }
+
+    func testUserMentionFallbackNeverLeaksRawIdentifier() {
+        let rawMention = "<@1297812287981359106>"
+        XCTAssertEqual(
+            rawMention.replacingUserMentionTokens { _ in nil },
+            "@unknown-user"
+        )
+    }
+
     func testSingleImagePreviewPreservesAspectRatioWithinCaps() {
         let portrait = ImageAttachmentPreviewLayout.singleSize(
             sourceSize: CGSize(width: 1080, height: 1440),
