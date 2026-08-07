@@ -119,7 +119,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
     
     // Callback for message actions
     var onMessageAction: ((MessageAction, Message) -> Void)?
-    var onImageTapped: ((UIImage, URL?, String?) -> Void)?
+    var onImageTapped: (([FullScreenImageItem], Int) -> Void)?
     /// Called when async content (images, link previews) finishes loading and may have changed cell height.
     var onAsyncContentLoaded: ((String) -> Void)?
     var onAvatarTap: (() -> Void)?
@@ -1542,20 +1542,29 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
     @objc internal func handleImageCellTap(_ gesture: UITapGestureRecognizer) {
         guard let imageView = gesture.view as? UIImageView,
               let image = imageView.image else { return }
-        
-        // Default fallback: still open preview if URL resolution fails
-        var originalURL: URL? = nil
-        var sessionToken: String? = nil
-        
-        
-        if let viewState = viewState,
-           let attachmentId = imageView.accessibilityIdentifier {
-            let urlString = viewState.formatUrl(fromId: attachmentId, withTag: "attachments")
-            originalURL = URL(string: urlString)
-            sessionToken = viewState.sessionToken
+
+        guard let viewState else {
+            onImageTapped?(
+                [FullScreenImageItem(previewImage: image, originalImageURL: nil, sessionToken: nil)],
+                0
+            )
+            return
         }
-        
-        onImageTapped?(image, originalURL, sessionToken)
+
+        let items = imageAttachmentViews.map { attachmentImageView in
+            let originalURL = attachmentImageView.accessibilityIdentifier.flatMap { attachmentId in
+                URL(string: viewState.formatUrl(fromId: attachmentId, withTag: "attachments"))
+            }
+            return FullScreenImageItem(
+                previewImage: attachmentImageView.image,
+                originalImageURL: originalURL,
+                sessionToken: viewState.sessionToken
+            )
+        }
+
+        guard !items.isEmpty else { return }
+        let initialIndex = min(max(0, imageView.tag), items.count - 1)
+        onImageTapped?(items, initialIndex)
     }
     
 
