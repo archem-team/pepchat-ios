@@ -1900,8 +1900,7 @@ class MessageCell: UITableViewCell, UITextViewDelegate {
         
         // Load image attachments
         if !imageAttachments.isEmpty {
-            let imageIds = imageAttachments.map { $0.id }
-            loadImageAttachments(attachments: imageIds, viewState: viewState)
+            loadImageAttachments(attachments: imageAttachments, viewState: viewState)
         }
         
         // Load file attachments
